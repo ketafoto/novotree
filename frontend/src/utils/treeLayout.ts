@@ -190,7 +190,7 @@ function computeSingleTreeLayout(data: TreeData): LayoutResult {
     const childBlocks = couples
       .map((couple) => {
         const kids = Array.from(childrenByFamily.get(couple.family_id) || new Set())
-          .filter((kidId) => idsSet.has(kidId));
+          .filter((kidId) => idsSet.has(kidId as number));
         if (kids.length === 0) return null;
         const parentIdx = couple.partner_ids
           .map((pid) => prevIndex.get(pid))

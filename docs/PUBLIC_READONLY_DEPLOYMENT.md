@@ -51,6 +51,11 @@ npm ci
 npm run build
 ```
 
+> **Note:** `npm install` (or `npm ci`) must be run before `npm run build`. `tsc` and other
+> build tools are local dev dependencies installed into `node_modules/.bin/` — they are not
+> global binaries. Running `npm run build` without `node_modules` present will fail with
+> `tsc: not found`.
+
 Deploy `frontend/dist` to your server path, for example:
 - `/srv/gedcom-public/frontend-dist`
 

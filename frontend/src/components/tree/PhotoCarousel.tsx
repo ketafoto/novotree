@@ -42,7 +42,7 @@ export function PhotoCarousel({
   className = '',
 }: PhotoCarouselProps) {
   const [index, setIndex] = useState(0);
-  const timerRef = useRef<ReturnType<typeof setInterval>>();
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const restIndex = useMemo(() => findRestIndex(photos), [photos]);
 
@@ -53,10 +53,17 @@ export function PhotoCarousel({
         setIndex((prev) => (prev + 1) % photos.length);
       }, intervalMs);
     } else {
-      clearInterval(timerRef.current);
+      if (timerRef.current != null) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
       setIndex(restIndex);
     }
-    return () => clearInterval(timerRef.current);
+    return () => {
+      if (timerRef.current != null) {
+        clearInterval(timerRef.current);
+      }
+    };
   }, [isHovering, photos.length, intervalMs, restIndex]);
 
   if (photos.length === 0) return null;
