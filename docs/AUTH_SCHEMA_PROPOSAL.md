@@ -1,164 +1,211 @@
-# Auth Schema Proposal (Viewer + Owner)
+# Auth System — As-Built (OVC Model)
 
-This proposal introduces persistent auth/authorization entities for future web editing and sharing, while preserving current local-owner workflows.
+> This document supersedes the original design proposal.  
+> It describes the **Owner / Viewer / Contributor (OVC)** system that was implemented.
 
-## Goals
+---
 
-- Keep current mode working: local admin + public read-only.
-- Support future "wiki-style" collaboration.
-- Explicitly separate:
-  - `viewer`: browser/web identity
-- `owner`: dataset holder (`datasets/<owner>/...`)
+## Table of Contents
 
-## Core Concepts
+1. [Roles](#roles)
+2. [Global Auth Database](#global-auth-database)
+3. [API Endpoints](#api-endpoints)
+4. [Token Strategy](#token-strategy)
+5. [Contributor Attribution](#contributor-attribution)
+6. [Owner Resolution per Request](#owner-resolution-per-request)
+7. [Flows](#flows)
 
-- A `viewer` can have different roles per `owner`.
-- `owner` remains the data boundary.
-- Authorization is evaluated as `(viewer, owner, role)`.
+---
 
-## Proposed Tables
+## Roles
 
-### 1) `auth_viewers`
+| Role | Description | Auth method |
+|------|-------------|-------------|
+| **Owner** | Owns a genealogy tree under `datasets/<owner_id>/`. Full read-write-delete access. Can invite contributors and manage share tokens. | Password + JWT (HttpOnly cookie) |
+| **Contributor** | Invited editor. Can create and edit their own records; cannot delete or edit other contributors' records. Attributed via `created_by` / `created_at`. | Password + JWT (HttpOnly cookie) |
+| **Viewer** | Anonymous read-only access via a share link (`?share=<token>`). No login required; no write access. | Share token in URL query string |
 
-Stores web identities.
+In `APP_MODE=admin` (local development), all auth is bypassed and the process acts as the default owner (`inovoseltsev`).
 
-Columns:
-- `id` (PK, bigint)
-- `email` (unique, nullable for invited-only flows)
-- `display_name` (nullable)
-- `password_hash` (nullable if external auth later)
-- `is_active` (bool, default true)
-- `created_at` (timestamp)
-- `updated_at` (timestamp)
-- `last_login_at` (timestamp, nullable)
+---
 
-Indexes:
-- unique index on `email`
+## Global Auth Database
 
-### 2) `auth_owners`
+`datasets/system.sqlite` — completely separate from each owner's `data.sqlite`.
 
-Maps owner metadata to existing filesystem folder (`datasets/<owner_id>`).
+```
+project_root/
+└── datasets/
+    ├── system.sqlite              ← Global auth database (NEVER commit to git)
+    ├── inovoseltsev/
+    │   ├── data.sqlite            ← Owner genealogy data
+    │   └── media/
+    └── <other_owner>/
+        ├── data.sqlite
+        └── media/
+```
 
-Columns:
-- `id` (PK, bigint)
-- `owner_id` (unique string; folder key)
-- `title` (nullable)
-- `is_active` (bool, default true)
-- `created_at` (timestamp)
-- `updated_at` (timestamp)
+### Tables
 
-Indexes:
-- unique index on `owner_id`
+#### `auth_editors` — all authenticated users (owners + contributors)
 
-### 3) `auth_owner_memberships`
+| Column | Type | Notes |
+|--------|------|-------|
+| `editor_id` | TEXT PK | Chosen username (login name) |
+| `display_name` | TEXT | Human-readable name |
+| `email` | TEXT | Optional; used for SMTP invites |
+| `role` | TEXT | `'owner'` or `'contributor'` |
+| `owner_id` | TEXT | For owners: equals `editor_id`. For contributors: NULL (trees via `auth_editor_trees`). |
+| `password_hash` | TEXT | bcrypt hash; NULL until set-password flow completes |
+| `is_active` | BOOL | Owner can deactivate a contributor |
+| `created_at` | TEXT | ISO-8601 UTC |
+| `last_login_at` | TEXT | ISO-8601 UTC |
 
-Many-to-many relation between viewers and owners with role.
+#### `auth_editor_trees` — contributor → tree access grants
 
-Columns:
-- `viewer_id` (FK -> `auth_viewers.id`)
-- `owner_id` (FK -> `auth_owners.id`)
-- `role` (enum/string: `viewer`, `editor`, `admin`)
-- `can_invite` (bool, default false)
-- `created_at` (timestamp)
-- `updated_at` (timestamp)
+| Column | Type | Notes |
+|--------|------|-------|
+| `editor_id` | TEXT | FK → auth_editors.editor_id |
+| `owner_id` | TEXT | Which tree they can access |
 
-Primary key:
-- (`viewer_id`, `owner_id`)
+UNIQUE on (`editor_id`, `owner_id`). A contributor can have access to multiple trees.
 
-Indexes:
-- index on (`owner_id`, `role`)
-- index on `viewer_id`
+#### `auth_share_tokens` — viewer share links
 
-### 4) `auth_invitations` (optional but recommended)
+| Column | Type | Notes |
+|--------|------|-------|
+| `token` | TEXT | URL-safe random token (32 bytes) |
+| `owner_id` | TEXT | Which tree this opens |
+| `label` | TEXT | Human-readable name (e.g. "Family reunion 2026") |
+| `is_active` | BOOL | Owner can revoke |
+| `expires_after_days` | INT | Default 90. Rolling expiry anchored on `last_used_at`. |
+| `created_at` | TEXT | ISO-8601 UTC |
+| `last_used_at` | TEXT | ISO-8601 UTC; updated on each use (rolling window) |
 
-Controls secure onboarding for collaborators.
+#### `auth_invitations` — pending Contribute requests
 
-Columns:
-- `id` (PK, bigint)
-- `owner_id` (FK -> `auth_owners.id`)
-- `email` (string)
-- `role` (`viewer`/`editor`/`admin`)
-- `token_hash` (string)
-- `invited_by_viewer_id` (FK -> `auth_viewers.id`)
-- `expires_at` (timestamp)
-- `accepted_at` (timestamp, nullable)
-- `created_at` (timestamp)
+| Column | Type | Notes |
+|--------|------|-------|
+| `owner_id` | TEXT | Which tree the visitor wants to join |
+| `display_name` | TEXT | Supplied by the visitor |
+| `email` | TEXT | Optional |
+| `message` | TEXT | Optional note from the visitor |
+| `status` | TEXT | `'pending'` \| `'approved'` \| `'rejected'` |
+| `created_at` | TEXT | ISO-8601 UTC |
+| `resolved_at` | TEXT | ISO-8601 UTC |
 
-Indexes:
-- index on (`owner_id`, `email`)
-- index on `token_hash`
+#### `auth_set_password_tokens` — one-time onboarding / reset tokens
 
-### 5) `auth_sessions` (if using stateful sessions)
+| Column | Type | Notes |
+|--------|------|-------|
+| `token` | TEXT | URL-safe random token (32 bytes) |
+| `editor_id` | TEXT | Placeholder editor created at approval |
+| `owner_id` | TEXT | Target tree hint (used to build session after set-password) |
+| `expires_at` | TEXT | ISO-8601 UTC (7-day TTL) |
+| `used_at` | TEXT | ISO-8601 UTC; NULL = not yet used |
 
-Columns:
-- `id` (PK, bigint)
-- `viewer_id` (FK -> `auth_viewers.id`)
-- `refresh_token_hash` (string)
-- `user_agent` (nullable)
-- `ip_address` (nullable)
-- `expires_at` (timestamp)
-- `revoked_at` (timestamp, nullable)
-- `created_at` (timestamp)
+---
 
-## Authorization Rules
+## API Endpoints
 
-Baseline policy:
-- `anonymous`: read-only in public mode for one configured owner.
-- `viewer` membership role:
-  - `viewer`: read-only
-  - `editor`: can create/update domain entities
-  - `admin`: full access including settings/invitations
+### Authentication (`/auth/*`)
 
-Endpoint enforcement:
-- keep route-level dependencies for mutation (`require_role("editor")`, `require_role("admin")`)
-- keep public-mode middleware write block as extra guard
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/auth/me` | Cookie | Return current editor identity |
+| POST | `/auth/login` | — | Login with `editor_id` + `password`; sets HttpOnly cookies |
+| POST | `/auth/signup` | — | Owner self-registration |
+| POST | `/auth/refresh` | Refresh cookie | Silently re-issue access token |
+| POST | `/auth/logout` | Cookie | Clear auth cookies |
+| POST | `/auth/change-password` | Cookie | Change own password |
+| POST | `/auth/set-password` | — | Complete contributor account setup via one-time token |
 
-## Owner Resolution Strategy
+### User management (`/users/*`, owner-only except where noted)
 
-For future multi-owner web app:
-- `owner_id` is explicit in route path or subdomain.
-- examples:
-  - path-based: `/o/{owner_id}/tree`, `/o/{owner_id}/individuals/...`
-  - subdomain: `{owner_id}.tree.example.com`
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/users/share-tokens` | Owner | List active share tokens |
+| POST | `/users/share-tokens` | Owner | Create share token |
+| DELETE | `/users/share-tokens/{id}` | Owner | Revoke share token |
+| GET | `/users/contributors` | Owner | List contributors for this tree |
+| POST | `/users/contributors/set-active` | Owner | Activate / deactivate contributor |
+| POST | `/users/contributors/reset-password` | Owner | Generate new set-password link (emails if SMTP configured) |
+| POST | `/users/invitations` | **Public** | Submit Contribute request (no auth) |
+| GET | `/users/invitations` | Owner | List all Contribute requests |
+| POST | `/users/invitations/{id}/approve` | Owner | Approve request → create contributor + set-password token |
+| POST | `/users/invitations/{id}/reject` | Owner | Reject request |
 
-Current implementation compatibility:
-- keep one active owner at runtime until multi-owner routing is introduced.
+---
 
-## Migration Plan
+## Token Strategy
 
-### Phase 0 (now)
-- Keep filesystem owners in `datasets/<owner>/`.
-- Keep current viewer model in code (anonymous/admin in mode).
+### Access + refresh cookie pair
 
-### Phase 1
-- Add `auth_owners` and bootstrap one row from current default owner.
-- Add `auth_viewers` with one local admin viewer.
-- Add `auth_owner_memberships` linking local admin viewer to owner as `admin`.
+| Cookie | Lifetime | Notes |
+|--------|----------|-------|
+| `access_token` | 8 h | JWT signed with `JWT_SECRET_KEY`. Payload: `sub` (editor_id), `owner_id`, `role`, `type`, `exp`. |
+| `refresh_token` | 14 days | Same shape. Silent re-issue via `POST /auth/refresh`. |
 
-### Phase 2
-- Add login/session endpoints and password flow.
-- Replace static `DEFAULT_OWNER_ID` admin identity with DB-backed viewer lookup.
+Both cookies: `HttpOnly=true`, `Secure=true` (production), `SameSite=Strict`.  
+No token is ever stored in `localStorage` or `sessionStorage` on the authenticated side.
 
-### Phase 3
-- Add invitations and editor role flows.
-- Enable web editing for `editor`/`admin`.
-- Add audit logging for write operations.
+### Share token (viewer)
 
-## Minimal Audit Table (recommended)
+`?share=<token>` passed as a URL query parameter.  
+The frontend persists it in `sessionStorage` for the duration of the browser session.  
+Backend middleware validates it on each request and applies a rolling 90-day expiry.  
+All write methods (`POST/PUT/PATCH/DELETE`) are blocked for share-token sessions.
 
-`audit_events`:
-- `id` (PK)
-- `owner_id` (FK auth_owners.id)
-- `viewer_id` (FK auth_viewers.id, nullable for anonymous)
-- `action` (string, e.g., `individual.update`)
-- `entity_type` (string)
-- `entity_id` (string/int)
-- `payload_json` (json/text, optional diff)
-- `created_at` (timestamp)
+---
 
-This is useful for rollback investigation and moderation if collaboration grows.
+## Contributor Attribution
 
-## Notes on Existing Folder
+Every mutable table (`main_individuals`, `main_families`, `main_individual_names`, `main_events`, `main_media`) has:
 
-- New canonical path is `datasets/`.
-- Keep using the term `owner` in code and docs.
+| Column | Description |
+|--------|-------------|
+| `created_by` | `editor_id` of the creator |
+| `created_at` | ISO-8601 UTC timestamp |
+
+Contributors may only edit records where `created_by == their editor_id`. Owners may edit any record. Neither may be deleted by a contributor.
+
+---
+
+## Owner Resolution per Request
+
+```
+Request arrives
+       │
+       ├─ APP_MODE=admin → use DEFAULT_OWNER_ID (dev bypass)
+       │
+       ├─ access_token cookie present → decode JWT → extract owner_id
+       │
+       └─ ?share=<token> → look up in auth_share_tokens → extract owner_id
+               │
+               └─ (write methods blocked for share sessions)
+
+owner_id → db.reset_engine() + db.init_db_once(OwnerInfo(owner_id))
+```
+
+---
+
+## Flows
+
+### Owner signup
+`POST /auth/signup` → creates `auth_editors` row (role=owner) → calls `init_db_once()` → sets JWT cookies → redirect to Dashboard.
+
+### Contributor invitation
+1. Visitor sees tree via share link → clicks "Contribute" button.
+2. `POST /users/invitations` (public) — stores pending invitation.
+3. Owner opens User Manager → "Requests" tab → clicks Approve.
+4. `POST /users/invitations/{id}/approve` — creates placeholder `auth_editors` row + `auth_editor_trees` row + `auth_set_password_tokens` row.
+5. If SMTP configured: invitation email sent automatically. Otherwise: owner copies the set-password link from the UI.
+6. Contributor opens `/set-password?token=<token>` — chooses username, display name, password.
+7. `POST /auth/set-password` — sets password, marks token used, issues JWT cookies → redirect to tree.
+
+### Contributor login (multiple trees)
+If a contributor has access to more than one owner tree, `POST /auth/login` returns HTTP 300 with the list of accessible `owner_ids`. The frontend shows a tree selector on step 2; the user picks one, and the login request is re-submitted with `owner_id`.
+
+### Password reset (owner-initiated)
+Owner opens User Manager → Contributors tab → Reset Password for a contributor.  
+`POST /users/contributors/reset-password` → creates new `auth_set_password_tokens` row → emails link or shows it in UI.

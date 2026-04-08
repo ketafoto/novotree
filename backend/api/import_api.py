@@ -11,9 +11,8 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 import shutil
 
 from database import db
-from database.owner_info import OwnerInfo
 from database.gedcom_import import import_gedcom
-from backend.api.auth import get_current_viewer, require_admin
+from backend.api.auth import EditorSession, require_owner
 
 router = APIRouter(prefix="/import", tags=["Import"])
 
@@ -44,20 +43,20 @@ def _is_zip_file(file_path: Path) -> bool:
 
 
 @router.post("/gedcom")
-async def import_gedcom_endpoint(file: UploadFile = File(...), _admin: dict = Depends(require_admin)):
+async def import_gedcom_endpoint(
+    file: UploadFile = File(...),
+    session: EditorSession = Depends(require_owner),
+):
     """
-    Import a GEDCOM file into the owner's database.
+    Import a GEDCOM file into the owner's database. Owner only.
 
     Accepts either:
     - A plaintext GEDCOM file (any extension)
     - A ZIP archive containing a GEDCOM file and optionally a media/ folder
     """
-    viewer = get_current_viewer()
-
     owner = db.get_active_owner()
     if not owner:
-        owner = OwnerInfo(owner_id=viewer["viewer_id"])
-        db.init_db_once(owner)
+        raise HTTPException(status_code=500, detail="No active owner")
 
     content = await file.read()
     if len(content) > MAX_UPLOAD_SIZE:

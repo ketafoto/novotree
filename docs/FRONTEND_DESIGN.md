@@ -1,8 +1,8 @@
 # 🌳 Genealogy Database Frontend - High-Level Design Document
 
-**Version:** 1.2
-**Date:** December 28, 2025
-**Status:** Approved - Ready for Implementation
+**Version:** 1.3
+**Date:** April 12, 2026
+**Status:** Updated — Section 5 revised for OVC auth model
 
 ---
 
@@ -215,7 +215,7 @@ Add to `.vscode/settings.json`:
 │                     BACKEND (FastAPI)                           │
 │  ┌──────────────────────────────────────────────────────────┐   │
 │  │  /auth/*        - Authentication (JWT tokens)            │   │
-│  │  /admin/*       - Admin user management (RSA signed)     │   │
+│  │  /users/*       - User management (owner-only)           │   │
 │  │  /types/*       - Lookup tables (sex, events, media)     │   │
 │  │  /individuals/* - Individual CRUD                        │   │
 │  │  /families/*    - Family CRUD                            │   │
@@ -225,7 +225,7 @@ Add to `.vscode/settings.json`:
 │  └──────────────────────────────────────────────────────────┘   │
 ├─────────────────────────────────────────────────────────────────┤
 │                     DATABASE (SQLite)                           │
-│                datasets/auth.sqlite       ← Global auth database   │
+│                datasets/system.sqlite     ← Global auth database   │
 │                datasets/<owner_id>/data.sqlite  ← Owner data      │
 │                datasets/<owner_id>/media/       ← Owner media     │
 └─────────────────────────────────────────────────────────────────┘
@@ -318,227 +318,140 @@ frontend/
 
 ## 5. User Authentication Scheme
 
-### 5.1 Authentication Flow Overview
+> **Implemented model: Owner / Viewer / Contributor (OVC).**
+> See [AUTH_SCHEMA_PROPOSAL.md](AUTH_SCHEMA_PROPOSAL.md) for the full as-built reference.
 
-**Manual viewer registration** where Admin personally registers viewers, and they then set their own password:
+### 5.1 Roles
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    REGISTRATION FLOW                            │
-└─────────────────────────────────────────────────────────────────┘
+| Role | Access | Auth method |
+|------|--------|-------------|
+| **Owner** | Full read/write/delete; manages share tokens and contributors | Password + JWT (HttpOnly cookie) |
+| **Contributor** | Create + edit own records; cannot delete or edit others' records | Password + JWT (HttpOnly cookie) |
+| **Viewer** | Read-only; no login needed | Share token in URL (`?share=<token>`) |
 
-    ADMIN                              SYSTEM                    USER
-      │                                   │                        │
-      │  1. Create viewer via Web Admin   │                        │
-      │   (viewer_id, email)              │                        │
-      ├──────────────────────────────────►│                        │
-      │                                   │                        │
-      │  2. System generates invitation   │                        │
-      │     link with secure token        │                        │
-      │◄──────────────────────────────────┤                        │
-      │                                   │                        │
-      │  3. Share link with viewer        │                        │
-      │   (email/WhatsApp/Telegram/etc)   │                        │
-      ├───────────────────────────────────┼───────────────────────►│
-      │                                   │                        │
-      │                                   │  4. Click invitation   │
-      │                                   │◄───────────────────────┤
-      │                                   │                        │
-      │                                   │  5. Show password form │
-      │                                   ├───────────────────────►│
-      │                                   │                        │
-      │                                   │  6. Submit new password│
-      │                                   │◄───────────────────────┤
-      │                                   │                        │
-      │                                   │  7. Account activated  │
-      │                                   ├───────────────────────►│
-```
+`APP_MODE=admin` bypasses all auth for local development (acts as the default owner).
 
-### 5.2 Password Reset Flow
-
-When a viewer forgets their password:
-1. User contacts Admin (you)
-2. Admin opens Web Admin Panel
-3. Admin clicks "Regenerate Invitation Link" for that user
-4. Admin shares new link with user
-5. User sets new password via the link
-
-### 5.3 Authentication Components
-
-#### Backend Changes Required
-
-```python
-# Authentication endpoints (new router: backend/api/auth.py)
-POST /auth/login              # Login with viewer_id/password → JWT token
-POST /auth/logout             # Logout (invalidate token)
-POST /auth/set-password       # Set password (with invitation token)
-GET  /auth/me                 # Get current viewer info
-
-# Admin endpoints (new router: backend/api/admin.py) - secured with public key
-POST /admin/viewers             # Create new viewer → returns invitation link
-GET  /admin/viewers             # List all viewers
-PUT  /admin/viewers/{id}/reset  # Regenerate invitation link
-DELETE /admin/viewers/{id}      # Delete viewer
-```
-
-#### Database Schema - Global Auth Database
-
-**Design Decision:** Authentication data is stored in a **separate global database** under the `datasets/` folder (`datasets/auth.sqlite`), NOT in each owner's `data.sqlite`. This is because:
-
-1. The `data.sqlite` is owner-specific genealogy data
-2. Authentication needs to work BEFORE we know which owner's database to access
-3. Admin needs to manage all viewers from one place
-4. Keeps all data folders under `datasets/`
-
-```
-project_root/
-└── datasets/
-    ├── auth.sqlite          ← Global authentication database (NEW)
-    ├── admin_public.pem     ← Admin public key for signature verification
-    ├── inovoseltsev/
-    │   ├── data.sqlite      ← Owner genealogy data
-    │   └── media/
-    └── john/
-        ├── data.sqlite
-        └── media/
-```
-
-#### Auth Database Schema (`datasets/auth.sqlite`)
-
-```sql
--- Global authentication table
-CREATE TABLE IF NOT EXISTS auth_viewers (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    owner_id TEXT UNIQUE NOT NULL,         -- Must match folder name in datasets/
-    email TEXT,
-    password_hash TEXT,                   -- bcrypt hash, NULL until password set
-    invitation_token TEXT,                -- One-time token for password setup
-    invitation_expires_at TEXT,           -- Token expiration (ISO format)
-    is_active BOOLEAN DEFAULT FALSE,      -- TRUE after password is set
-    is_admin BOOLEAN DEFAULT FALSE,       -- TRUE for admin viewers
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    last_login_at TEXT
-);
-```
-
-#### Admin Authentication - Public Key Cryptography
-
-Instead of simple API keys, we use **public key cryptography** for admin authentication:
-
-**How it works:**
-1. During setup, generate a **key pair** (private + public key)
-2. **Private key** stays with Admin (never uploaded to server)
-3. **Public key** is stored on server (`datasets/admin_public.pem`)
-4. Admin signs requests with private key, server verifies with public key
+### 5.2 Owner Signup & Contributor Invitation Flow
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                 ADMIN AUTHENTICATION FLOW                        │
+│               CONTRIBUTOR INVITATION FLOW                       │
 └─────────────────────────────────────────────────────────────────┘
 
-    ADMIN (has private key)              SERVER (has public key)
-         │                                       │
-         │  1. Create request payload            │
-         │     (e.g., create viewer)             │
-         │                                       │
-         │  2. Sign payload with PRIVATE key     │
-         │     signature = sign(payload, privkey)│
-         │                                       │
-         │  3. Send: payload + signature         │
-         ├──────────────────────────────────────►│
-         │                                       │
-         │                    4. Verify signature│
-         │                       with PUBLIC key │
-         │                       verify(payload, │
-         │                         signature,    │
-         │                         pubkey)       │
-         │                                       │
-         │  5. If valid: process request         │
-         │◄──────────────────────────────────────┤
+    VISITOR                         OWNER                    BACKEND
+      │                               │                        │
+      │  1. Opens tree via share link │                        │
+      │  2. Clicks "Contribute"       │                        │
+      ├───────────────────────────────┼───────────────────────►│
+      │     POST /users/invitations   │                        │
+      │     (public, no auth)         │                        │
+      │                               │                        │
+      │                               │  3. User Manager shows │
+      │                               │  pending request       │
+      │                               │◄───────────────────────┤
+      │                               │                        │
+      │                               │  4. Owner approves     │
+      │                               ├───────────────────────►│
+      │                               │  POST /users/invitations│
+      │                               │  /{id}/approve         │
+      │                               │                        │
+      │                               │  5. Backend creates    │
+      │                               │  contributor + token   │
+      │                               │◄───────────────────────┤
+      │                               │                        │
+      │  6. Receives set-password link│                        │
+      │  (email or shared by owner)   │                        │
+      │◄──────────────────────────────┤                        │
+      │                               │                        │
+      │  7. Opens /set-password?token=│                        │
+      │  chooses username + password  │                        │
+      ├───────────────────────────────┼───────────────────────►│
+      │     POST /auth/set-password   │                        │
+      │                               │                        │
+      │  8. JWT cookies set → logged in                        │
+      │◄───────────────────────────────────────────────────────┤
 ```
 
-**Setup commands (one-time):**
-```bash
-# Generate key pair (Admin keeps private key safe!)
-openssl genrsa -out admin_private.pem 2048
-openssl rsa -in admin_private.pem -pubout -out admin_public.pem
+### 5.3 Password Reset Flow
 
-# Copy public key to server
-cp admin_public.pem datasets/admin_public.pem
+When a contributor needs a password reset:
+1. Owner opens User Manager → Contributors tab.
+2. Clicks "Reset Password" for that contributor.
+3. `POST /users/contributors/reset-password` generates a new set-password token.
+4. If SMTP is configured, the link is emailed automatically.
+5. Otherwise, the owner copies the link from the UI and shares it.
+6. Contributor opens the link and sets a new password.
 
-# Private key stays with Admin (NEVER upload to server!)
-# Store admin_private.pem securely (USB drive, password manager, etc.)
+### 5.4 Authentication Implementation
+
+> Full API endpoint tables, database schema, and token details: see [AUTH_SCHEMA_PROPOSAL.md](AUTH_SCHEMA_PROPOSAL.md).
+
+#### Backend API summary
+
+```
+/auth/*   — signup, login, logout, refresh, me, change-password, set-password
+/users/*  — share-tokens, contributors, invitations (all owner-only except POST /users/invitations)
 ```
 
-**Note:** The `meta_header` table in owner's `data.sqlite` stores GEDCOM metadata (submitter info, etc.) and remains separate from authentication.
+Auth data lives in `datasets/system.sqlite` (global, never committed to git), separate from each owner's `datasets/<owner_id>/data.sqlite`.
 
-### 5.4 Token-Based Authentication (JWT)
+### 5.5 Token Strategy
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                      LOGIN FLOW                                 │
-└─────────────────────────────────────────────────────────────────┘
+Two HttpOnly cookies are set on login — no tokens in `localStorage`:
 
-    USER                           FRONTEND                    BACKEND
-      │                               │                           │
-      │  1. Enter credentials         │                           │
-      ├──────────────────────────────►│                           │
-      │                               │                           │
-      │                               │  2. POST /auth/login      │
-      │                               ├──────────────────────────►│
-      │                               │                           │
-      │                               │  3. Validate credentials  │
-      │                               │                           │
-      │                               │  4. Return JWT token      │
-      │                               │◄──────────────────────────┤
-      │                               │                           │
-      │                               │  5. Store in localStorage │
-      │                               │                           │
-      │  6. Redirect to Dashboard     │                           │
-      │◄──────────────────────────────┤                           │
-```
+| Cookie | Lifetime | Purpose |
+|--------|----------|---------|
+| `access_token` | 8 h | Authenticates every API request |
+| `refresh_token` | 14 days | Silently re-issues access token via `POST /auth/refresh` |
 
-### 5.5 Security Considerations
+Both: `HttpOnly`, `Secure` (production), `SameSite=Strict`.
+
+Viewers use a share token in the URL (`?share=<token>`, 90-day rolling expiry); the frontend persists it in `sessionStorage` for the tab session.
+
+### 5.6 Security Considerations
 
 | Aspect | Implementation |
 |--------|----------------|
 | **Password Storage** | bcrypt hash with salt (never plain text) |
-| **JWT Tokens** | Short expiration (1 hour), refresh token pattern |
-| **Token Storage** | localStorage (simpler for SPA) |
-| **HTTPS** | Required in production |
-| **CORS** | Strict origin checking |
-| **Rate Limiting** | Prevent brute-force attacks on login |
-| **Admin Panel Security** | API key authentication (generated at setup) |
+| **JWT Storage** | HttpOnly cookies — not accessible via JavaScript |
+| **Token Expiry** | Access: 8 h; Refresh: 14 days; Set-password: 7 days; Share: rolling 90 days |
+| **HTTPS** | Required in production; Caddy provides automatic TLS |
+| **CORS** | Strict origin checking; `SameSite=Strict` on cookies |
+| **Rate Limiting** | Per-IP request window; disabled in APP_MODE=admin |
+| **Viewer Write Block** | All write methods (POST/PUT/PATCH/DELETE) rejected for share-token sessions |
+| **Contributor Scope** | Contributor can only edit records where `created_by == their editor_id` |
 
-### 5.6 Web Admin Panel
+### 5.7 User Manager (Owner-Only UI)
 
-The admin panel provides a web interface for user management:
+The User Manager page (`/users`, owner-only) has three tabs:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  🔐 ADMIN PANEL                                    [Logout]     │
+│  USER MANAGER            [Share Links] [Contributors] [Requests]│
 ├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  USER MANAGEMENT                                 [+ Add User]   │
-│                                                                 │
-│  ┌─────────────────────────────────────────────────────────────┐│
-│  │ Username      │ Email           │ Status    │ Actions      ││
-│  ├───────────────┼─────────────────┼───────────┼──────────────┤│
-│  │ inovoseltsev  │ ivan@mail.com   │ ✅ Active │ 🔄 ⚙️ 🗑️   ││
-│  │ john          │ john@mail.com   │ ⏳ Pending│ 🔄 ⚙️ 🗑️   ││
-│  │ mary          │ mary@mail.com   │ ✅ Active │ 🔄 ⚙️ 🗑️   ││
-│  └───────────────┴─────────────────┴───────────┴──────────────┘│
-│                                                                │
-│  🔄 = Regenerate invitation link                                │
-│  ⚙️ = Edit user                                                 │
-│  🗑️ = Delete user                                               │
-│                                                                 │
+│  Share Links tab:                                               │
+│  ┌──────────────────────────┬──────────────┬──────────────────┐ │
+│  │ Label                    │ Created      │ Actions          │ │
+│  ├──────────────────────────┼──────────────┼──────────────────┤ │
+│  │ Family reunion 2026      │ 2026-04-01   │ [Copy] [Revoke]  │ │
+│  └──────────────────────────┴──────────────┴──────────────────┘ │
+│  [+ Create share link]                                          │
+├─────────────────────────────────────────────────────────────────┤
+│  Contributors tab:                                              │
+│  ┌────────────┬──────────────┬───────────┬────────────────────┐ │
+│  │ Username   │ Email        │ Status    │ Actions            │ │
+│  ├────────────┼──────────────┼───────────┼────────────────────┤ │
+│  │ john       │ j@mail.com   │ Active    │ [Reset pw] [Deact] │ │
+│  └────────────┴──────────────┴───────────┴────────────────────┘ │
+├─────────────────────────────────────────────────────────────────┤
+│  Requests tab:                                                  │
+│  ┌──────────────┬────────────┬──────────┬─────────────────────┐ │
+│  │ Name         │ Email      │ Status   │ Actions             │ │
+│  ├──────────────┼────────────┼──────────┼─────────────────────┤ │
+│  │ Mary Smith   │ m@mail.com │ Pending  │ [Approve] [Reject]  │ │
+│  └──────────────┴────────────┴──────────┴─────────────────────┘ │
 └─────────────────────────────────────────────────────────────────┘
 ```
-
-**Access:** Admin panel is accessed via `/admin` route and requires:
-1. Valid admin API key (generated during initial setup)
-2. The key is stored securely and used to authenticate admin requests
 
 ---
 
@@ -551,17 +464,25 @@ The admin panel provides a web interface for user management:
 │  PUBLIC ROUTES (No authentication required)                     │
 ├─────────────────────────────────────────────────────────────────┤
 │  /login                 - Login page                            │
-│  /set-password/:token   - Password setup page (invitation link) │
+│  /signup                - Owner self-registration               │
+│  /set-password          - Contributor account setup (one-time)  │
 └─────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────┐
-│  PROTECTED ROUTES (Authentication required)                     │
+│  VIEWER-ACCESSIBLE ROUTES (auth OR valid ?share= token)         │
+├─────────────────────────────────────────────────────────────────┤
+│  /tree                  - Full family tree overview             │
+│  /individuals/:id       - View individual (read-only for viewer)│
+│  /individuals/:id/tree  - Individual-focused tree               │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│  EDITOR ROUTES (owner or contributor login required)            │
 ├─────────────────────────────────────────────────────────────────┤
 │  /                      - Dashboard (statistics & quick actions)│
 │                                                                 │
 │  /individuals           - Individuals list (table view)         │
 │  /individuals/new       - Create new individual                 │
-│  /individuals/:id       - View individual (with events & media) │
 │  /individuals/:id/edit  - Edit individual (with events & media) │
 │                                                                 │
 │  /families              - Families list (table view)            │
@@ -572,17 +493,16 @@ The admin panel provides a web interface for user management:
 │  /bulk-edit/individuals - Bulk edit individuals (table mode)    │
 │  /bulk-edit/families    - Bulk edit families (table mode)       │
 │                                                                 │
-│  /export                - Export data (GEDCOM + media ZIP)      │
-│                                                                 │
-│  /settings              - User settings                         │
+│  /settings              - User settings (change password, etc.) │
 │  /settings/header       - GEDCOM header metadata                │
 └─────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────┐
-│  ADMIN ROUTES (Admin API key required)                          │
+│  OWNER-ONLY ROUTES                                              │
 ├─────────────────────────────────────────────────────────────────┤
-│  /admin                 - Admin login                           │
-│  /admin/viewers         - Viewer management                     │
+│  /import                - GEDCOM import                         │
+│  /export                - Export data (GEDCOM + media ZIP)      │
+│  /users                 - User Manager (share tokens, contrib.) │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -1087,69 +1007,82 @@ export default apiClient;
 
 ### 10.2 Multi-User API Architecture
 
-**Critical Design:** Multiple viewers may edit owner datasets simultaneously. The backend must know WHICH owner's database to access for each request.
+**Critical Design:** Multiple editors (owners + contributors) may access different owner datasets simultaneously. The backend must know WHICH owner's database to open for each request.
 
-#### How Viewer Context is Passed
+#### How Editor Context is Resolved
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│               VIEWER CONTEXT IN API REQUESTS                     │
+│               EDITOR CONTEXT IN API REQUESTS                    │
 └─────────────────────────────────────────────────────────────────┘
 
-  1. Viewer logs in → receives JWT token containing owner_id
-  
-  2. JWT Token payload:
+  1. Editor logs in → backend sets two HttpOnly cookies:
+       access_token  (8 h JWT)
+       refresh_token (14 day JWT)
+
+  2. JWT access_token payload:
      {
-       "sub": "inovoseltsev",     ← owner_id
-       "exp": 1735500000,         ← expiration
-       "iat": 1735496400          ← issued at
+       "sub":      "john",           ← editor_id
+       "owner_id": "inovoseltsev",   ← whose tree is active
+       "role":     "contributor",    ← 'owner' | 'contributor'
+       "type":     "access",
+       "exp":      1735500000
      }
-  
-  3. Every API request includes token in header:
-     Authorization: Bearer <jwt_token>
-  
-  4. Backend extracts owner_id from token:
-     owner_id = decode_jwt(token)["sub"]
-  
-  5. Backend uses correct database:
-     db_path = f"datasets/{owner_id}/data.sqlite"
+
+  3. Cookies are sent automatically by the browser with every request.
+     No Authorization header. No localStorage.
+
+  4. Per-request middleware decodes the cookie and switches the active
+     SQLAlchemy engine to the correct owner's database:
+       db_path = f"datasets/{owner_id}/data.sqlite"
+
+  5. For viewer (share-token) sessions:
+       ?share=<token> in URL → backend looks up auth_share_tokens
+       → resolves owner_id → opens that database (read-only)
 ```
 
-#### Backend Changes Required
+#### Backend Implementation Pattern
 
 ```python
-# backend/api/dependencies.py
-from fastapi import Depends, HTTPException
-from fastapi.security import HTTPBearer
-import jwt
+# backend/api/auth.py — FastAPI dependencies used in every mutating route
 
-security = HTTPBearer()
+class EditorSession:
+    """Resolved identity for the current request."""
+    editor_id: str
+    owner_id: str     # which tree is active
+    role: str         # 'owner' | 'contributor'
+    display_name: str
 
-def get_current_viewer(credentials = Depends(security)) -> str:
-    """Extract viewer id from JWT token."""
-    try:
-        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=["HS256"])
-        viewer_id = payload.get("sub")
-        if not viewer_id:
-            raise HTTPException(status_code=401, detail="Invalid token")
-        return viewer_id
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token expired")
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+def get_current_editor(
+    access_token: Optional[str] = Cookie(default=None),
+    db: Session = Depends(get_system_db),
+) -> EditorSession:
+    """Decode access_token cookie → return EditorSession (or 401)."""
+    ...
 
-def get_owner_db(owner_id: str = Depends(get_current_viewer)) -> Session:
-    """Get database session for the resolved owner."""
-    owner_info = OwnerInfo(owner_id=owner_id)
-    engine = create_engine(f"sqlite:///{owner_info.db_file}")
-    Session = sessionmaker(bind=engine)
-    return Session()
+def require_owner(session = Depends(get_current_editor)) -> EditorSession:
+    """Raise 403 if role != 'owner'."""
+    ...
+
+def require_editor(session = Depends(get_current_editor)) -> EditorSession:
+    """Accept both owner and contributor."""
+    ...
 
 # Usage in API endpoints:
-@router.get("/individuals")
-def list_individuals(db: Session = Depends(get_owner_db)):
-    # db is automatically the correct owner's database!
-    return db.query(Individual).all()
+@router.post("/individuals")
+def create_individual(
+    body: IndividualCreate,
+    session: EditorSession = Depends(require_editor),  # owner or contributor
+    db: Session = Depends(get_db),
+):
+    individual = Individual(
+        ...,
+        created_by=session.editor_id,   # attribution
+        created_at=now_iso(),
+    )
+    db.add(individual)
+    db.commit()
+    ...
 ```
 
 ### 10.3 API Endpoints Mapping
@@ -1310,36 +1243,26 @@ const eventSchema = z.object({
 );
 ```
 
-### 10.6 New Backend Endpoints Needed
+### 10.6 Backend Endpoints Reference
 
-The current backend needs these additions:
+Auth and user-management endpoints: see [AUTH_SCHEMA_PROPOSAL.md](AUTH_SCHEMA_PROPOSAL.md).
+
+Other routers implemented in this project:
 
 ```python
-# Authentication (new router: backend/api/auth.py)
-POST /auth/login           # Returns JWT token
-POST /auth/logout          # Invalidate token
-POST /auth/set-password    # Set password with invitation token
-GET  /auth/me              # Get current viewer info
-
-# Lookup types (new router: backend/api/types.py)
+# Lookup types (backend/api/types.py)
 GET  /types/sex            # Sex codes for dropdown
 GET  /types/events         # Event types for dropdown
 GET  /types/media          # Media types for dropdown
 GET  /types/family-roles   # Family member roles for dropdown
 
-# Media file upload (enhance backend/api/media.py)
+# Media file upload (backend/api/media.py)
 POST /media/upload         # Multipart form upload, saves to owner's media folder
 GET  /media/{id}/file      # Serve the actual file
 
-# Export (new router: backend/api/export.py)
-GET  /export/gedcom        # Export GEDCOM file (uses gedcom_export.py)
+# Export (backend/api/export.py)
+GET  /export/gedcom        # Export GEDCOM file
 GET  /export/zip           # Export GEDCOM + media as ZIP
-
-# Admin (new router: backend/api/admin.py) - secured with public key signature
-POST /admin/viewers          # Create viewer → returns invitation link
-GET  /admin/viewers          # List viewers
-PUT  /admin/viewers/{id}/reset  # Regenerate invitation link
-DELETE /admin/viewers/{id}   # Delete viewer
 ```
 
 ---
@@ -1530,7 +1453,7 @@ USER                           FRONTEND                    BACKEND
 |-------|------|---------|
 | **ERROR** | Exceptions, failed operations | Database connection failed, File not found |
 | **WARN** | Potential issues | Slow query (>1s), Low disk space |
-| **INFO** | Key operations | Server started, Viewer logged in (viewer_id only) |
+| **INFO** | Key operations | Server started, Editor logged in (editor_id only) |
 
 #### What Does NOT Get Logged
 
@@ -1586,7 +1509,7 @@ def setup_logging():
 logger = setup_logging()
 
 # ✅ Good - logs operation status without personal data
-logger.info(f"Viewer '{viewer_id}' logged in successfully")
+logger.info(f"Editor '{editor_id}' logged in successfully")
 logger.error(f"Database query failed: {error_type}")
 
 # ❌ Bad - would expose personal data
@@ -1687,20 +1610,21 @@ sudo systemctl restart rsyslog
 ## 16. Implementation Phases
 
 ### Phase 1: Foundation (Week 1-2)
-**Goal:** Basic project setup, authentication, and admin panel
+**Goal:** Basic project setup, OVC authentication, and User Manager
 
-- [ ] Initialize React + Vite + TypeScript project
-- [ ] Configure Tailwind CSS (light theme)
-- [ ] Set up folder structure
-- [ ] Create basic layout components (Header, Sidebar, Footer)
-- [ ] Create global auth database (`auth.sqlite`)
-- [ ] Implement auth endpoints (login, set-password, me)
-- [ ] Implement admin endpoints (create viewer, list viewers, reset invitation)
-- [ ] Implement authentication context and login page
-- [ ] Create Web Admin Panel (user management)
-- [ ] Create protected route wrapper
+- [x] Initialize React + Vite + TypeScript project
+- [x] Configure Tailwind CSS (light theme)
+- [x] Set up folder structure
+- [x] Create basic layout components (Header, Sidebar, Footer)
+- [x] Create global auth database (`datasets/system.sqlite`)
+- [x] Implement auth endpoints (signup, login, logout, refresh, set-password, me)
+- [x] Implement user management endpoints (/users/share-tokens, /users/contributors, /users/invitations)
+- [x] Implement AuthContext with OVC role detection and share-token support
+- [x] Create Login, Signup, SetPassword pages
+- [x] Create User Manager page (Share Links, Contributors, Requests tabs)
+- [x] Create ProtectedRoute with minRole prop (viewer / contributor / owner)
 
-**Deliverable:** Admin can create viewers, viewers can log in and see basic dashboard
+**Deliverable:** Owner can sign up, share a viewer link, invite contributors, contributors can log in
 
 ### Phase 2: Core CRUD - Individual Mode (Week 3-4)
 **Goal:** Full CRUD for individuals and families with embedded events & media
@@ -1779,8 +1703,8 @@ All open questions have been resolved. Here's the summary of decisions:
 
 | Question | Decision | Notes |
 |----------|----------|-------|
-| **User Management** | Web Admin Panel | Secured with API key |
-| **Password Reset** | Manual invitation regeneration | Admin regenerates link via Admin Panel |
+| **User Management** | User Manager page (`/users`) | Owner-only; three tabs: Share Links, Contributors, Requests |
+| **Password Reset** | Owner generates reset link in User Manager | Optional SMTP email; fallback to UI-shown link |
 | **Theme** | Light theme only | No dark mode toggle |
 | **Language** | English only | No i18n infrastructure |
 | **Mobile Support** | Desktop-first | Mobile deferred to future release |
@@ -1792,10 +1716,10 @@ All open questions have been resolved. Here's the summary of decisions:
 | **CSV Import/Export** | Removed from bulk-edit | Not needed initially |
 | **Bulk-Edit Enhancement** | "Create Family from Selected" | Added shortcut |
 | **Bulk-Edit Search** | Search/filter box | Filter individuals in table |
-| **Auth Database** | `datasets/auth.sqlite` | Under datasets/ folder |
-| **Admin Security** | Public key cryptography | RSA key pair for admin auth |
+| **Auth Database** | `datasets/system.sqlite` | Under datasets/ folder; never committed to git |
+| **Auth Security** | HttpOnly cookie (JWT) | No localStorage; SameSite=Strict; access + refresh pair |
 | **Logging** | rsyslog | System handles rotation |
-| **Viewer Context** | JWT contains viewer_id | Multi-viewer simultaneous access |
+| **Editor Context** | JWT cookie contains editor_id + owner_id + role | Per-request middleware switches active SQLite database |
 | **Lookup Tables** | Dropdowns from types_* tables | GEDCOM 5.5.1 compliance |
 
 ---

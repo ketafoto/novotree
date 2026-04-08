@@ -23,5 +23,12 @@ python-multipart>=0.0.6
 pytest>=8.0.0
 httpx>=0.25.0  # Required for FastAPI TestClient
 
+# Authentication
+python-jose[cryptography]>=3.3.0  # JWT encode/decode
+bcrypt>=4.0.0                      # password hashing
+
+# Email
+aiosmtplib>=3.0.0                  # async SMTP for invitation/approval emails
+
 # Transitive dependencies (installed automatically, listed for reference)
 # starlette, anyio, typing_extensions, etc. are pulled by fastapi/pydantic

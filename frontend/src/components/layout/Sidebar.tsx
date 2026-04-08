@@ -10,9 +10,11 @@ import {
   ArrowLeftRight,
   Settings,
   ChevronDown,
+  Users,
+  LogOut,
 } from 'lucide-react';
 import { useState } from 'react';
-import { isPublicApp } from '../../config/appMode';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface NavItemProps {
   to: string;
@@ -69,23 +71,11 @@ function NavGroup({ icon, label, children }: NavGroupProps) {
 }
 
 export function Sidebar() {
-  if (isPublicApp) {
-    return (
-      <aside className="w-64 bg-white border-r border-gray-200 min-h-screen p-4">
-        <nav className="space-y-1">
-          <NavItem
-            to="/tree"
-            icon={<GitBranch className="w-5 h-5" />}
-            label="Tree"
-          />
-        </nav>
-      </aside>
-    );
-  }
+  const { editor, isOwner, logout } = useAuth();
 
   return (
-    <aside className="w-64 bg-white border-r border-gray-200 min-h-screen p-4">
-      <nav className="space-y-1">
+    <aside className="w-64 bg-white border-r border-gray-200 min-h-screen flex flex-col p-4">
+      <nav className="space-y-1 flex-1">
         <NavItem
           to="/"
           icon={<LayoutDashboard className="w-5 h-5" />}
@@ -134,12 +124,22 @@ export function Sidebar() {
             icon={<Download className="w-5 h-5" />}
             label="Export"
           />
-          <NavItem
-            to="/import"
-            icon={<Upload className="w-5 h-5" />}
-            label="Import"
-          />
+          {isOwner && (
+            <NavItem
+              to="/import"
+              icon={<Upload className="w-5 h-5" />}
+              label="Import"
+            />
+          )}
         </NavGroup>
+
+        {isOwner && (
+          <NavItem
+            to="/users"
+            icon={<Users className="w-5 h-5" />}
+            label="User Manager"
+          />
+        )}
 
         <NavItem
           to="/settings"
@@ -147,7 +147,23 @@ export function Sidebar() {
           label="Settings"
         />
       </nav>
+
+      {/* User info + logout at bottom */}
+      {editor && (
+        <div className="border-t border-gray-200 pt-4 mt-4">
+          <div className="px-4 mb-2">
+            <p className="text-sm font-medium text-gray-800 truncate">{editor.display_name}</p>
+            <p className="text-xs text-gray-400 capitalize">{editor.role}</p>
+          </div>
+          <button
+            onClick={logout}
+            className="flex items-center gap-3 w-full px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors text-sm"
+          >
+            <LogOut className="w-4 h-4" />
+            Sign out
+          </button>
+        </div>
+      )}
     </aside>
   );
 }
-

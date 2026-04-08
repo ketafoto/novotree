@@ -33,6 +33,8 @@ export interface Individual {
   death_place?: string;
   notes?: string;
   names: IndividualName[];
+  created_by?: string;
+  created_at?: string;
 }
 
 export interface IndividualCreate {
@@ -85,6 +87,8 @@ export interface Family {
   notes?: string;
   members: FamilyMember[];
   children: FamilyChild[];
+  created_by?: string;
+  created_at?: string;
 }
 
 export interface FamilyCreate {
@@ -160,45 +164,98 @@ export interface LookupType {
   description: string;
 }
 
-// ==================== Viewer Types ====================
-// Viewer = browser/session identity. A viewer may get edit rights in future.
-// Owner = backend data holder under datasets/<owner>/.
-export interface Viewer {
-  id: number;
-  viewer_id: string;
-  role?: 'anonymous' | 'admin' | 'editor';
+// ==================== Auth / Editor Types ====================
+// editor: any authenticated user (owner or contributor)
+// viewer: anonymous read-only access via share token
+
+export type EditorRole = 'owner' | 'contributor';
+
+export interface Editor {
+  editor_id: string;
+  display_name: string;
   email?: string;
+  role: EditorRole;
+  owner_id: string;       // which tree is active for this session
   is_active: boolean;
-  is_admin: boolean;
-  created_at: string;
+  created_at?: string;
   last_login_at?: string;
 }
 
 export interface LoginRequest {
-  viewer_id: string;
+  editor_id: string;
   password: string;
+  owner_id?: string;      // required when contributor has multiple trees
 }
 
-export interface LoginResponse {
-  access_token: string;
-  token_type: string;
-  viewer: Viewer;
+export interface SignupRequest {
+  editor_id: string;
+  display_name: string;
+  password: string;
+  email?: string;
 }
 
 export interface SetPasswordRequest {
   token: string;
+  editor_id: string;
+  display_name: string;
   password: string;
-}
-
-// ==================== Admin Types ====================
-export interface CreateViewerRequest {
-  viewer_id: string;
   email?: string;
 }
 
-export interface CreateViewerResponse {
-  viewer: Viewer;
-  invitation_link: string;
+export interface ChangePasswordRequest {
+  current_password: string;
+  new_password: string;
+}
+
+export interface AuthResponse {
+  editor: Editor;
+}
+
+// ==================== Share Tokens ====================
+export interface ShareToken {
+  id: number;
+  owner_id: string;
+  token: string;
+  label?: string;
+  is_active: boolean;
+  created_at?: string;
+  last_used_at?: string;
+  expires_after_days: number;
+}
+
+export interface ShareTokenCreate {
+  label?: string;
+  description?: string;  // alias accepted by backend
+  expires_after_days?: number;
+}
+
+// ==================== Contributors / Invitations ====================
+export interface Contributor {
+  editor_id: string;
+  display_name: string;
+  email?: string;
+  is_active: boolean;
+  created_at: string;
+  last_login_at?: string;
+  approved_at?: string;
+}
+
+export interface Invitation {
+  id: number;
+  owner_id: string;
+  display_name: string;
+  email?: string;
+  message?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  created_at: string;
+  processed_at?: string;
+}
+
+export interface ContributeRequest {
+  owner_id: string;
+  display_name: string;
+  email?: string;
+  message?: string;
 }
 
 // ==================== Tree Visualization ====================

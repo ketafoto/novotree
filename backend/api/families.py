@@ -1,21 +1,33 @@
-# API endpoints for managing families in the genealogy database
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 from typing import List
+
 from .. import schemas
+from .auth import EditorSession, require_editor, require_owner
+from .api_utils import generate_gedcom_id
 import database.models
 import database.db
-from .api_utils import generate_gedcom_id
-from .auth import require_admin
+
 
 router = APIRouter(prefix="/families", tags=["families"])
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _check_edit_permission(session: EditorSession, record_created_by: str | None) -> None:
+    if session.is_contributor and record_created_by != session.editor_id:
+        raise HTTPException(status_code=403, detail="Contributors can only edit their own records")
+
 
 @router.post("", response_model=schemas.Family)
 def create_family(
     family: schemas.FamilyCreate,
-    _admin: dict = Depends(require_admin),
-    db: Session = Depends(database.db.get_db)
+    session: EditorSession = Depends(require_editor),
+    db: Session = Depends(database.db.get_db),
 ):
     """Create a new family."""
     gedcom_id = family.gedcom_id
@@ -28,65 +40,68 @@ def create_family(
         if existing:
             raise HTTPException(status_code=400, detail="GEDCOM ID already exists")
 
+    now = _now_iso()
     db_family = database.models.Family(
         gedcom_id=gedcom_id,
         marriage_date=family.marriage_date,
+        marriage_date_approx=family.marriage_date_approx,
         marriage_place=family.marriage_place,
         divorce_date=family.divorce_date,
+        divorce_date_approx=family.divorce_date_approx,
         family_type=family.family_type or "marriage",
         notes=family.notes,
+        created_by=session.editor_id,
+        created_at=now,
     )
 
-    # Add members
     for member_in in family.members:
-        db_member = database.models.FamilyMember(
+        db.add(database.models.FamilyMember(
             individual_id=member_in.individual_id,
             role=member_in.role,
             family=db_family,
-        )
-        db.add(db_member)
+        ))
 
-    # Add children
     for child_in in family.children:
-        db_child = database.models.FamilyChild(
+        db.add(database.models.FamilyChild(
             child_id=child_in.child_id,
             family=db_family,
-        )
-        db.add(db_child)
+        ))
 
     db.add(db_family)
     db.commit()
     db.refresh(db_family)
-
     return db_family
+
 
 @router.get("", response_model=List[schemas.Family])
 def read_families(
     skip: int = 0,
     limit: int = 100,
-    db: Session = Depends(database.db.get_db)
+    db: Session = Depends(database.db.get_db),
 ):
-    """Read list of families with pagination."""
-    families = (
+    return (
         db.query(database.models.Family)
-        .options(joinedload(database.models.Family.members),
-                 joinedload(database.models.Family.children))
+        .options(
+            joinedload(database.models.Family.members),
+            joinedload(database.models.Family.children),
+        )
         .offset(skip)
         .limit(limit)
         .all()
     )
-    return families
+
 
 @router.get("/{family_id}", response_model=schemas.Family)
 def read_family(
     family_id: int,
-    db: Session = Depends(database.db.get_db)
+    db: Session = Depends(database.db.get_db),
 ):
-    """Read a single family by ID."""
     family = (
         db.query(database.models.Family)
-        .options(joinedload(database.models.Family.members),
-                 joinedload(database.models.Family.children))
+        .options(
+            joinedload(database.models.Family.members),
+            joinedload(database.models.Family.children),
+        )
         .filter(database.models.Family.id == family_id)
         .first()
     )
@@ -94,20 +109,21 @@ def read_family(
         raise HTTPException(status_code=404, detail="Family not found")
     return family
 
+
 @router.put("/{family_id}", response_model=schemas.Family)
 def update_family(
     family_id: int,
     family_update: schemas.FamilyUpdate,
-    _admin: dict = Depends(require_admin),
-    db: Session = Depends(database.db.get_db)
+    session: EditorSession = Depends(require_editor),
+    db: Session = Depends(database.db.get_db),
 ):
-    """Update a family."""
     family = db.query(database.models.Family).filter(
         database.models.Family.id == family_id
     ).first()
-
     if family is None:
         raise HTTPException(status_code=404, detail="Family not found")
+
+    _check_edit_permission(session, family.created_by)
 
     update_data = family_update.model_dump(exclude_unset=True)
 
@@ -116,23 +132,19 @@ def update_family(
             if value is not None:
                 family.members.clear()
                 for member_in in value:
-                    # After model_dump(), member_in is a dict
-                    db_member = database.models.FamilyMember(
-                        individual_id=member_in['individual_id'],
-                        role=member_in.get('role'),
+                    db.add(database.models.FamilyMember(
+                        individual_id=member_in["individual_id"],
+                        role=member_in.get("role"),
                         family=family,
-                    )
-                    db.add(db_member)
+                    ))
         elif key == "children":
             if value is not None:
                 family.children.clear()
                 for child_in in value:
-                    # After model_dump(), child_in is a dict
-                    db_child = database.models.FamilyChild(
-                        child_id=child_in['child_id'],
+                    db.add(database.models.FamilyChild(
+                        child_id=child_in["child_id"],
                         family=family,
-                    )
-                    db.add(db_child)
+                    ))
         elif hasattr(family, key):
             setattr(family, key, value)
 
@@ -140,21 +152,20 @@ def update_family(
     db.refresh(family)
     return family
 
+
 @router.delete("/{family_id}")
 def delete_family(
     family_id: int,
-    _admin: dict = Depends(require_admin),
-    db: Session = Depends(database.db.get_db)
+    session: EditorSession = Depends(require_owner),
+    db: Session = Depends(database.db.get_db),
 ):
-    """Delete a family."""
+    """Delete a family. Owner only."""
     family = db.query(database.models.Family).filter(
         database.models.Family.id == family_id
     ).first()
-
     if family is None:
         raise HTTPException(status_code=404, detail="Family not found")
 
     db.delete(family)
     db.commit()
-
     return {"detail": "Family deleted"}

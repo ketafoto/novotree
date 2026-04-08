@@ -203,6 +203,7 @@ export function BulkEditIndividualsPage() {
                   <th className="py-3 px-2 text-left font-semibold text-gray-600">Birth Place</th>
                   <th className="py-3 px-2 text-left font-semibold text-gray-600">Death Date</th>
                   <th className="py-3 px-2 text-left font-semibold text-gray-600">Death Place</th>
+                  <th className="py-3 px-2 text-left font-semibold text-gray-600">Added by</th>
                   <th className="py-3 px-2 text-right font-semibold text-gray-600">Actions</th>
                 </tr>
               </thead>
@@ -306,6 +307,9 @@ export function BulkEditIndividualsPage() {
                         ) : (
                           individual.death_place || '-'
                         )}
+                      </td>
+                      <td className="py-2 px-2 text-xs text-gray-400">
+                        {individual.created_by || '—'}
                       </td>
                       <td className="py-2 px-2 text-right">
                         {isEditing ? (

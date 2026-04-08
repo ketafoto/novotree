@@ -1,14 +1,18 @@
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { User, Heart, Calendar, Image, ArrowRight, Plus } from 'lucide-react';
+import { User, Heart, Calendar, Image, ArrowRight, Plus, Share2, Copy, Trash2, Users } from 'lucide-react';
 import { individualsApi } from '../../api/individuals';
 import { familiesApi } from '../../api/families';
 import { eventsApi } from '../../api/events';
 import { mediaApi } from '../../api/media';
+import { usersApi } from '../../api/auth';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
 import { Spinner } from '../../components/common/Spinner';
 import { formatIndividualName, getLatestName } from '../../utils/nameUtils';
+import { useAuth } from '../../contexts/AuthContext';
+import toast from 'react-hot-toast';
 
 interface StatCardProps {
   title: string;
@@ -36,7 +40,95 @@ function StatCard({ title, value, icon, linkTo, color }: StatCardProps) {
   );
 }
 
+function ShareLinksWidget() {
+  const qc = useQueryClient();
+  const { data: tokens = [], isLoading } = useQuery({
+    queryKey: ['share-tokens'],
+    queryFn: usersApi.listShareTokens,
+  });
+  const [isCreating, setIsCreating] = useState(false);
+
+  const activeTokens = tokens.filter(t => t.is_active);
+
+  const create = async () => {
+    setIsCreating(true);
+    try {
+      await usersApi.createShareToken({ description: 'Family share link' });
+      qc.invalidateQueries({ queryKey: ['share-tokens'] });
+      toast.success('Share link created');
+    } catch {
+      toast.error('Failed to create share link');
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const copy = (token: string) => {
+    const url = `${window.location.origin}/tree?share=${token}`;
+    navigator.clipboard.writeText(url).then(() => toast.success('Link copied!'));
+  };
+
+  const revoke = async (id: number) => {
+    try {
+      await usersApi.revokeShareToken(id);
+      qc.invalidateQueries({ queryKey: ['share-tokens'] });
+    } catch {
+      toast.error('Failed to revoke');
+    }
+  };
+
+  return (
+    <Card
+      title="Share Links"
+      actions={
+        <Link to="/users">
+          <Button variant="ghost" size="sm">
+            Manage
+            <ArrowRight className="w-4 h-4 ml-1" />
+          </Button>
+        </Link>
+      }
+    >
+      {isLoading ? (
+        <div className="py-4 flex justify-center"><Spinner /></div>
+      ) : activeTokens.length === 0 ? (
+        <div className="text-center py-4">
+          <Share2 className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+          <p className="text-sm text-gray-500 mb-3">No share links yet.</p>
+          <Button size="sm" onClick={create} disabled={isCreating}>
+            <Plus className="w-3.5 h-3.5 mr-1" />
+            {isCreating ? 'Creating…' : 'Create link'}
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {activeTokens.map(t => (
+            <div key={t.id} className="flex items-center gap-3 py-2">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-700 truncate">{t.label || 'Unnamed link'}</p>
+                <p className="text-xs text-gray-400 font-mono truncate">
+                  {window.location.origin}/tree?share={t.token}
+                </p>
+              </div>
+              <button onClick={() => copy(t.token)} className="p-1.5 hover:bg-gray-100 rounded" title="Copy link">
+                <Copy className="w-4 h-4 text-gray-500" />
+              </button>
+              <button onClick={() => revoke(t.id)} className="p-1.5 hover:bg-red-50 rounded" title="Revoke">
+                <Trash2 className="w-4 h-4 text-red-400" />
+              </button>
+            </div>
+          ))}
+          <button onClick={create} disabled={isCreating} className="text-xs text-blue-600 hover:underline">
+            {isCreating ? 'Creating…' : '+ New link'}
+          </button>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 export function DashboardPage() {
+  const { isOwner } = useAuth();
   const { data: individuals, isLoading: loadingIndividuals } = useQuery({
     queryKey: ['individuals'],
     queryFn: () => individualsApi.list(),
@@ -137,8 +229,19 @@ export function DashboardPage() {
               Export GEDCOM
             </Button>
           </Link>
+          {isOwner && (
+            <Link to="/users">
+              <Button variant="secondary">
+                <Users className="w-4 h-4 mr-2" />
+                User Manager
+              </Button>
+            </Link>
+          )}
         </div>
       </Card>
+
+      {/* Share Links — owners only */}
+      {isOwner && <ShareLinksWidget />}
 
       {/* Recent Individuals */}
       <Card

@@ -175,3 +175,21 @@ Frontend (Vite + React + TailWind):
 2.
 Use separate databases for different datasets:
 change DEFAULT_OWNER_ID in backend/api/auth.py
+
+
+Next
+=======================
+novotreee
+----------------------
+-1. Check if Tree could be adjusted for viewing on mobile
+-2. Make the private version - keep database on local host - enable to export/import to/from server on demand
+
+1. Ability to remove owner (kind of unregister) - delete it's data - this is by user and this is by admin.
+
+2. We probably need a separate "admin" page - to be accessable by admin (me) only.
+   On this page UI should:
+   1. Manage users - both contributors and owners (invite, add, delete)
+   2. Run manually backup script using the vm-backup.py script
+   (found either under ../novospace.git/scripts/deployment/vm-backup.py. or under deployment folder installed by 
+   ../novospace.git/scripts/deployment/vm-setup.py)
+ 

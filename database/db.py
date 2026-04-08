@@ -102,7 +102,6 @@ def init_db_once(owner_info: Optional[Union[OwnerInfo, str]] = None):
         )
         Base.metadata.create_all(bind=engine)
         _seed_lookup_tables(engine)
-        _run_migrations(engine)
         SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
     return engine
@@ -125,17 +124,6 @@ def _seed_lookup_tables(eng):
                     f"INSERT OR IGNORE INTO {table_name} (code, description) "
                     f"VALUES (:code, :desc)"),
                     {"code": code, "desc": description})
-        conn.commit()
-
-
-def _run_migrations(eng):
-    """Add new columns to existing tables if they don't exist (idempotent)."""
-    with eng.connect() as conn:
-        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(main_media)"))}
-        if "is_default" not in cols:
-            conn.execute(text("ALTER TABLE main_media ADD COLUMN is_default INTEGER DEFAULT 0"))
-        if "age_on_photo" not in cols:
-            conn.execute(text("ALTER TABLE main_media ADD COLUMN age_on_photo INTEGER"))
         conn.commit()
 
 

@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Eye, EyeOff, Key, User } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import apiClient from '../../api/client';
+import { authApi } from '../../api/auth';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
 import { Card } from '../../components/common/Card';
@@ -16,9 +16,9 @@ const changePasswordSchema = z
     newPassword: z
       .string()
       .min(8, 'Password must be at least 8 characters')
-      .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
-      .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
-      .regex(/[0-9]/, 'Password must contain at least one number'),
+      .regex(/[A-Z]/, 'Must contain at least one uppercase letter')
+      .regex(/[a-z]/, 'Must contain at least one lowercase letter')
+      .regex(/[0-9]/, 'Must contain at least one number'),
     confirmPassword: z.string(),
   })
   .refine((data) => data.newPassword === data.confirmPassword, {
@@ -29,7 +29,7 @@ const changePasswordSchema = z
 type ChangePasswordFormData = z.infer<typeof changePasswordSchema>;
 
 export function SettingsPage() {
-  const { viewer } = useAuth();
+  const { editor } = useAuth();
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -45,25 +45,22 @@ export function SettingsPage() {
 
   const onSubmit = async (data: ChangePasswordFormData) => {
     try {
-      await apiClient.post('/auth/change-password', {
+      await authApi.changePassword({
         current_password: data.currentPassword,
         new_password: data.newPassword,
       });
       toast.success('Password changed successfully');
       reset();
-    } catch (error: unknown) {
+    } catch {
       toast.error('Failed to change password. Please check your current password.');
     }
   };
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
-      {/* Page Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-        <p className="text-gray-600 mt-1">
-          Manage your account settings
-        </p>
+        <p className="text-gray-600 mt-1">Manage your account settings</p>
       </div>
 
       {/* Profile Info */}
@@ -73,17 +70,22 @@ export function SettingsPage() {
             <User className="w-8 h-8 text-emerald-600" />
           </div>
           <div>
-            <p className="text-lg font-semibold text-gray-900">{viewer?.viewer_id}</p>
-            <p className="text-gray-600">{viewer?.email || 'No email set'}</p>
-            <p className="text-sm text-gray-500">
-              Member since {viewer?.created_at ? new Date(viewer.created_at).toLocaleDateString() : 'Unknown'}
+            <p className="text-lg font-semibold text-gray-900">
+              {editor?.display_name || editor?.editor_id || 'Dev User'}
             </p>
+            <p className="text-sm text-gray-500 capitalize">{editor?.role ?? 'owner'}</p>
+            <p className="text-gray-600">{editor?.email || 'No email set'}</p>
+            {editor?.created_at && (
+              <p className="text-sm text-gray-400">
+                Member since {new Date(editor.created_at).toLocaleDateString()}
+              </p>
+            )}
           </div>
         </div>
       </Card>
 
-      {/* Change Password */}
-      <Card title="Change Password">
+      {/* Change Password — not shown in dev mode (no real auth) */}
+      <Card title="Security — Change Password">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="relative">
             <Input
@@ -97,11 +99,7 @@ export function SettingsPage() {
               onClick={() => setShowCurrentPassword(!showCurrentPassword)}
               className="absolute right-3 top-8 text-gray-400 hover:text-gray-600"
             >
-              {showCurrentPassword ? (
-                <EyeOff className="w-5 h-5" />
-              ) : (
-                <Eye className="w-5 h-5" />
-              )}
+              {showCurrentPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
             </button>
           </div>
 
@@ -117,11 +115,7 @@ export function SettingsPage() {
               onClick={() => setShowNewPassword(!showNewPassword)}
               className="absolute right-3 top-8 text-gray-400 hover:text-gray-600"
             >
-              {showNewPassword ? (
-                <EyeOff className="w-5 h-5" />
-              ) : (
-                <Eye className="w-5 h-5" />
-              )}
+              {showNewPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
             </button>
           </div>
 
@@ -137,11 +131,7 @@ export function SettingsPage() {
               onClick={() => setShowConfirmPassword(!showConfirmPassword)}
               className="absolute right-3 top-8 text-gray-400 hover:text-gray-600"
             >
-              {showConfirmPassword ? (
-                <EyeOff className="w-5 h-5" />
-              ) : (
-                <Eye className="w-5 h-5" />
-              )}
+              {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
             </button>
           </div>
 
@@ -154,4 +144,3 @@ export function SettingsPage() {
     </div>
   );
 }
-

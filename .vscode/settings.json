@@ -50,7 +50,7 @@
     ],
     "python.testing.autoTestDiscoverOnSaveEnabled": true,
 
-    "workbench.colorTheme": "Best Themes - Darcula",
+    // "workbench.colorTheme": "Default Dark Modern",
 
     "cursorpyright.analysis.extraPaths": [
         "./venv/lib/python3.*/site-packages"

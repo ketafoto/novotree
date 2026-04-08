@@ -12,15 +12,14 @@ from fastapi.responses import FileResponse
 import shutil
 
 from database import db
-from database.owner_info import OwnerInfo
 from database.gedcom_export import export_gedcom
-from backend.api.auth import get_current_viewer, require_admin
+from backend.api.auth import EditorSession, require_editor
 
 router = APIRouter(prefix="/export", tags=["Export"])
 
 
 @router.post("/gedcom")
-def export_gedcom_endpoint(_admin: dict = Depends(require_admin)):
+def export_gedcom_endpoint(session: EditorSession = Depends(require_editor)):
     """
     Export the owner's database to GEDCOM format with media files.
     
@@ -28,21 +27,16 @@ def export_gedcom_endpoint(_admin: dict = Depends(require_admin)):
     - <viewer_id>_export.ged - GEDCOM 5.5.1 file
     - media/ - All associated media files
     """
-    viewer = get_current_viewer()
-    
-    # Resolve active owner info
     owner = db.get_active_owner()
     if not owner:
-        # Local admin viewer maps to same-named owner by default.
-        owner = OwnerInfo(owner_id=viewer["viewer_id"])
-        db.init_db_once(owner)
-    
+        raise HTTPException(status_code=500, detail="No active owner")
+
     # Create temporary directory for export
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
-        
+
         # Generate GEDCOM file
-        gedcom_filename = f"{viewer['viewer_id']}_export.ged"
+        gedcom_filename = f"{session.owner_id}_export.ged"
         gedcom_path = temp_path / gedcom_filename
         
         try:
@@ -54,7 +48,7 @@ def export_gedcom_endpoint(_admin: dict = Depends(require_admin)):
         
         # Create ZIP archive
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        zip_filename = f"{viewer['viewer_id']}_export_{timestamp}.zip"
+        zip_filename = f"{session.owner_id}_export_{timestamp}.zip"
         zip_path = temp_path / zip_filename
         
         with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
@@ -81,17 +75,13 @@ def export_gedcom_endpoint(_admin: dict = Depends(require_admin)):
 
 
 @router.post("/gedcom-raw")
-def export_gedcom_raw_endpoint(_admin: dict = Depends(require_admin)):
+def export_gedcom_raw_endpoint(session: EditorSession = Depends(require_editor)):
     """
     Export the user's database to a raw GEDCOM file (no media, no ZIP).
     """
-    viewer = get_current_viewer()
-
-    # Resolve active owner info
     owner = db.get_active_owner()
     if not owner:
-        owner = OwnerInfo(owner_id=viewer["viewer_id"])
-        db.init_db_once(owner)
+        raise HTTPException(status_code=500, detail="No active owner")
 
     # Create temporary directory for export
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -99,7 +89,7 @@ def export_gedcom_raw_endpoint(_admin: dict = Depends(require_admin)):
 
         # Generate GEDCOM file
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        gedcom_filename = f"{viewer['viewer_id']}_export_{timestamp}.ged"
+        gedcom_filename = f"{session.owner_id}_export_{timestamp}.ged"
         gedcom_path = temp_path / gedcom_filename
 
         try:

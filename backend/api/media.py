@@ -6,10 +6,21 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
+from datetime import datetime, timezone
+
 from .. import schemas
 import database.models
 import database.db
-from .auth import require_admin
+from .auth import EditorSession, require_editor, require_owner
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _check_edit_permission(session: EditorSession, record_created_by: str | None) -> None:
+    if session.is_contributor and record_created_by != session.editor_id:
+        raise HTTPException(status_code=403, detail="Contributors can only edit their own records")
 
 logger = logging.getLogger("gedcom.backend")
 
@@ -31,7 +42,7 @@ async def upload_photo(
     individual_id: int = Form(...),
     age_on_photo: int = Form(...),
     is_default: bool = Form(False),
-    _admin: dict = Depends(require_admin),
+    session: EditorSession = Depends(require_editor),
     db: Session = Depends(database.db.get_db),
 ):
     """Upload a cropped photo for an individual.
@@ -84,6 +95,8 @@ async def upload_photo(
         media_type_code="photo",
         is_default=1 if is_default else 0,
         age_on_photo=age_on_photo,
+        created_by=session.editor_id,
+        created_at=_now_iso(),
     )
     db.add(db_media)
     db.commit()
@@ -120,7 +133,7 @@ def serve_media_file(media_id: int, db: Session = Depends(database.db.get_db)):
 @router.put("/{media_id}/set-default", response_model=schemas.Media)
 def set_default_photo(
     media_id: int,
-    _admin: dict = Depends(require_admin),
+    session: EditorSession = Depends(require_editor),
     db: Session = Depends(database.db.get_db),
 ):
     """Mark a photo as the default for its individual."""
@@ -147,7 +160,7 @@ async def recrop_photo(
     file: UploadFile = File(...),
     age_on_photo: int = Form(...),
     is_default: bool = Form(False),
-    _admin: dict = Depends(require_admin),
+    session: EditorSession = Depends(require_editor),
     db: Session = Depends(database.db.get_db),
 ):
     """Replace an existing photo file with a newly cropped version."""
@@ -198,7 +211,7 @@ async def recrop_photo(
 @router.post("", response_model=schemas.Media)
 def create_media(
     media: schemas.MediaCreate,
-    _admin: dict = Depends(require_admin),
+    session: EditorSession = Depends(require_editor),
     db: Session = Depends(database.db.get_db),
 ):
     """Create a new media record."""
@@ -211,6 +224,8 @@ def create_media(
         description=media.description,
         is_default=1 if media.is_default else 0,
         age_on_photo=media.age_on_photo,
+        created_by=session.editor_id,
+        created_at=_now_iso(),
     )
     db.add(db_media)
     db.commit()
@@ -255,7 +270,7 @@ def read_media_by_id(
 def update_media(
     media_id: int,
     media_update: schemas.MediaUpdate,
-    _admin: dict = Depends(require_admin),
+    session: EditorSession = Depends(require_editor),
     db: Session = Depends(database.db.get_db),
 ):
     """Update a media record."""
@@ -266,6 +281,8 @@ def update_media(
     )
     if media is None:
         raise HTTPException(status_code=404, detail="Media not found")
+
+    _check_edit_permission(session, media.created_by)
 
     update_data = media_update.model_dump(exclude_unset=True)
     for key, value in update_data.items():
@@ -280,7 +297,7 @@ def update_media(
 @router.delete("/{media_id}")
 def delete_media(
     media_id: int,
-    _admin: dict = Depends(require_admin),
+    session: EditorSession = Depends(require_owner),
     db: Session = Depends(database.db.get_db),
 ):
     """Delete a media record and its file on disk."""

@@ -2,13 +2,15 @@ import { useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ReactFlowProvider } from '@xyflow/react';
-import { X, Download, GitBranch } from 'lucide-react';
+import { X, Download, GitBranch, UserPlus } from 'lucide-react';
 
 import { treeApi } from '../../api/tree';
 import { Spinner } from '../../components/common/Spinner';
 import { TreeCanvas } from '../../components/tree/TreeCanvas';
 import { TreeLegend } from '../../components/tree/TreeLegend';
 import { ExportControls } from '../../components/tree/ExportControls';
+import { ContributeDialog } from '../../components/common/ContributeDialog';
+import { useAuth } from '../../contexts/AuthContext';
 
 /**
  * Full tree overview page.
@@ -17,9 +19,14 @@ import { ExportControls } from '../../components/tree/ExportControls';
  */
 export function TreeOverviewPage() {
   const navigate = useNavigate();
+  const { isViewer, editor } = useAuth();
   const [photoIntervalSec, setPhotoIntervalSec] = useState(3);
   const [showExport, setShowExport] = useState(false);
+  const [showContribute, setShowContribute] = useState(false);
   const viewportRef = useRef<HTMLDivElement | null>(null);
+
+  // Derive owner info for the Contribute dialog
+  const ownerOwnerId = editor?.owner_id ?? '';
 
   const { data: treeData, isLoading, isError } = useQuery({
     queryKey: ['tree', 'full'],
@@ -81,6 +88,18 @@ export function TreeOverviewPage() {
               title="Photo carousel interval (1-10 seconds)"
             />
           </div>
+
+          {/* Contribute button — visible to viewers (share token) and anonymous */}
+          {isViewer && ownerOwnerId && (
+            <button
+              onClick={() => setShowContribute(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors"
+              title="Request to contribute data"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              Contribute
+            </button>
+          )}
 
           <button
             onClick={() => setShowExport(!showExport)}
@@ -149,6 +168,13 @@ export function TreeOverviewPage() {
           </div>
         )}
       </div>
+
+      {showContribute && (
+        <ContributeDialog
+          ownerOwnerId={ownerOwnerId}
+          onClose={() => setShowContribute(false)}
+        />
+      )}
     </div>
   );
 }
