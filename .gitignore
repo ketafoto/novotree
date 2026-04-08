@@ -15,3 +15,5 @@ datasets/**/*.svg
 datasets/**/*.heic
 datasets/**/*.heif
 datasets/**/*.heif-srgb
+!datasets/inovoseltsev/**
+datasets/inovoseltsev/data.sqlite.*
