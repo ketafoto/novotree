@@ -1,6 +1,7 @@
 __pycache__
 venv-linux
 venv-win
+.venv
 node_modules
 /test_gedcom.db
 

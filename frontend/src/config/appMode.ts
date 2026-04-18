@@ -1,4 +1,4 @@
-const mode = (import.meta.env.VITE_APP_MODE ?? 'admin').toLowerCase();
+const mode = (import.meta.env.VITE_NOVOTREE_APP_MODE ?? 'admin').toLowerCase();
 
 /** Dev mode: auth is bypassed — no login screen, auto-authenticated as owner. */
 export const isDevMode = mode === 'admin';

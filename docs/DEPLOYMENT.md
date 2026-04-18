@@ -87,7 +87,7 @@ sudo nano /opt/novotree/.env
 Minimum required content (full template in `backend/.env.public.example`):
 
 ```ini
-APP_MODE=production
+NOVOTREE_APP_MODE=public
 CORS_ORIGINS=https://tree.example.com
 ENABLE_API_DOCS=false
 JWT_SECRET_KEY=<64-hex-char string from command above>
@@ -101,7 +101,18 @@ JWT_REFRESH_DAYS=14
 # SMTP_FROM=Novotree <novotree@example.com>
 ```
 
-For the OVC auth model (`APP_MODE` values and JWT settings) see [docs/AUTH_SCHEMA_PROPOSAL.md](docs/AUTH_SCHEMA_PROPOSAL.md).
+### App mode variables
+
+Novotree uses two independent app-mode variables — one for each process involved in serving the app:
+
+| Variable | Who reads it | When | Effect of `admin` (default) |
+|---|---|---|---|
+| `NOVOTREE_APP_MODE` | **Python backend** (FastAPI/uvicorn) | At runtime, from the systemd env file | All API endpoints skip JWT validation; every request is auto-authenticated as the default owner (`inovoseltsev`). No credentials needed. |
+| `VITE_NOVOTREE_APP_MODE` | **Vite** (frontend build tool) | At build time, during `npm run build` | The login screen is omitted from the compiled React app. The value is baked into the JS bundle as a string literal — it cannot be changed after the build without rebuilding. |
+
+Both default to `admin` if unset. **Both must be set to a non-`admin` value in production.** If either is left as `admin`, that layer bypasses authentication regardless of what the other is set to.
+
+For JWT settings see [docs/AUTH_SCHEMA_PROPOSAL.md](docs/AUTH_SCHEMA_PROPOSAL.md).
 
 ---
 
@@ -110,7 +121,7 @@ For the OVC auth model (`APP_MODE` values and JWT settings) see [docs/AUTH_SCHEM
 ```bash
 cd /opt/novotree/frontend
 sudo npm ci
-sudo npm run build          # output → frontend/dist/
+VITE_NOVOTREE_APP_MODE=public npm run build   # output → frontend/dist/
 ```
 
 ---

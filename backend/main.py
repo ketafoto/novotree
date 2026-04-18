@@ -4,8 +4,8 @@
 # Open http://localhost:8000 for API info
 # Open http://localhost:8000/docs for interactive Swagger UI (admin mode only)
 #
-# APP_MODE=admin  (default) — auth bypassed, uses DEFAULT_OWNER_ID database
-# APP_MODE=<anything else>  — full JWT authentication required
+# NOVOTREE_APP_MODE=admin  (default) — auth bypassed, uses DEFAULT_OWNER_ID database
+# NOVOTREE_APP_MODE=<anything else>  — full JWT authentication required
 #
 import logging
 import time

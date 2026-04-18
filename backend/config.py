@@ -50,7 +50,7 @@ class Settings:
 
 
 def load_settings() -> Settings:
-    app_mode = os.getenv("APP_MODE", "admin").strip().lower()
+    app_mode = os.getenv("NOVOTREE_APP_MODE", "admin").strip().lower()
 
     is_dev = app_mode == "admin"
     default_origins = (

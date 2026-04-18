@@ -329,7 +329,7 @@ frontend/
 | **Contributor** | Create + edit own records; cannot delete or edit others' records | Password + JWT (HttpOnly cookie) |
 | **Viewer** | Read-only; no login needed | Share token in URL (`?share=<token>`) |
 
-`APP_MODE=admin` bypasses all auth for local development (acts as the default owner).
+`NOVOTREE_APP_MODE=admin` bypasses all auth for local development (acts as the default owner).
 
 ### 5.2 Owner Signup & Contributor Invitation Flow
 
@@ -417,7 +417,7 @@ Viewers use a share token in the URL (`?share=<token>`, 90-day rolling expiry); 
 | **Token Expiry** | Access: 8 h; Refresh: 14 days; Set-password: 7 days; Share: rolling 90 days |
 | **HTTPS** | Required in production; Caddy provides automatic TLS |
 | **CORS** | Strict origin checking; `SameSite=Strict` on cookies |
-| **Rate Limiting** | Per-IP request window; disabled in APP_MODE=admin |
+| **Rate Limiting** | Per-IP request window; disabled in NOVOTREE_APP_MODE=admin |
 | **Viewer Write Block** | All write methods (POST/PUT/PATCH/DELETE) rejected for share-token sessions |
 | **Contributor Scope** | Contributor can only edit records where `created_by == their editor_id` |
 

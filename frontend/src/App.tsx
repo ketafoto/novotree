@@ -70,7 +70,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <PrefetchTypes />
-      <BrowserRouter>
+      <BrowserRouter basename={import.meta.env.BASE_URL}>
         <AuthProvider>
           <Routes>
             {/* ── Public auth pages (no Layout wrapper) ── */}

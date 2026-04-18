@@ -7,7 +7,7 @@ Terminology:
 - contributor: an editor invited to contribute to one or more owner trees
 - viewer: anonymous read-only access via share token in URL
 
-In APP_MODE=admin (local dev), all auth is bypassed — the default owner is
+In NOVOTREE_APP_MODE=admin (local dev), all auth is bypassed — the default owner is
 auto-resolved without requiring login.
 """
 
@@ -183,7 +183,7 @@ class EditorSession:
 
 
 def _dev_session() -> EditorSession:
-    """Auto-authenticated session for APP_MODE=admin."""
+    """Auto-authenticated session for NOVOTREE_APP_MODE=admin."""
     return EditorSession(
         editor_id=DEFAULT_OWNER_ID,
         owner_id=DEFAULT_OWNER_ID,

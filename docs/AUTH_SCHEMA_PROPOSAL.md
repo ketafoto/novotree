@@ -25,7 +25,7 @@
 | **Contributor** | Invited editor. Can create and edit their own records; cannot delete or edit other contributors' records. Attributed via `created_by` / `created_at`. | Password + JWT (HttpOnly cookie) |
 | **Viewer** | Anonymous read-only access via a share link (`?share=<token>`). No login required; no write access. | Share token in URL query string |
 
-In `APP_MODE=admin` (local development), all auth is bypassed and the process acts as the default owner (`inovoseltsev`).
+In `NOVOTREE_APP_MODE=admin` (local development), all auth is bypassed and the process acts as the default owner (`inovoseltsev`).
 
 ---
 
@@ -176,7 +176,7 @@ Contributors may only edit records where `created_by == their editor_id`. Owners
 ```
 Request arrives
        │
-       ├─ APP_MODE=admin → use DEFAULT_OWNER_ID (dev bypass)
+       ├─ NOVOTREE_APP_MODE=admin → use DEFAULT_OWNER_ID (dev bypass)
        │
        ├─ access_token cookie present → decode JWT → extract owner_id
        │
