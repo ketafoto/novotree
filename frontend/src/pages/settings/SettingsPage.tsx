@@ -8,17 +8,13 @@ import { authApi } from '../../api/auth';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
 import { Card } from '../../components/common/Card';
+import { passwordSchema, PASSWORD_HINT } from '../../utils/passwordValidation';
 import toast from 'react-hot-toast';
 
 const changePasswordSchema = z
   .object({
     currentPassword: z.string().min(1, 'Current password is required'),
-    newPassword: z
-      .string()
-      .min(8, 'Password must be at least 8 characters')
-      .regex(/[A-Z]/, 'Must contain at least one uppercase letter')
-      .regex(/[a-z]/, 'Must contain at least one lowercase letter')
-      .regex(/[0-9]/, 'Must contain at least one number'),
+    newPassword: passwordSchema,
     confirmPassword: z.string(),
   })
   .refine((data) => data.newPassword === data.confirmPassword, {
@@ -109,6 +105,7 @@ export function SettingsPage() {
               type={showNewPassword ? 'text' : 'password'}
               {...register('newPassword')}
               error={errors.newPassword?.message}
+              helperText={PASSWORD_HINT}
             />
             <button
               type="button"

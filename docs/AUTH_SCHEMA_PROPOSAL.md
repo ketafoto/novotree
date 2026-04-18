@@ -137,6 +137,22 @@ UNIQUE on (`editor_id`, `owner_id`). A contributor can have access to multiple t
 
 ---
 
+## Password Policy
+
+All new-password flows (signup, contributor set-password, change-password) enforce the same rules on both frontend (Zod) and backend (FastAPI):
+
+| Rule | Value |
+|------|-------|
+| Minimum length | 8 characters |
+| Uppercase letter | at least one (`[A-Z]`) |
+| Lowercase letter | at least one (`[a-z]`) |
+| Digit | at least one (`[0-9]`) |
+| Special character | not required |
+
+**Rationale for this project:** NovoTree is a private family genealogy app with invited contributors — not a financial or medical system. The audience includes non-technical family members for whom special-character requirements cause friction (forgotten passwords, lockouts) without meaningful security gain. NIST SP 800-63B explicitly recommends against mandatory complexity rules in favour of length; uppercase + lowercase + digit at 8 characters is a solid baseline against dictionary attacks for this threat model. If stricter security is ever needed, increasing the minimum length to 12 is more effective than adding a special-character requirement.
+
+---
+
 ## Token Strategy
 
 ### Access + refresh cookie pair

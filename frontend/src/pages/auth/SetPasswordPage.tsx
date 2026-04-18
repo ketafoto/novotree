@@ -8,6 +8,7 @@ import { authApi } from '../../api/auth';
 import { useAuth } from '../../contexts/AuthContext';
 import { Input } from '../../components/common/Input';
 import { Button } from '../../components/common/Button';
+import { passwordSchema, PASSWORD_HINT } from '../../utils/passwordValidation';
 import toast from 'react-hot-toast';
 
 const schema = z
@@ -19,7 +20,7 @@ const schema = z
       .regex(/^[a-zA-Z0-9_-]+$/, 'Only letters, numbers, _ and - allowed'),
     display_name: z.string().min(1, 'Display name is required'),
     email: z.string().email('Invalid email').optional().or(z.literal('')),
-    password: z.string().min(8, 'Password must be at least 8 characters'),
+    password: passwordSchema,
     confirm_password: z.string().min(1, 'Please confirm your password'),
   })
   .refine((d) => d.password === d.confirm_password, {
@@ -120,6 +121,7 @@ export function SetPasswordPage() {
                 autoComplete="new-password"
                 {...register('password')}
                 error={errors.password?.message}
+                helperText={PASSWORD_HINT}
               />
               <button
                 type="button"

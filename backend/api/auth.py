@@ -60,7 +60,7 @@ class SignupRequest(BaseModel):
     editor_id: str
     display_name: str
     password: str
-    email: Optional[str] = None
+    email: str
 
 
 class SetPasswordRequest(BaseModel):
@@ -83,6 +83,22 @@ class TokenResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # Password helpers
 # ---------------------------------------------------------------------------
+
+_PASSWORD_HINT = (
+    "Password must be at least 8 characters and contain uppercase, lowercase, and a digit."
+)
+
+
+def validate_password_strength(password: str) -> None:
+    import re
+    if (
+        len(password) < 8
+        or not re.search(r"[A-Z]", password)
+        or not re.search(r"[a-z]", password)
+        or not re.search(r"[0-9]", password)
+    ):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=_PASSWORD_HINT)
+
 
 def hash_password(plain: str) -> str:
     return bcrypt.hashpw(plain.encode(), bcrypt.gensalt()).decode()
@@ -376,6 +392,8 @@ def signup(
             detail=f"Username '{body.editor_id}' is already taken",
         )
 
+    validate_password_strength(body.password)
+
     now = datetime.now(timezone.utc).isoformat()
     editor = AuthEditor(
         editor_id=body.editor_id,
@@ -472,6 +490,7 @@ def change_password(
     if not verify_password(body.current_password, editor.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Current password is incorrect")
 
+    validate_password_strength(body.new_password)
     editor.password_hash = hash_password(body.new_password)
     db.commit()
     return {"detail": "Password changed successfully"}
@@ -522,6 +541,7 @@ def set_password(
         ).update({"editor_id": body.editor_id})
         editor.editor_id = body.editor_id
 
+    validate_password_strength(body.password)
     editor.display_name = body.display_name
     editor.email = body.email
     editor.password_hash = hash_password(body.password)

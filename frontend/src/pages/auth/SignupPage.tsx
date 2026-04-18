@@ -8,6 +8,7 @@ import { authApi } from '../../api/auth';
 import { useAuth } from '../../contexts/AuthContext';
 import { Input } from '../../components/common/Input';
 import { Button } from '../../components/common/Button';
+import { passwordSchema, PASSWORD_HINT } from '../../utils/passwordValidation';
 import toast from 'react-hot-toast';
 
 const signupSchema = z
@@ -18,8 +19,8 @@ const signupSchema = z
       .max(32, 'Username must be 32 characters or fewer')
       .regex(/^[a-zA-Z0-9_-]+$/, 'Only letters, numbers, _ and - allowed'),
     display_name: z.string().min(1, 'Display name is required'),
-    email: z.string().email('Invalid email').optional().or(z.literal('')),
-    password: z.string().min(8, 'Password must be at least 8 characters'),
+    email: z.string().email('Invalid email'),
+    password: passwordSchema,
     confirm_password: z.string().min(1, 'Please confirm your password'),
   })
   .refine((d) => d.password === d.confirm_password, {
@@ -39,14 +40,14 @@ export function SignupPage() {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<SignupData>({ resolver: zodResolver(signupSchema) });
+  } = useForm<SignupData>({ resolver: zodResolver(signupSchema), mode: 'onChange' });
 
   const onSubmit = async (data: SignupData) => {
     try {
       await authApi.signup({
         editor_id: data.editor_id,
         display_name: data.display_name,
-        email: data.email || undefined,
+        email: data.email,
         password: data.password,
       });
       // Cookies are now set — pull fresh editor state
@@ -66,7 +67,7 @@ export function SignupPage() {
             <TreeDeciduous className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900">Genealogy DB</h1>
-          <p className="text-gray-500 mt-1 text-sm">Create your owner account</p>
+          <p className="text-gray-500 mt-1 text-sm">Create tree owner account</p>
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
@@ -75,6 +76,7 @@ export function SignupPage() {
               label="Display Name"
               autoComplete="name"
               autoFocus
+              required
               {...register('display_name')}
               error={errors.display_name?.message}
             />
@@ -82,17 +84,20 @@ export function SignupPage() {
             <Input
               label="Username"
               autoComplete="username"
+              required
               {...register('editor_id')}
               error={errors.editor_id?.message}
               helperText="Letters, numbers, _ and - only"
             />
 
             <Input
-              label="Email (optional)"
+              label="Email"
               type="email"
               autoComplete="email"
+              required
               {...register('email')}
               error={errors.email?.message}
+              helperText="Used for password reset"
             />
 
             <div className="relative">
@@ -100,8 +105,11 @@ export function SignupPage() {
                 label="Password"
                 type={showPassword ? 'text' : 'password'}
                 autoComplete="new-password"
+                required
                 {...register('password')}
                 error={errors.password?.message}
+                helperText={PASSWORD_HINT}
+                suppressError
               />
               <button
                 type="button"
@@ -118,6 +126,7 @@ export function SignupPage() {
                 label="Confirm Password"
                 type={showConfirm ? 'text' : 'password'}
                 autoComplete="new-password"
+                required
                 {...register('confirm_password')}
                 error={errors.confirm_password?.message}
               />
