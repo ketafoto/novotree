@@ -94,6 +94,20 @@ UNIQUE on (`editor_id`, `owner_id`). A contributor can have access to multiple t
 | `created_at` | TEXT | ISO-8601 UTC |
 | `resolved_at` | TEXT | ISO-8601 UTC |
 
+#### `auth_pending_owners` — email-verification holding area for new owner signups
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `token` | TEXT | URL-safe random token (32 bytes), unique |
+| `editor_id` | TEXT | Chosen username, unique |
+| `display_name` | TEXT | |
+| `email` | TEXT | |
+| `password_hash` | TEXT | bcrypt hash, computed at signup time |
+| `expires_at` | TEXT | ISO-8601 UTC; 1-hour TTL |
+| `created_at` | TEXT | ISO-8601 UTC |
+
+Row is deleted once the verification link is clicked and the account is promoted to `auth_editors`. Stale rows (expired but unclicked) are cleaned up on the next signup attempt for the same username or email.
+
 #### `auth_set_password_tokens` — one-time onboarding / reset tokens
 
 | Column | Type | Notes |
@@ -114,7 +128,8 @@ UNIQUE on (`editor_id`, `owner_id`). A contributor can have access to multiple t
 |--------|------|------|-------------|
 | GET | `/auth/me` | Cookie | Return current editor identity |
 | POST | `/auth/login` | — | Login with `editor_id` + `password`; sets HttpOnly cookies |
-| POST | `/auth/signup` | — | Owner self-registration |
+| POST | `/auth/signup` | — | Owner self-registration — stores pending row and sends verification email |
+| POST | `/auth/verify-email?token=` | — | Complete owner signup after email verification |
 | POST | `/auth/refresh` | Refresh cookie | Silently re-issue access token |
 | POST | `/auth/logout` | Cookie | Clear auth cookies |
 | POST | `/auth/change-password` | Cookie | Change own password |
@@ -208,7 +223,8 @@ owner_id → db.reset_engine() + db.init_db_once(OwnerInfo(owner_id))
 ## Flows
 
 ### Owner signup
-`POST /auth/signup` → creates `auth_editors` row (role=owner) → calls `init_db_once()` → sets JWT cookies → redirect to Dashboard.
+1. `POST /auth/signup` → validates credentials → creates `auth_pending_owners` row (1-hour TTL) → sends verification email → returns 202.
+2. User clicks link in email → `POST /auth/verify-email?token=<token>` → promotes pending row to `auth_editors` (role=owner) → calls `init_db_once()` → sets JWT cookies → redirect to Dashboard.
 
 ### Contributor invitation
 1. Visitor sees tree via share link → clicks "Contribute" button.

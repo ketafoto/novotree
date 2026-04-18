@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 
 from backend.config import settings
 from database.system_db import get_system_db
-from database.system_models import AuthEditor, AuthEditorTree, AuthSetPasswordToken
+from database.system_models import AuthEditor, AuthEditorTree, AuthPendingOwner, AuthSetPasswordToken
 
 logger = logging.getLogger("gedcom.auth")
 
@@ -80,6 +80,16 @@ class TokenResponse(BaseModel):
     editor: EditorResponse
 
 
+class SignupResponse(BaseModel):
+    detail: str
+    emailed: bool
+
+
+class PublicConfig(BaseModel):
+    admin_email: Optional[str] = None
+    signup_enabled: bool = True
+
+
 # ---------------------------------------------------------------------------
 # Password helpers
 # ---------------------------------------------------------------------------
@@ -108,6 +118,46 @@ def verify_password(plain: str, hashed: str) -> bool:
     try:
         return bcrypt.checkpw(plain.encode(), hashed.encode())
     except Exception:
+        return False
+
+
+# ---------------------------------------------------------------------------
+# Email verification helpers
+# ---------------------------------------------------------------------------
+
+_EMAIL_VERIFY_TOKEN_TTL_HOURS = 1
+
+
+async def _send_verification_email(to: str, display_name: str, verify_url: str) -> bool:
+    if not settings.smtp_enabled:
+        return False
+    try:
+        import aiosmtplib
+        from email.message import EmailMessage
+
+        msg = EmailMessage()
+        msg["From"] = settings.smtp_from
+        msg["To"] = to
+        msg["Subject"] = "Verify your Novotree account"
+        msg.set_content(
+            f"Hello {display_name},\n\n"
+            f"Click the link below to verify your email and complete account creation:\n\n"
+            f"{verify_url}\n\n"
+            f"This link expires in {_EMAIL_VERIFY_TOKEN_TTL_HOURS} hour.\n\n"
+            f"If you did not create this account, you can ignore this email."
+        )
+
+        await aiosmtplib.send(
+            msg,
+            hostname=settings.smtp_host,
+            port=settings.smtp_port,
+            username=settings.smtp_user,
+            password=settings.smtp_password,
+            start_tls=True,
+        )
+        return True
+    except Exception as e:
+        logger.warning(f"Failed to send verification email to {to}: {e}")
         return False
 
 
@@ -374,48 +424,132 @@ def login(
     )
 
 
-@router.post("/signup", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-def signup(
+@router.post("/signup", response_model=SignupResponse, status_code=status.HTTP_202_ACCEPTED)
+async def signup(
     body: SignupRequest,
-    response: Response,
+    request: Request,
     db: Session = Depends(get_system_db),
 ):
     """
-    Owner sign-up. Creates auth_editors row and initializes the owner's database.
-    Reuses existing datasets/<owner_id>/ folder if present (safe for inovoseltsev).
+    Owner sign-up — step 1 of 2.
+
+    Validates credentials and stores the signup in a pending table, then emails
+    a verification link.  The account is not created until the user clicks the link.
+    Returns 202 whether or not the email was sent (to avoid user enumeration).
     """
-    # Uniqueness check
-    existing = db.query(AuthEditor).filter(AuthEditor.editor_id == body.editor_id).first()
-    if existing:
+    if not settings.is_dev and not settings.smtp_enabled:
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Username '{body.editor_id}' is already taken",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Account registration is currently unavailable — SMTP not configured.",
         )
 
     validate_password_strength(body.password)
 
-    now = datetime.now(timezone.utc).isoformat()
-    editor = AuthEditor(
+    # Check for conflicts in both permanent and pending tables
+    if db.query(AuthEditor).filter(AuthEditor.editor_id == body.editor_id).first():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Username '{body.editor_id}' is already taken",
+        )
+    if db.query(AuthEditor).filter(AuthEditor.email == body.email).first():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An account with this email already exists",
+        )
+
+    # Remove any stale pending row for the same editor_id or email
+    now = datetime.now(timezone.utc)
+    db.query(AuthPendingOwner).filter(
+        (AuthPendingOwner.editor_id == body.editor_id) |
+        (AuthPendingOwner.email == body.email)
+    ).delete(synchronize_session=False)
+
+    raw_token = secrets.token_urlsafe(32)
+    expires_at = (now + timedelta(hours=_EMAIL_VERIFY_TOKEN_TTL_HOURS)).isoformat()
+
+    pending = AuthPendingOwner(
+        token=raw_token,
         editor_id=body.editor_id,
         display_name=body.display_name,
         email=body.email,
-        role="owner",
         password_hash=hash_password(body.password),
-        owner_id=body.editor_id,
+        expires_at=expires_at,
+        created_at=now.isoformat(),
+    )
+    db.add(pending)
+    db.commit()
+
+    base = f"{request.url.scheme}://{request.url.netloc}"
+    path = "/novotree/verify-email" if not settings.is_dev else "/verify-email"
+    verify_url = f"{base}{path}?token={raw_token}"
+
+    logger.info(f"Signup pending email verification: {body.editor_id} <{body.email}>")
+
+    emailed = await _send_verification_email(body.email, body.display_name, verify_url)
+    if not emailed:
+        logger.warning(f"Verification email not sent for {body.editor_id} — SMTP not configured or failed. Link: {verify_url}")
+
+    return SignupResponse(
+        detail="Check your email for a verification link to complete account creation.",
+        emailed=emailed,
+    )
+
+
+@router.post("/verify-email", response_model=TokenResponse)
+def verify_email(
+    token: str,
+    response: Response,
+    db: Session = Depends(get_system_db),
+):
+    """
+    Owner sign-up — step 2 of 2.
+
+    Validates the email verification token, promotes the pending signup to a real
+    auth_editors row, initializes the owner's database, and issues JWT cookies.
+    """
+    pending = db.query(AuthPendingOwner).filter(
+        AuthPendingOwner.token == token,
+    ).first()
+    if not pending:
+        raise HTTPException(status_code=400, detail="Invalid or already used verification link")
+
+    if datetime.now(timezone.utc) > datetime.fromisoformat(pending.expires_at):
+        db.delete(pending)
+        db.commit()
+        raise HTTPException(status_code=400, detail="Verification link has expired — please sign up again")
+
+    # Final conflict check (race condition guard)
+    if db.query(AuthEditor).filter(AuthEditor.editor_id == pending.editor_id).first():
+        db.delete(pending)
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Username '{pending.editor_id}' was taken while waiting for verification",
+        )
+
+    now = datetime.now(timezone.utc).isoformat()
+    editor = AuthEditor(
+        editor_id=pending.editor_id,
+        display_name=pending.display_name,
+        email=pending.email,
+        role="owner",
+        password_hash=pending.password_hash,
+        owner_id=pending.editor_id,
         is_active=True,
         created_at=now,
         last_login_at=now,
     )
     db.add(editor)
+    db.delete(pending)
     db.commit()
     db.refresh(editor)
 
-    # Initialize owner's genealogy database (safe — CREATE TABLE IF NOT EXISTS)
+    # Initialize owner's genealogy database
     from database.db import init_db_once
     from database.owner_info import OwnerInfo
-    init_db_once(OwnerInfo(owner_id=body.editor_id))
+    init_db_once(OwnerInfo(owner_id=editor.editor_id))
 
-    logger.info(f"Owner signed up: {body.editor_id}")
+    logger.info(f"Owner email verified and account created: {editor.editor_id}")
 
     _set_auth_cookies(response, editor.editor_id, editor.editor_id, "owner")
     return TokenResponse(
@@ -429,6 +563,52 @@ def signup(
             created_at=editor.created_at,
             last_login_at=editor.last_login_at,
         )
+    )
+
+
+@router.post("/resend-verification", response_model=SignupResponse)
+async def resend_verification(
+    email: str,
+    request: Request,
+    db: Session = Depends(get_system_db),
+):
+    """
+    Resend the email verification link for a pending owner signup.
+    Silently succeeds if the email is not found (to avoid enumeration).
+    """
+    pending = db.query(AuthPendingOwner).filter(
+        AuthPendingOwner.email == email,
+    ).first()
+
+    emailed = False
+    if pending:
+        # Refresh the token and TTL
+        pending.token = secrets.token_urlsafe(32)
+        pending.expires_at = (
+            datetime.now(timezone.utc) + timedelta(hours=_EMAIL_VERIFY_TOKEN_TTL_HOURS)
+        ).isoformat()
+        db.commit()
+
+        base = f"{request.url.scheme}://{request.url.netloc}"
+        path = "/novotree/verify-email" if not settings.is_dev else "/verify-email"
+        verify_url = f"{base}{path}?token={pending.token}"
+
+        emailed = await _send_verification_email(pending.email, pending.display_name, verify_url)
+        if not emailed:
+            logger.warning(f"Resend verification email failed for {email}. Link: {verify_url}")
+
+    return SignupResponse(
+        detail="If that email has a pending signup, a new verification link has been sent.",
+        emailed=emailed,
+    )
+
+
+@router.get("/public-config", response_model=PublicConfig)
+def get_public_config():
+    """Return public configuration for the frontend (no auth required)."""
+    return PublicConfig(
+        admin_email=settings.admin_email,
+        signup_enabled=settings.is_dev or settings.smtp_enabled,
     )
 
 

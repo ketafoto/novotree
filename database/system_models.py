@@ -18,6 +18,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import declarative_base
 
+
 SystemBase = declarative_base()
 
 
@@ -115,3 +116,22 @@ class AuthSetPasswordToken(SystemBase):
     owner_id = Column(String, nullable=True)         # target tree (hint for session after set-password)
     expires_at = Column(String, nullable=False)      # ISO-8601 UTC
     used_at = Column(String, nullable=True)          # ISO-8601 UTC; NULL = not yet used
+
+
+class AuthPendingOwner(SystemBase):
+    """
+    Temporary holding area for owner signups awaiting email verification.
+    Row is deleted and promoted to auth_editors once the verification link is clicked.
+    Expires after 1 hour — a background sweep or on-demand check removes stale rows.
+    """
+
+    __tablename__ = "auth_pending_owners"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    token = Column(String, nullable=False, unique=True)   # URL-safe random token (32 bytes)
+    editor_id = Column(String, nullable=False, unique=True)
+    display_name = Column(String, nullable=False)
+    email = Column(String, nullable=False)
+    password_hash = Column(String, nullable=False)        # already hashed at signup time
+    expires_at = Column(String, nullable=False)           # ISO-8601 UTC; 1-hour TTL
+    created_at = Column(String, nullable=False)           # ISO-8601 UTC

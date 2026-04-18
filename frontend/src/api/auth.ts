@@ -4,6 +4,8 @@ import type {
   AuthResponse,
   LoginRequest,
   SignupRequest,
+  SignupResponse,
+  PublicConfig,
   SetPasswordRequest,
   ChangePasswordRequest,
   ShareToken,
@@ -24,8 +26,23 @@ export const authApi = {
     return res.data;
   },
 
-  signup: async (body: SignupRequest): Promise<AuthResponse> => {
-    const res = await apiClient.post<AuthResponse>('/auth/signup', body);
+  signup: async (body: SignupRequest): Promise<SignupResponse> => {
+    const res = await apiClient.post<SignupResponse>('/auth/signup', body);
+    return res.data;
+  },
+
+  verifyEmail: async (token: string): Promise<AuthResponse> => {
+    const res = await apiClient.post<AuthResponse>('/auth/verify-email', null, { params: { token } });
+    return res.data;
+  },
+
+  resendVerification: async (email: string): Promise<SignupResponse> => {
+    const res = await apiClient.post<SignupResponse>('/auth/resend-verification', null, { params: { email } });
+    return res.data;
+  },
+
+  getPublicConfig: async (): Promise<PublicConfig> => {
+    const res = await apiClient.get<PublicConfig>('/auth/public-config');
     return res.data;
   },
 

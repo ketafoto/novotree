@@ -12,6 +12,7 @@ import { typesApi } from './api/types';
 import { LoginPage } from './pages/auth/LoginPage';
 import { SignupPage } from './pages/auth/SignupPage';
 import { SetPasswordPage } from './pages/auth/SetPasswordPage';
+import { VerifyEmailPage } from './pages/auth/VerifyEmailPage';
 
 // Main pages
 import { DashboardPage } from './pages/dashboard/DashboardPage';
@@ -77,6 +78,7 @@ function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/signup" element={<SignupPage />} />
             <Route path="/set-password" element={<SetPasswordPage />} />
+            <Route path="/verify-email" element={<VerifyEmailPage />} />
 
             {/* ── Viewer-accessible tree routes (share token or authenticated) ── */}
             <Route

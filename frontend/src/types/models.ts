@@ -191,7 +191,17 @@ export interface SignupRequest {
   editor_id: string;
   display_name: string;
   password: string;
-  email?: string;
+  email: string;
+}
+
+export interface SignupResponse {
+  detail: string;
+  emailed: boolean;
+}
+
+export interface PublicConfig {
+  admin_email: string | null;
+  signup_enabled: boolean;
 }
 
 export interface SetPasswordRequest {

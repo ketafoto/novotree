@@ -39,6 +39,9 @@ class Settings:
     smtp_password: str | None
     smtp_from: str | None
 
+    # Support contact shown on auth pages (optional)
+    admin_email: str | None
+
     @property
     def is_dev(self) -> bool:
         """Local development mode — auth bypassed."""
@@ -107,6 +110,7 @@ def load_settings() -> Settings:
         smtp_user=os.getenv("SMTP_USER") or None,
         smtp_password=os.getenv("SMTP_PASSWORD") or None,
         smtp_from=os.getenv("SMTP_FROM") or None,
+        admin_email=os.getenv("ADMIN_EMAIL") or None,
     )
 
 

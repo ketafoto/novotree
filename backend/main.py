@@ -89,7 +89,8 @@ WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 # Paths that don't need an owner database
 AUTH_ONLY_PATHS = {
     "/auth/login", "/auth/signup", "/auth/logout", "/auth/refresh",
-    "/auth/me", "/auth/set-password",
+    "/auth/me", "/auth/set-password", "/auth/verify-email",
+    "/auth/resend-verification", "/auth/public-config",
     "/users/invitations",    # POST from public (Contribute button)
     "/health",
 }
