@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import { shareUrl } from '../../utils/shareUrl';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Share2,
   Copy,
+  Check,
   Trash2,
   Plus,
   Users,
@@ -20,6 +22,23 @@ import { Card } from '../../components/common/Card';
 import { Spinner } from '../../components/common/Spinner';
 import toast from 'react-hot-toast';
 
+function copyToClipboard(text: string) {
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(() => toast.success('Link copied!'));
+  } else {
+    // navigator.clipboard is unavailable on plain HTTP (non-localhost) — use legacy fallback
+    const el = document.createElement('textarea');
+    el.value = text;
+    el.style.position = 'fixed';
+    el.style.opacity = '0';
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand('copy');
+    document.body.removeChild(el);
+    toast.success('Link copied!');
+  }
+}
+
 // ──────────────────────────────────────────────────────────────
 // Share Tokens tab
 // ──────────────────────────────────────────────────────────────
@@ -32,14 +51,16 @@ function ShareTokensTab() {
 
   const [isCreating, setIsCreating] = useState(false);
   const [label, setLabel] = useState('');
+  const [expiryDays, setExpiryDays] = useState(90);
   const [showCreate, setShowCreate] = useState(false);
+  const [copiedTokenId, setCopiedTokenId] = useState<number | null>(null);
 
   const activeTokens = tokens.filter((t) => t.is_active);
 
   const create = async () => {
     setIsCreating(true);
     try {
-      await usersApi.createShareToken({ label: label.trim() || undefined, expires_after_days: 90 });
+      await usersApi.createShareToken({ label: label.trim() || undefined, expires_after_days: expiryDays });
       qc.invalidateQueries({ queryKey: ['share-tokens'] });
       toast.success('Share link created');
       setLabel('');
@@ -51,9 +72,10 @@ function ShareTokensTab() {
     }
   };
 
-  const copy = (token: string) => {
-    const url = `${window.location.origin}/tree?share=${token}`;
-    navigator.clipboard.writeText(url).then(() => toast.success('Link copied!'));
+  const copy = (t: { id: number; token: string }) => {
+    copyToClipboard(shareUrl(t.token));
+    setCopiedTokenId(t.id);
+    setTimeout(() => setCopiedTokenId(null), 2000);
   };
 
   const revoke = async (id: number) => {
@@ -93,6 +115,20 @@ function ShareTokensTab() {
               onKeyDown={(e) => { if (e.key === 'Enter') void create(); }}
             />
           </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Expires in</label>
+            <select
+              value={expiryDays}
+              onChange={(e) => setExpiryDays(Number(e.target.value))}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            >
+              <option value={30}>1 month</option>
+              <option value={90}>3 months</option>
+              <option value={180}>6 months</option>
+              <option value={365}>1 year</option>
+              <option value={3650}>10 years</option>
+            </select>
+          </div>
           <Button size="sm" onClick={create} disabled={isCreating} isLoading={isCreating}>
             Create
           </Button>
@@ -115,21 +151,27 @@ function ShareTokensTab() {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-800">{t.label || 'Unnamed link'}</p>
                 <p className="text-xs text-gray-400 font-mono truncate">
-                  {window.location.origin}/tree?share={t.token}
+                  {shareUrl(t.token)}
                 </p>
                 {t.created_at && (
                   <p className="text-xs text-gray-400">
                     Created {new Date(t.created_at).toLocaleDateString()}
                     {t.last_used_at && ` · Last used ${new Date(t.last_used_at).toLocaleDateString()}`}
+                    {' · '}
+                    <span className="text-emerald-600">
+                      Expires {new Date(new Date(t.created_at).getTime() + t.expires_after_days * 86400000).toLocaleDateString()}
+                    </span>
                   </p>
                 )}
               </div>
               <button
-                onClick={() => copy(t.token)}
+                onClick={() => copy(t)}
                 className="p-1.5 hover:bg-gray-100 rounded"
                 title="Copy link"
               >
-                <Copy className="w-4 h-4 text-gray-500" />
+                {copiedTokenId === t.id
+                  ? <Check className="w-4 h-4 text-emerald-500" />
+                  : <Copy className="w-4 h-4 text-gray-500" />}
               </button>
               <button
                 onClick={() => void revoke(t.id)}
@@ -236,11 +278,7 @@ function ContributorsTab() {
                 {resetLinks[c.editor_id]}
               </span>
               <button
-                onClick={() => {
-                  navigator.clipboard.writeText(resetLinks[c.editor_id]).then(() =>
-                    toast.success('Link copied!')
-                  );
-                }}
+                onClick={() => copyToClipboard(resetLinks[c.editor_id])}
                 className="text-xs text-amber-700 hover:underline flex-shrink-0"
               >
                 Copy
@@ -352,11 +390,7 @@ function RequestsTab() {
                       {approveLinks[inv.id]}
                     </span>
                     <button
-                      onClick={() => {
-                        navigator.clipboard.writeText(approveLinks[inv.id]).then(() =>
-                          toast.success('Link copied!')
-                        );
-                      }}
+                      onClick={() => copyToClipboard(approveLinks[inv.id])}
                       className="text-xs text-emerald-700 hover:underline flex-shrink-0"
                     >
                       Copy

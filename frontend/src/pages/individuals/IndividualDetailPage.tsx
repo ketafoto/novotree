@@ -441,7 +441,7 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
                       }`}
                     >
                       <img
-                        src={`${mediaApi.getFileUrl(item.id)}?v=${photoCacheBust}`}
+                        src={mediaApi.getFileUrl(item.id, { v: photoCacheBust })}
                         alt={`Age ${item.age_on_photo ?? '?'}`}
                         className="w-full h-full object-cover"
                         loading="lazy"
@@ -468,7 +468,7 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
           sourceMediaId={editingPhoto?.id}
           initialImageSrc={
             editingPhoto
-              ? `${mediaApi.getFileUrl(editingPhoto.id)}?v=${photoCacheBust}`
+              ? mediaApi.getFileUrl(editingPhoto.id, { v: photoCacheBust })
               : newPhotoSrc ?? undefined
           }
           initialAge={editingPhoto?.age_on_photo}

@@ -57,7 +57,7 @@ export function ModalPhotosSection({
                   }`}
                 >
                   <img
-                    src={`${mediaApi.getFileUrl(item.id)}?v=${photoCacheBust}`}
+                    src={mediaApi.getFileUrl(item.id, { v: photoCacheBust })}
                     alt={`Age ${item.age_on_photo ?? '?'}`}
                     className="w-full h-full object-cover"
                     loading="lazy"

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { shareUrl } from '../../utils/shareUrl';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { User, Heart, Calendar, Image, ArrowRight, Plus, Share2, Copy, Trash2, Users } from 'lucide-react';
@@ -64,7 +65,7 @@ function ShareLinksWidget() {
   };
 
   const copy = (token: string) => {
-    const url = `${window.location.origin}/tree?share=${token}`;
+    const url = shareUrl(token);
     navigator.clipboard.writeText(url).then(() => toast.success('Link copied!'));
   };
 
@@ -107,7 +108,7 @@ function ShareLinksWidget() {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-700 truncate">{t.label || 'Unnamed link'}</p>
                 <p className="text-xs text-gray-400 font-mono truncate">
-                  {window.location.origin}/tree?share={t.token}
+                  {shareUrl(t.token)}
                 </p>
               </div>
               <button onClick={() => copy(t.token)} className="p-1.5 hover:bg-gray-100 rounded" title="Copy link">

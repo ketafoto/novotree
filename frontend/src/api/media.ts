@@ -90,7 +90,12 @@ export const mediaApi = {
     await apiClient.delete(`/media/${id}`);
   },
 
-  getFileUrl: (id: number): string => {
-    return `/api/media/${id}/file`;
+  getFileUrl: (id: number, extraParams?: Record<string, string | number>): string => {
+    const params = new URLSearchParams();
+    const share = new URLSearchParams(window.location.search).get('share');
+    if (share) params.set('share', share);
+    if (extraParams) Object.entries(extraParams).forEach(([k, v]) => params.set(k, String(v)));
+    const qs = params.toString();
+    return qs ? `/api/media/${id}/file?${qs}` : `/api/media/${id}/file`;
   },
 };

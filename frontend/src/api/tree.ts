@@ -6,23 +6,31 @@ export interface TreeParams {
   descendant_depth?: number;
 }
 
+const shareToken = new URLSearchParams(window.location.search).get('share');
+
+function injectShareToken(data: TreeData): TreeData {
+  if (!shareToken) return data;
+  return {
+    ...data,
+    nodes: data.nodes.map((n) => ({
+      ...n,
+      photo_url: n.photo_url ? `${n.photo_url}?share=${shareToken}` : n.photo_url,
+      photos: n.photos?.map((p) => ({ ...p, url: `${p.url}?share=${shareToken}` })),
+    })),
+  };
+}
+
 export const treeApi = {
-  /**
-   * Get family tree data centered on an individual
-   */
   getTree: async (individualId: number, params: TreeParams = {}): Promise<TreeData> => {
     const response = await apiClient.get<TreeData>(
       `/individuals/${individualId}/tree`,
       { params },
     );
-    return response.data;
+    return injectShareToken(response.data);
   },
 
-  /**
-   * Get the full tree with every individual in the database (all connected components).
-   */
   getFullTree: async (): Promise<TreeData> => {
     const response = await apiClient.get<TreeData>('/tree/full');
-    return response.data;
+    return injectShareToken(response.data);
   },
 };
