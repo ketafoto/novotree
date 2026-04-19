@@ -31,7 +31,6 @@ export function TreeOverviewPage() {
   const { data: treeData, isLoading, isError } = useQuery({
     queryKey: ['tree', 'full'],
     queryFn: () => treeApi.getFullTree(),
-    staleTime: 5 * 60 * 1000,
   });
 
   const handleClose = useCallback(() => {

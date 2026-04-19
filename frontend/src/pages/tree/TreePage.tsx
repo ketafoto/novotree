@@ -52,7 +52,6 @@ export function TreePage() {
         descendant_depth: descendantDepth,
       }),
     enabled: !!id,
-    staleTime: 5 * 60 * 1000,
   });
 
   // Close handler: go back to previous page

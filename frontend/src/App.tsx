@@ -53,6 +53,9 @@ queryClient.setQueryDefaults(['types'], {
   staleTime: Infinity,
   gcTime: 24 * 60 * 60 * 1000,
 });
+queryClient.setQueryDefaults(['tree'], {
+  staleTime: 0,  // always refetch tree on mount so edits elsewhere are reflected immediately
+});
 
 function PrefetchTypes() {
   useEffect(() => {
