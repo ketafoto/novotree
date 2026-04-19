@@ -11,6 +11,10 @@ import { Card } from '../../components/common/Card';
 import { passwordSchema, PASSWORD_HINT } from '../../utils/passwordValidation';
 import toast from 'react-hot-toast';
 
+const profileSchema = z.object({
+  display_name: z.string().min(1, 'Display name is required'),
+});
+
 const changePasswordSchema = z
   .object({
     currentPassword: z.string().min(1, 'Current password is required'),
@@ -22,13 +26,23 @@ const changePasswordSchema = z
     path: ['confirmPassword'],
   });
 
+type ProfileFormData = z.infer<typeof profileSchema>;
 type ChangePasswordFormData = z.infer<typeof changePasswordSchema>;
 
 export function SettingsPage() {
-  const { editor } = useAuth();
+  const { editor, refresh } = useAuth();
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  const {
+    register: registerProfile,
+    handleSubmit: handleProfileSubmit,
+    formState: { errors: profileErrors, isSubmitting: profileSubmitting },
+  } = useForm<ProfileFormData>({
+    resolver: zodResolver(profileSchema),
+    defaultValues: { display_name: editor?.display_name ?? '' },
+  });
 
   const {
     register,
@@ -38,6 +52,16 @@ export function SettingsPage() {
   } = useForm<ChangePasswordFormData>({
     resolver: zodResolver(changePasswordSchema),
   });
+
+  const onProfileSubmit = async (data: ProfileFormData) => {
+    try {
+      await authApi.updateProfile(data.display_name);
+      await refresh();
+      toast.success('Profile updated');
+    } catch {
+      toast.error('Failed to update profile');
+    }
+  };
 
   const onSubmit = async (data: ChangePasswordFormData) => {
     try {
@@ -59,10 +83,10 @@ export function SettingsPage() {
         <p className="text-gray-600 mt-1">Manage your account settings</p>
       </div>
 
-      {/* Profile Info */}
+      {/* Profile */}
       <Card title="Profile">
-        <div className="flex items-center gap-4">
-          <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center">
+        <div className="flex items-center gap-4 mb-6">
+          <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center shrink-0">
             <User className="w-8 h-8 text-emerald-600" />
           </div>
           <div>
@@ -78,6 +102,16 @@ export function SettingsPage() {
             )}
           </div>
         </div>
+        <form onSubmit={handleProfileSubmit(onProfileSubmit)} className="space-y-4">
+          <Input
+            label="Display Name"
+            {...registerProfile('display_name')}
+            error={profileErrors.display_name?.message}
+          />
+          <Button type="submit" isLoading={profileSubmitting}>
+            Save
+          </Button>
+        </form>
       </Card>
 
       {/* Change Password — not shown in dev mode (no real auth) */}

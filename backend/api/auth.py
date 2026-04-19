@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import bcrypt
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
 from jose import JWTError, jwt
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -73,6 +73,10 @@ class SetPasswordRequest(BaseModel):
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
+
+
+class UpdateProfileRequest(BaseModel):
+    display_name: str
 
 
 class TokenResponse(BaseModel):
@@ -685,6 +689,31 @@ def change_password(
     editor.password_hash = hash_password(body.new_password)
     db.commit()
     return {"detail": "Password changed successfully"}
+
+
+@router.patch("/profile", response_model=EditorResponse)
+def update_profile(
+    body: UpdateProfileRequest,
+    session: EditorSession = Depends(get_current_editor),
+    db: Session = Depends(get_system_db),
+):
+    """Update own profile (display name)."""
+    editor = db.query(AuthEditor).filter(AuthEditor.editor_id == session.editor_id).first()
+    if not editor:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    editor.display_name = body.display_name
+    db.commit()
+    return EditorResponse(
+        editor_id=editor.editor_id,
+        display_name=editor.display_name,
+        email=editor.email,
+        role=editor.role,
+        owner_id=editor.owner_id or editor.editor_id,
+        is_active=editor.is_active,
+        created_at=editor.created_at,
+        last_login_at=editor.last_login_at,
+    )
 
 
 @router.post("/set-password", response_model=TokenResponse)
