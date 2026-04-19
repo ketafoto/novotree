@@ -10,8 +10,8 @@ from datetime import datetime, timezone
 
 from .. import schemas
 import database.models
-import database.db
-from .auth import EditorSession, require_editor, require_owner
+from database.owner_info import OwnerInfo
+from .auth import EditorSession, get_tree_db, get_tree_owner_info, get_viewer_tree_db, get_viewer_owner_info, require_editor, require_owner
 
 
 def _now_iso() -> str:
@@ -22,7 +22,7 @@ def _check_edit_permission(session: EditorSession, record_created_by: str | None
     if session.is_contributor and record_created_by != session.editor_id:
         raise HTTPException(status_code=403, detail="Contributors can only edit their own records")
 
-logger = logging.getLogger("gedcom.backend")
+logger = logging.getLogger("novotree.backend")
 
 router = APIRouter(prefix="/media", tags=["media"])
 
@@ -43,7 +43,8 @@ async def upload_photo(
     age_on_photo: int = Form(...),
     is_default: bool = Form(False),
     session: EditorSession = Depends(require_editor),
-    db: Session = Depends(database.db.get_db),
+    db: Session = Depends(get_tree_db),
+    owner: OwnerInfo = Depends(get_tree_owner_info),
 ):
     """Upload a cropped photo for an individual.
 
@@ -68,10 +69,6 @@ async def upload_photo(
     data = await file.read()
     if len(data) > MAX_UPLOAD_SIZE:
         raise HTTPException(status_code=400, detail="File exceeds 20 MB limit")
-
-    owner = database.db.get_active_owner()
-    if not owner:
-        raise HTTPException(status_code=500, detail="No active owner")
 
     media_dir = Path(owner.media_dir)
     media_dir.mkdir(parents=True, exist_ok=True)
@@ -105,7 +102,11 @@ async def upload_photo(
 
 
 @router.get("/{media_id}/file")
-def serve_media_file(media_id: int, db: Session = Depends(database.db.get_db)):
+def serve_media_file(
+    media_id: int,
+    db: Session = Depends(get_viewer_tree_db),
+    owner: OwnerInfo = Depends(get_viewer_owner_info),
+):
     """Serve a media file by its database ID."""
     media = (
         db.query(database.models.Media)
@@ -114,10 +115,6 @@ def serve_media_file(media_id: int, db: Session = Depends(database.db.get_db)):
     )
     if not media or not media.file_path:
         raise HTTPException(status_code=404, detail="Media file not found")
-
-    owner = database.db.get_active_owner()
-    if not owner:
-        raise HTTPException(status_code=500, detail="No active owner")
 
     file_path = Path(owner.media_dir) / media.file_path
     if not file_path.exists():
@@ -134,7 +131,7 @@ def serve_media_file(media_id: int, db: Session = Depends(database.db.get_db)):
 def set_default_photo(
     media_id: int,
     session: EditorSession = Depends(require_editor),
-    db: Session = Depends(database.db.get_db),
+    db: Session = Depends(get_tree_db),
 ):
     """Mark a photo as the default for its individual."""
     media = (
@@ -161,7 +158,8 @@ async def recrop_photo(
     age_on_photo: int = Form(...),
     is_default: bool = Form(False),
     session: EditorSession = Depends(require_editor),
-    db: Session = Depends(database.db.get_db),
+    db: Session = Depends(get_tree_db),
+    owner: OwnerInfo = Depends(get_tree_owner_info),
 ):
     """Replace an existing photo file with a newly cropped version."""
     media = (
@@ -187,10 +185,6 @@ async def recrop_photo(
     if len(data) > MAX_UPLOAD_SIZE:
         raise HTTPException(status_code=400, detail="File exceeds 20 MB limit")
 
-    owner = database.db.get_active_owner()
-    if not owner:
-        raise HTTPException(status_code=500, detail="No active owner")
-
     file_path = Path(owner.media_dir) / media.file_path
     file_path.parent.mkdir(parents=True, exist_ok=True)
     file_path.write_bytes(data)
@@ -212,7 +206,7 @@ async def recrop_photo(
 def create_media(
     media: schemas.MediaCreate,
     session: EditorSession = Depends(require_editor),
-    db: Session = Depends(database.db.get_db),
+    db: Session = Depends(get_tree_db),
 ):
     """Create a new media record."""
     db_media = database.models.Media(
@@ -239,7 +233,7 @@ def read_media(
     limit: int = 100,
     individual_id: Optional[int] = None,
     family_id: Optional[int] = None,
-    db: Session = Depends(database.db.get_db),
+    db: Session = Depends(get_viewer_tree_db),
 ):
     """Read list of media with optional filtering."""
     query = db.query(database.models.Media)
@@ -253,7 +247,7 @@ def read_media(
 @router.get("/{media_id}", response_model=schemas.Media)
 def read_media_by_id(
     media_id: int,
-    db: Session = Depends(database.db.get_db),
+    db: Session = Depends(get_viewer_tree_db),
 ):
     """Read a single media record by ID."""
     media = (
@@ -271,7 +265,7 @@ def update_media(
     media_id: int,
     media_update: schemas.MediaUpdate,
     session: EditorSession = Depends(require_editor),
-    db: Session = Depends(database.db.get_db),
+    db: Session = Depends(get_tree_db),
 ):
     """Update a media record."""
     media = (
@@ -298,7 +292,8 @@ def update_media(
 def delete_media(
     media_id: int,
     session: EditorSession = Depends(require_owner),
-    db: Session = Depends(database.db.get_db),
+    db: Session = Depends(get_tree_db),
+    owner: OwnerInfo = Depends(get_tree_owner_info),
 ):
     """Delete a media record and its file on disk."""
     media = (
@@ -310,11 +305,9 @@ def delete_media(
         raise HTTPException(status_code=404, detail="Media not found")
 
     if media.file_path:
-        owner = database.db.get_active_owner()
-        if owner:
-            file_path = Path(owner.media_dir) / media.file_path
-            if file_path.exists():
-                file_path.unlink()
+        file_path = Path(owner.media_dir) / media.file_path
+        if file_path.exists():
+            file_path.unlink()
 
     db.delete(media)
     db.commit()

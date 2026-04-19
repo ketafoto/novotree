@@ -42,6 +42,11 @@ class Settings:
     # Support contact shown on auth pages (optional)
     admin_email: str | None
 
+    # Whether to set Secure flag on auth cookies.
+    # Defaults True in public mode (production uses HTTPS via Caddy).
+    # Set COOKIE_SECURE=false to test public mode over plain HTTP on a dev VM.
+    cookie_secure: bool
+
     @property
     def is_dev(self) -> bool:
         """Local development mode — auth bypassed."""
@@ -111,6 +116,7 @@ def load_settings() -> Settings:
         smtp_password=os.getenv("SMTP_PASSWORD") or None,
         smtp_from=os.getenv("SMTP_FROM") or None,
         admin_email=os.getenv("ADMIN_EMAIL") or None,
+        cookie_secure=_as_bool(os.getenv("COOKIE_SECURE"), default=not is_dev),
     )
 
 

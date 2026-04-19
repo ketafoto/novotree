@@ -10,7 +10,7 @@
         "fastapi",
         "gedcom",
         "httpx",
-        "inovoseltsev",
+        "aktiniya",
         "novoseltsev",
         "pydantic",
         "pytest",

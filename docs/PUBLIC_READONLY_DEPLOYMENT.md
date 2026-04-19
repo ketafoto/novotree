@@ -2,7 +2,7 @@
 
 > **This document describes the old two-server deployment model (`APP_MODE=public`) which has been replaced.**
 >
-> The current deployment model uses a **single server** with full OVC (Owner / Viewer / Contributor) auth. See [DEPLOYMENT.md](../DEPLOYMENT.md) for the current guide.
+> The current deployment model uses a **single server** with full OCV (Owner / Viewer / Contributor) auth. See [DEPLOYMENT.md](../DEPLOYMENT.md) for the current guide.
 
 ---
 

@@ -11,25 +11,25 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 import shutil
 
-from database import db
+from database.owner_info import OwnerInfo
 from database.gedcom_export import export_gedcom
-from backend.api.auth import EditorSession, require_editor
+from backend.api.auth import EditorSession, get_tree_owner_info, require_editor
 
 router = APIRouter(prefix="/export", tags=["Export"])
 
 
 @router.post("/gedcom")
-def export_gedcom_endpoint(session: EditorSession = Depends(require_editor)):
+def export_gedcom_endpoint(
+    session: EditorSession = Depends(require_editor),
+    owner: OwnerInfo = Depends(get_tree_owner_info),
+):
     """
     Export the owner's database to GEDCOM format with media files.
-    
+
     Returns a ZIP archive containing:
-    - <viewer_id>_export.ged - GEDCOM 5.5.1 file
+    - <owner_id>_export.ged - GEDCOM 5.5.1 file
     - media/ - All associated media files
     """
-    owner = db.get_active_owner()
-    if not owner:
-        raise HTTPException(status_code=500, detail="No active owner")
 
     # Create temporary directory for export
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -75,13 +75,11 @@ def export_gedcom_endpoint(session: EditorSession = Depends(require_editor)):
 
 
 @router.post("/gedcom-raw")
-def export_gedcom_raw_endpoint(session: EditorSession = Depends(require_editor)):
-    """
-    Export the user's database to a raw GEDCOM file (no media, no ZIP).
-    """
-    owner = db.get_active_owner()
-    if not owner:
-        raise HTTPException(status_code=500, detail="No active owner")
+def export_gedcom_raw_endpoint(
+    session: EditorSession = Depends(require_editor),
+    owner: OwnerInfo = Depends(get_tree_owner_info),
+):
+    """Export the owner's database to a raw GEDCOM file (no media, no ZIP)."""
 
     # Create temporary directory for export
     with tempfile.TemporaryDirectory() as temp_dir:

@@ -9,7 +9,7 @@ from typing import Dict, List, Optional, Set, Tuple
 
 from .. import schemas
 import database.models as models
-import database.db
+from .auth import get_viewer_tree_db
 
 router = APIRouter(prefix="/individuals", tags=["tree"])
 full_tree_router = APIRouter(prefix="/tree", tags=["tree"])
@@ -240,7 +240,7 @@ def get_individual_tree(
     individual_id: int,
     ancestor_depth: int = Query(default=1, ge=0, le=MAX_DEPTH_CAP),
     descendant_depth: int = Query(default=1, ge=0, le=MAX_DEPTH_CAP),
-    db: Session = Depends(database.db.get_db),
+    db: Session = Depends(get_viewer_tree_db),
 ):
     """Get the family tree centered on an individual.
 
@@ -480,7 +480,7 @@ def get_individual_tree(
 
 
 @full_tree_router.get("/full", response_model=schemas.TreeResponse)
-def get_full_tree(db: Session = Depends(database.db.get_db)):
+def get_full_tree(db: Session = Depends(get_viewer_tree_db)):
     """Return a tree containing every individual in the database with all
     family connections.  Disconnected sub-trees are included side by side.
 

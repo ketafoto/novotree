@@ -11,12 +11,11 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 import shutil
 
 from database import db
+from database.owner_info import OwnerInfo
 from database.gedcom_import import import_gedcom
-from backend.api.auth import EditorSession, require_owner
+from backend.api.auth import EditorSession, get_tree_owner_info, require_owner
 
 router = APIRouter(prefix="/import", tags=["Import"])
-
-MAX_UPLOAD_SIZE = 200 * 1024 * 1024  # 200 MB
 
 
 def _find_gedcom_in_dir(directory: Path) -> Path | None:
@@ -46,6 +45,7 @@ def _is_zip_file(file_path: Path) -> bool:
 async def import_gedcom_endpoint(
     file: UploadFile = File(...),
     session: EditorSession = Depends(require_owner),
+    owner: OwnerInfo = Depends(get_tree_owner_info),
 ):
     """
     Import a GEDCOM file into the owner's database. Owner only.
@@ -53,21 +53,20 @@ async def import_gedcom_endpoint(
     Accepts either:
     - A plaintext GEDCOM file (any extension)
     - A ZIP archive containing a GEDCOM file and optionally a media/ folder
+
+    The upload is streamed directly to disk — no RAM limit on file size.
+    If a media/ folder is present in the ZIP it replaces the owner's media dir entirely.
     """
-    owner = db.get_active_owner()
-    if not owner:
-        raise HTTPException(status_code=500, detail="No active owner")
-
-    content = await file.read()
-    if len(content) > MAX_UPLOAD_SIZE:
-        raise HTTPException(status_code=413, detail="File too large (max 200 MB)")
-    if len(content) == 0:
-        raise HTTPException(status_code=400, detail="Empty file uploaded")
-
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
         uploaded_path = temp_path / (file.filename or "upload")
-        uploaded_path.write_bytes(content)
+
+        # Stream upload to disk to avoid loading large files into RAM.
+        with uploaded_path.open("wb") as out:
+            shutil.copyfileobj(file.file, out)
+
+        if uploaded_path.stat().st_size == 0:
+            raise HTTPException(status_code=400, detail="Empty file uploaded")
 
         gedcom_path: Path | None = None
         media_source: Path | None = None
@@ -102,14 +101,11 @@ async def import_gedcom_endpoint(
             )
 
         if media_source:
-            owner.media_dir.mkdir(parents=True, exist_ok=True)
-            media_count = 0
-            for media_file in media_source.rglob('*'):
-                if media_file.is_file() and not media_file.name.startswith('.'):
-                    dest = owner.media_dir / media_file.relative_to(media_source)
-                    dest.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(media_file, dest)
-                    media_count += 1
+            # Replace owner's media dir entirely with the imported one.
+            if owner.media_dir.exists():
+                shutil.rmtree(owner.media_dir)
+            shutil.copytree(media_source, owner.media_dir)
+            media_count = sum(1 for f in owner.media_dir.rglob('*') if f.is_file())
 
         try:
             success = import_gedcom(gedcom_path, owner.db_file)
@@ -120,8 +116,7 @@ async def import_gedcom_endpoint(
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
 
-        db.reset_engine()
-        db.init_db_once(owner)
+        db.reload_owner(owner.owner_id)
 
         result = {"status": "ok", "message": "GEDCOM imported successfully"}
         if media_source:

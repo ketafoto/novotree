@@ -107,7 +107,7 @@ Novotree uses two independent app-mode variables — one for each process involv
 
 | Variable | Who reads it | When | Effect of `admin` (default) |
 |---|---|---|---|
-| `NOVOTREE_APP_MODE` | **Python backend** (FastAPI/uvicorn) | At runtime, from the systemd env file | All API endpoints skip JWT validation; every request is auto-authenticated as the default owner (`inovoseltsev`). No credentials needed. |
+| `NOVOTREE_APP_MODE` | **Python backend** (FastAPI/uvicorn) | At runtime, from the systemd env file | All API endpoints skip JWT validation; every request is auto-authenticated as the default owner (`aktiniya`). No credentials needed. |
 | `VITE_NOVOTREE_APP_MODE` | **Vite** (frontend build tool) | At build time, during `npm run build` | The login screen is omitted from the compiled React app. The value is baked into the JS bundle as a string literal — it cannot be changed after the build without rebuilding. |
 
 Both default to `admin` if unset. **Both must be set to a non-`admin` value in production.** If either is left as `admin`, that layer bypasses authentication regardless of what the other is set to.

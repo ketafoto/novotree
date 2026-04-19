@@ -8,11 +8,11 @@ Imports GEDCOM 5.5.1 format file into genealogy database using backend models.
 Usage:
     python -m database.gedcom_import [--owner OWNER_ID] [input_file]
 
-    --owner OWNER_ID: Import for specific owner (default: inovoseltsev)
+    --owner OWNER_ID: Import for specific owner (default: aktiniya)
     input_file      : Path to GEDCOM file (default: user's data.ged)
 
 Examples:
-    python -m database.gedcom_import --owner inovoseltsev
+    python -m database.gedcom_import --owner aktiniya
     python -m database.gedcom_import --owner john path/to/family.ged
 """
 

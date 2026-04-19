@@ -8,11 +8,11 @@ Exports genealogy database to GEDCOM 5.5.1 format using backend models.
 Usage:
     python -m database.gedcom_export [--owner OWNER_ID] [output_file]
 
-    --owner OWNER_ID: Export for specific owner (default: inovoseltsev)
+    --owner OWNER_ID: Export for specific owner (default: aktiniya)
     output_file     : Path to output GEDCOM file (default: user's data.ged)
 
 Examples:
-    python -m database.gedcom_export --owner inovoseltsev
+    python -m database.gedcom_export --owner aktiniya
     python -m database.gedcom_export --owner john path/to/output.ged
 """
 

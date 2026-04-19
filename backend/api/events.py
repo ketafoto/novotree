@@ -5,9 +5,8 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 
 from .. import schemas
-from .auth import EditorSession, require_editor, require_owner
+from .auth import EditorSession, get_tree_db, require_editor, require_owner
 import database.models
-import database.db
 
 
 router = APIRouter(prefix="/events", tags=["events"])
@@ -26,7 +25,7 @@ def _check_edit_permission(session: EditorSession, record_created_by: str | None
 def create_event(
     event: schemas.EventCreate,
     session: EditorSession = Depends(require_editor),
-    db: Session = Depends(database.db.get_db),
+    db: Session = Depends(get_tree_db),
 ):
     db_event = database.models.Event(
         individual_id=event.individual_id,
@@ -51,7 +50,7 @@ def read_events(
     limit: int = 100,
     individual_id: Optional[int] = None,
     family_id: Optional[int] = None,
-    db: Session = Depends(database.db.get_db),
+    db: Session = Depends(get_tree_db),
 ):
     query = db.query(database.models.Event)
     if individual_id:
@@ -64,7 +63,7 @@ def read_events(
 @router.get("/{event_id}", response_model=schemas.Event)
 def read_event(
     event_id: int,
-    db: Session = Depends(database.db.get_db),
+    db: Session = Depends(get_tree_db),
 ):
     event = db.query(database.models.Event).filter(
         database.models.Event.id == event_id
@@ -79,7 +78,7 @@ def update_event(
     event_id: int,
     event_update: schemas.EventUpdate,
     session: EditorSession = Depends(require_editor),
-    db: Session = Depends(database.db.get_db),
+    db: Session = Depends(get_tree_db),
 ):
     event = db.query(database.models.Event).filter(
         database.models.Event.id == event_id
@@ -102,7 +101,7 @@ def update_event(
 def delete_event(
     event_id: int,
     session: EditorSession = Depends(require_owner),
-    db: Session = Depends(database.db.get_db),
+    db: Session = Depends(get_tree_db),
 ):
     """Delete an event. Owner only."""
     event = db.query(database.models.Event).filter(

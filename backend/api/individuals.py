@@ -6,9 +6,8 @@ from typing import List
 
 from .. import schemas
 from . import api_utils
-from .auth import EditorSession, require_editor, require_owner
+from .auth import EditorSession, get_tree_db, require_editor, require_owner
 import database.models
-import database.db
 
 
 router = APIRouter(prefix="/individuals", tags=["individuals"])
@@ -28,7 +27,7 @@ def _check_edit_permission(session: EditorSession, record_created_by: str | None
 def create_individual(
     individual: schemas.IndividualCreate,
     session: EditorSession = Depends(require_editor),
-    db: Session = Depends(database.db.get_db),
+    db: Session = Depends(get_tree_db),
 ):
     """Create a new individual with associated names."""
     gedcom_id = individual.gedcom_id
@@ -80,7 +79,7 @@ def create_individual(
 def read_individuals(
     skip: int = 0,
     limit: int = 100,
-    db: Session = Depends(database.db.get_db),
+    db: Session = Depends(get_tree_db),
 ):
     """Read list of individuals with pagination."""
     return (
@@ -95,7 +94,7 @@ def read_individuals(
 @router.get("/{individual_id}", response_model=schemas.Individual)
 def read_individual_by_id(
     individual_id: int,
-    db: Session = Depends(database.db.get_db),
+    db: Session = Depends(get_tree_db),
 ):
     """Read a single individual by ID."""
     individual = (
@@ -114,7 +113,7 @@ def update_individual(
     individual_id: int,
     individual_update: schemas.IndividualUpdate,
     session: EditorSession = Depends(require_editor),
-    db: Session = Depends(database.db.get_db),
+    db: Session = Depends(get_tree_db),
 ):
     """Update an individual."""
     individual = db.query(database.models.Individual).filter(
@@ -166,7 +165,7 @@ def update_individual(
 def delete_individual(
     individual_id: int,
     session: EditorSession = Depends(require_owner),
-    db: Session = Depends(database.db.get_db),
+    db: Session = Depends(get_tree_db),
 ):
     """Delete an individual. Owner only."""
     individual = db.query(database.models.Individual).filter(

@@ -5,25 +5,10 @@ venv-win
 node_modules
 /test_gedcom.db
 
-# Auth / system database (contains password hashes and tokens — never commit)
-datasets/system.sqlite
-datasets/system.sqlite-shm
-datasets/system.sqlite-wal
+# Root-level sqlite files (created during dev/testing)
+*.sqlite
 
-# SQLite auto-backups created by the backup script
-datasets/**/*.sqlite.*
-
-datasets/**/*.jpg
-datasets/**/*.png
-datasets/**/*.jpeg
-datasets/**/*.gif
-datasets/**/*.bmp
-datasets/**/*.tiff
-datasets/**/*.ico
-datasets/**/*.webp
-datasets/**/*.svg
-datasets/**/*.heic
-datasets/**/*.heif
-datasets/**/*.heif-srgb
-!datasets/inovoseltsev/**
-datasets/inovoseltsev/data.sqlite.*
+# All owner data is runtime — never commit databases or media.
+# Only .gitkeep placeholder files are tracked to preserve directory structure.
+datasets/*
+!datasets/.gitkeep

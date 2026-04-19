@@ -4,8 +4,8 @@
 # Test Configuration:
 # - Each test module gets its own temp folder: tests/<module_path>/temp/
 #   e.g., tests/backend/test_backend.py → tests/backend/test_backend/temp/
-# - The default owner (inovoseltsev) is used, mirroring the real datasets/ structure
-# - The test GEDCOM data is copied from datasets/inovoseltsev/data.ged
+# - The default owner (aktiniya) is used, mirroring the real datasets/ structure
+# - The test GEDCOM data is copied from datasets/aktiniya/data.ged
 # - All test data is cleaned up after successful test runs
 #
 # To invoke tests use:
@@ -30,8 +30,8 @@ from database.owner_info import OwnerInfo
 PROJECT_ROOT_DIR = Path(__file__).parent.parent
 TESTS_DIR = Path(__file__).parent
 
-# Source data: use inovoseltsev's GEDCOM file as test data
-SOURCE_GEDCOM = PROJECT_ROOT_DIR / "datasets" / "inovoseltsev" / "data.ged"
+# Source data: use aktiniya's GEDCOM file as test data
+SOURCE_GEDCOM = PROJECT_ROOT_DIR / "datasets" / "aktiniya" / "data.ged"
 
 
 def get_test_owner(test_module_path: Path) -> OwnerInfo:
@@ -192,8 +192,8 @@ def test_db(request, is_debug):
     Fixture for database setup/teardown.
 
     - Creates test owner directory based on test module path
-      e.g., tests/database/test_database/temp/inovoseltsev/
-    - Copies GEDCOM file from datasets/inovoseltsev/data.ged
+      e.g., tests/database/test_database/temp/aktiniya/
+    - Copies GEDCOM file from datasets/aktiniya/data.ged
     - Creates test database using init_db_once()
     - Does NOT clean up here - cleanup only happens in pytest_sessionfinish
       when ALL tests pass (to preserve files for debugging failed tests)

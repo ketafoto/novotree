@@ -5,10 +5,9 @@ from sqlalchemy.orm import Session, joinedload
 from typing import List
 
 from .. import schemas
-from .auth import EditorSession, require_editor, require_owner
+from .auth import EditorSession, get_tree_db, require_editor, require_owner
 from .api_utils import generate_gedcom_id
 import database.models
-import database.db
 
 
 router = APIRouter(prefix="/families", tags=["families"])
@@ -27,7 +26,7 @@ def _check_edit_permission(session: EditorSession, record_created_by: str | None
 def create_family(
     family: schemas.FamilyCreate,
     session: EditorSession = Depends(require_editor),
-    db: Session = Depends(database.db.get_db),
+    db: Session = Depends(get_tree_db),
 ):
     """Create a new family."""
     gedcom_id = family.gedcom_id
@@ -77,7 +76,7 @@ def create_family(
 def read_families(
     skip: int = 0,
     limit: int = 100,
-    db: Session = Depends(database.db.get_db),
+    db: Session = Depends(get_tree_db),
 ):
     return (
         db.query(database.models.Family)
@@ -94,7 +93,7 @@ def read_families(
 @router.get("/{family_id}", response_model=schemas.Family)
 def read_family(
     family_id: int,
-    db: Session = Depends(database.db.get_db),
+    db: Session = Depends(get_tree_db),
 ):
     family = (
         db.query(database.models.Family)
@@ -115,7 +114,7 @@ def update_family(
     family_id: int,
     family_update: schemas.FamilyUpdate,
     session: EditorSession = Depends(require_editor),
-    db: Session = Depends(database.db.get_db),
+    db: Session = Depends(get_tree_db),
 ):
     family = db.query(database.models.Family).filter(
         database.models.Family.id == family_id
@@ -157,7 +156,7 @@ def update_family(
 def delete_family(
     family_id: int,
     session: EditorSession = Depends(require_owner),
-    db: Session = Depends(database.db.get_db),
+    db: Session = Depends(get_tree_db),
 ):
     """Delete a family. Owner only."""
     family = db.query(database.models.Family).filter(

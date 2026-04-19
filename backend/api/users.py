@@ -29,7 +29,7 @@ from database.system_models import (
     AuthShareToken,
 )
 
-logger = logging.getLogger("gedcom.users")
+logger = logging.getLogger("novotree.users")
 
 router = APIRouter(prefix="/users", tags=["Users"])
 

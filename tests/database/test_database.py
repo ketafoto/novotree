@@ -2,7 +2,7 @@
 # pytest tests/database/test_database.py::TestImportExportGedcom -s
 #
 # This test validates the GEDCOM import/export roundtrip.
-# It uses test data copied from datasets/inovoseltsev/ folder.
+# It uses test data copied from datasets/aktiniya/ folder.
 #
 
 import pytest
@@ -30,7 +30,7 @@ class TestImportExportGedcom:
         # Reset engine to ensure clean state
         database.db.reset_engine()
 
-        # Check if source GEDCOM exists (from datasets/inovoseltsev/)
+        # Check if source GEDCOM exists (from datasets/aktiniya/)
         if not SOURCE_GEDCOM.exists():
             pytest.skip(f"Source GEDCOM file not found: {SOURCE_GEDCOM}")
 

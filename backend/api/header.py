@@ -26,8 +26,7 @@ from typing import Optional
 
 from .. import schemas
 import database.models
-import database.db
-from .auth import EditorSession, require_owner
+from .auth import EditorSession, get_tree_db, get_viewer_tree_db, require_owner
 
 router = APIRouter(prefix="/header", tags=["header"])
 
@@ -78,7 +77,7 @@ def get_or_create_header(db: Session) -> database.models.Header:
 
 
 @router.get("", response_model=schemas.Header)
-def get_header(db: Session = Depends(database.db.get_db)):
+def get_header(db: Session = Depends(get_viewer_tree_db)):
     """Get GEDCOM header and submitter information.
 
     Returns the current header metadata. If no header exists,
@@ -91,7 +90,7 @@ def get_header(db: Session = Depends(database.db.get_db)):
 def update_header(
     header_update: schemas.HeaderUpdate,
     session: EditorSession = Depends(require_owner),
-    db: Session = Depends(database.db.get_db)
+    db: Session = Depends(get_tree_db),
 ):
     """Update GEDCOM header and submitter information.
 
@@ -130,7 +129,7 @@ def update_header(
 def update_submitter(
     submitter: SubmitterUpdate,
     session: EditorSession = Depends(require_owner),
-    db: Session = Depends(database.db.get_db)
+    db: Session = Depends(get_tree_db),
 ):
     """Update submitter information only.
 
@@ -154,7 +153,7 @@ def update_submitter(
 
 
 @router.get("/submitter")
-def get_submitter(db: Session = Depends(database.db.get_db)):
+def get_submitter(db: Session = Depends(get_viewer_tree_db)):
     """Get submitter information only.
 
     Returns just the submitter (contact) details for display in UI.

@@ -19,7 +19,7 @@ PROJECT_ROOT = Path(__file__).parent.parent
 DATASETS_DIR = PROJECT_ROOT / "datasets"
 
 # Default owner id (used when OwnerInfo is created without owner_id)
-_DEFAULT_OWNER_ID = "inovoseltsev"
+_DEFAULT_OWNER_ID = "aktiniya"
 
 
 @dataclass

@@ -29,7 +29,7 @@ from backend.config import settings
 from backend.logging import setup_logging
 
 setup_logging()
-logger = logging.getLogger("gedcom.backend")
+logger = logging.getLogger("novotree.backend")
 
 
 # ---------------------------------------------------------------------------
@@ -41,6 +41,13 @@ async def lifespan(app: FastAPI):
     # Initialize global system database (auth)
     init_system_db()
     logger.info("System database initialized")
+
+    if not settings.cookie_secure and not settings.is_dev:
+        logger.warning(
+            "COOKIE_SECURE=false in public mode — auth cookies are sent over plain HTTP. "
+            "Safe only behind an HTTPS-terminating proxy (Caddy). "
+            "Remove COOKIE_SECURE=false before exposing this server to the internet."
+        )
 
     if settings.is_dev:
         # Dev mode: initialize default owner's database directly

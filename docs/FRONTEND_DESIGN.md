@@ -2,7 +2,7 @@
 
 **Version:** 1.3
 **Date:** April 12, 2026
-**Status:** Updated — Section 5 revised for OVC auth model
+**Status:** Updated — Section 5 revised for OCV auth model
 
 ---
 
@@ -318,7 +318,7 @@ frontend/
 
 ## 5. User Authentication Scheme
 
-> **Implemented model: Owner / Viewer / Contributor (OVC).**
+> **Implemented model: Owner / Contributor / Viewer (OCV).**
 > See [AUTH_SCHEMA_PROPOSAL.md](AUTH_SCHEMA_PROPOSAL.md) for the full as-built reference.
 
 ### 5.1 Roles
@@ -1023,7 +1023,7 @@ export default apiClient;
   2. JWT access_token payload:
      {
        "sub":      "john",           ← editor_id
-       "owner_id": "inovoseltsev",   ← whose tree is active
+       "owner_id": "aktiniya",   ← whose tree is active
        "role":     "contributor",    ← 'owner' | 'contributor'
        "type":     "access",
        "exp":      1735500000
@@ -1320,7 +1320,7 @@ Files are stored in `datasets/<owner_id>/media/` with unique filenames:
 
 ```
 datasets/
-└── inovoseltsev/
+└── aktiniya/
     ├── data.sqlite
     ├── data.ged
     └── media/
@@ -1610,7 +1610,7 @@ sudo systemctl restart rsyslog
 ## 16. Implementation Phases
 
 ### Phase 1: Foundation (Week 1-2)
-**Goal:** Basic project setup, OVC authentication, and User Manager
+**Goal:** Basic project setup, OCV authentication, and User Manager
 
 - [x] Initialize React + Vite + TypeScript project
 - [x] Configure Tailwind CSS (light theme)
@@ -1619,7 +1619,7 @@ sudo systemctl restart rsyslog
 - [x] Create global auth database (`datasets/system.sqlite`)
 - [x] Implement auth endpoints (signup, login, logout, refresh, set-password, me)
 - [x] Implement user management endpoints (/users/share-tokens, /users/contributors, /users/invitations)
-- [x] Implement AuthContext with OVC role detection and share-token support
+- [x] Implement AuthContext with OCV role detection and share-token support
 - [x] Create Login, Signup, SetPassword pages
 - [x] Create User Manager page (Share Links, Contributors, Requests tabs)
 - [x] Create ProtectedRoute with minRole prop (viewer / contributor / owner)

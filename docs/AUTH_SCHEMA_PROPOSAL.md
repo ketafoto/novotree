@@ -1,7 +1,7 @@
-# Auth System — As-Built (OVC Model)
+# Auth System — As-Built (OCV Model)
 
 > This document supersedes the original design proposal.  
-> It describes the **Owner / Viewer / Contributor (OVC)** system that was implemented.
+> It describes the **Owner / Contributor / Viewer (OCV)** system that was implemented.
 
 ---
 
@@ -25,7 +25,7 @@
 | **Contributor** | Invited editor. Can create and edit their own records; cannot delete or edit other contributors' records. Attributed via `created_by` / `created_at`. | Password + JWT (HttpOnly cookie) |
 | **Viewer** | Anonymous read-only access via a share link (`?share=<token>`). No login required; no write access. | Share token in URL query string |
 
-In `NOVOTREE_APP_MODE=admin` (local development), all auth is bypassed and the process acts as the default owner (`inovoseltsev`).
+In `NOVOTREE_APP_MODE=admin` (local development), all auth is bypassed and the process acts as the default owner (`aktiniya`).
 
 ---
 
@@ -37,7 +37,7 @@ In `NOVOTREE_APP_MODE=admin` (local development), all auth is bypassed and the p
 project_root/
 └── datasets/
     ├── system.sqlite              ← Global auth database (NEVER commit to git)
-    ├── inovoseltsev/
+    ├── aktiniya/
     │   ├── data.sqlite            ← Owner genealogy data
     │   └── media/
     └── <other_owner>/
@@ -204,6 +204,8 @@ Contributors may only edit records where `created_by == their editor_id`. Owners
 
 ## Owner Resolution per Request
 
+Every request carries its `owner_id` through FastAPI's dependency injection chain — there is no global active-owner state.
+
 ```
 Request arrives
        │
@@ -215,8 +217,23 @@ Request arrives
                │
                └─ (write methods blocked for share sessions)
 
-owner_id → db.reset_engine() + db.init_db_once(OwnerInfo(owner_id))
+owner_id → get_engine(owner_id)  ← cached in pool; created on first use
+         → per-request Session   ← opened/closed within the request lifecycle
 ```
+
+### Dependency chain (FastAPI)
+
+```
+get_current_editor()        ← decodes JWT, returns EditorSession(owner_id=...)
+    └─ get_tree_db()        ← yields Session for owner's data.sqlite
+    └─ get_tree_owner_info() ← returns OwnerInfo (paths for owner's files)
+
+get_viewer_owner_id()       ← resolves owner_id from JWT or share token
+    └─ get_viewer_tree_db() ← yields Session (read-only endpoints, tree/media)
+    └─ get_viewer_owner_info()
+```
+
+Multiple owners can be served simultaneously — each request opens a session from its own engine. Engines are cached in `_pool: dict[str, Engine]` and never shared across owners.
 
 ---
 
@@ -224,7 +241,7 @@ owner_id → db.reset_engine() + db.init_db_once(OwnerInfo(owner_id))
 
 ### Owner signup
 1. `POST /auth/signup` → validates credentials → creates `auth_pending_owners` row (1-hour TTL) → sends verification email → returns 202.
-2. User clicks link in email → `POST /auth/verify-email?token=<token>` → promotes pending row to `auth_editors` (role=owner) → calls `init_db_once()` → sets JWT cookies → redirect to Dashboard.
+2. User clicks link in email → `POST /auth/verify-email?token=<token>` → promotes pending row to `auth_editors` (role=owner) → calls `get_engine(owner_id)` to initialise the owner's DB → sets JWT cookies → redirect to Dashboard.
 
 ### Contributor invitation
 1. Visitor sees tree via share link → clicks "Contribute" button.

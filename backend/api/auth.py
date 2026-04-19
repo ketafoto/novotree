@@ -26,10 +26,10 @@ from backend.config import settings
 from database.system_db import get_system_db
 from database.system_models import AuthEditor, AuthEditorTree, AuthPendingOwner, AuthSetPasswordToken
 
-logger = logging.getLogger("gedcom.auth")
+logger = logging.getLogger("novotree.auth")
 
 # Default owner used in dev bypass mode
-DEFAULT_OWNER_ID = "inovoseltsev"
+DEFAULT_OWNER_ID = "aktiniya"
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -223,7 +223,7 @@ def _decode_token(token: str, expected_type: str) -> dict:
 def _set_auth_cookies(response: Response, editor_id: str, owner_id: str, role: str) -> None:
     access = _issue_access_token(editor_id, owner_id, role)
     refresh = _issue_refresh_token(editor_id, owner_id, role)
-    secure = not settings.is_dev
+    secure = settings.cookie_secure
     response.set_cookie(
         key="access_token", value=access,
         httponly=True, secure=secure, samesite="strict",
@@ -358,6 +358,34 @@ def get_viewer_owner_id(
                 return token_row.owner_id
 
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+
+
+# ---------------------------------------------------------------------------
+# Tree database dependencies (per-request, owner-scoped)
+# ---------------------------------------------------------------------------
+
+def get_tree_db(session: EditorSession = Depends(get_current_editor)):
+    """Dependency: yield a SQLAlchemy session for the authenticated editor's owner tree."""
+    from database.db import get_db as _get_db
+    yield from _get_db(session.owner_id)
+
+
+def get_viewer_tree_db(owner_id: str = Depends(get_viewer_owner_id)):
+    """Dependency: yield a SQLAlchemy session for viewer access (JWT or share token)."""
+    from database.db import get_db as _get_db
+    yield from _get_db(owner_id)
+
+
+def get_tree_owner_info(session: EditorSession = Depends(get_current_editor)):
+    """Dependency: return OwnerInfo for the authenticated editor's owner tree."""
+    from database.db import get_owner_info as _get_owner_info
+    return _get_owner_info(session.owner_id)
+
+
+def get_viewer_owner_info(owner_id: str = Depends(get_viewer_owner_id)):
+    """Dependency: return OwnerInfo for viewer access (JWT or share token)."""
+    from database.db import get_owner_info as _get_owner_info
+    return _get_owner_info(owner_id)
 
 
 # ---------------------------------------------------------------------------
@@ -559,10 +587,9 @@ def verify_email(
     db.commit()
     db.refresh(editor)
 
-    # Initialize owner's genealogy database
-    from database.db import init_db_once
-    from database.owner_info import OwnerInfo
-    init_db_once(OwnerInfo(owner_id=editor.editor_id))
+    # Initialize owner's genealogy database (ensures dirs + tables exist)
+    from database.db import get_engine
+    get_engine(editor.editor_id)
 
     logger.info(f"Owner email verified and account created: {editor.editor_id}")
 

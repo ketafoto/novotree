@@ -4,12 +4,13 @@ Lookup types API endpoints.
 Provides endpoints to fetch predefined GEDCOM lookup values
 for dropdowns in the frontend.
 """
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from sqlalchemy import text
+from sqlalchemy.orm import Session
 from typing import List
 from pydantic import BaseModel
 
-from database import db
+from .auth import get_viewer_tree_db
 
 router = APIRouter(prefix="/types", tags=["Lookup Types"])
 
@@ -21,144 +22,49 @@ class LookupType(BaseModel):
 
 
 @router.get("/sex", response_model=List[LookupType])
-def get_sex_types():
+def get_sex_types(db: Session = Depends(get_viewer_tree_db)):
     """Get all sex type codes for dropdowns."""
-    engine = db.init_db_once()
-    
-    with engine.connect() as conn:
-        result = conn.execute(
-            text("SELECT code, description FROM lookup_sexes ORDER BY code")
-        )
-        rows = result.fetchall()
-    
-    return [LookupType(code=row[0], description=row[1]) for row in rows]
+    rows = db.execute(text("SELECT code, description FROM lookup_sexes ORDER BY code")).fetchall()
+    return [LookupType(code=r[0], description=r[1]) for r in rows]
 
 
 @router.get("/events", response_model=List[LookupType])
-def get_event_types():
+def get_event_types(db: Session = Depends(get_viewer_tree_db)):
     """Get all event type codes for dropdowns."""
-    engine = db.init_db_once()
-    
-    with engine.connect() as conn:
-        result = conn.execute(
-            text("SELECT code, description FROM lookup_event_types ORDER BY code")
-        )
-        rows = result.fetchall()
-    
-    return [LookupType(code=row[0], description=row[1]) for row in rows]
+    rows = db.execute(text("SELECT code, description FROM lookup_event_types ORDER BY code")).fetchall()
+    return [LookupType(code=r[0], description=r[1]) for r in rows]
 
 
 @router.get("/media", response_model=List[LookupType])
-def get_media_types():
+def get_media_types(db: Session = Depends(get_viewer_tree_db)):
     """Get all media type codes for dropdowns."""
-    engine = db.init_db_once()
-    
-    with engine.connect() as conn:
-        result = conn.execute(
-            text("SELECT code, description FROM lookup_media_types ORDER BY code")
-        )
-        rows = result.fetchall()
-    
-    return [LookupType(code=row[0], description=row[1]) for row in rows]
+    rows = db.execute(text("SELECT code, description FROM lookup_media_types ORDER BY code")).fetchall()
+    return [LookupType(code=r[0], description=r[1]) for r in rows]
 
 
 @router.get("/family-roles", response_model=List[LookupType])
-def get_family_roles():
+def get_family_roles(db: Session = Depends(get_viewer_tree_db)):
     """Get all family member role codes for dropdowns."""
-    engine = db.init_db_once()
-    
-    with engine.connect() as conn:
-        result = conn.execute(
-            text("SELECT code, description FROM lookup_family_roles ORDER BY code")
-        )
-        rows = result.fetchall()
-    
-    return [LookupType(code=row[0], description=row[1]) for row in rows]
+    rows = db.execute(text("SELECT code, description FROM lookup_family_roles ORDER BY code")).fetchall()
+    return [LookupType(code=r[0], description=r[1]) for r in rows]
 
 
 @router.get("/family-types", response_model=List[LookupType])
-def get_family_types():
+def get_family_types(db: Session = Depends(get_viewer_tree_db)):
     """Get all family type codes for dropdowns."""
-    engine = db.init_db_once()
-
-    with engine.connect() as conn:
-        result = conn.execute(
-            text("SELECT code, description FROM lookup_family_types ORDER BY code")
-        )
-        rows = result.fetchall()
-
-    return [LookupType(code=row[0], description=row[1]) for row in rows]
+    rows = db.execute(text("SELECT code, description FROM lookup_family_types ORDER BY code")).fetchall()
+    return [LookupType(code=r[0], description=r[1]) for r in rows]
 
 
 @router.get("/name-types", response_model=List[LookupType])
-def get_name_types():
+def get_name_types(db: Session = Depends(get_viewer_tree_db)):
     """Get all name types for dropdowns."""
-    engine = db.init_db_once()
-
-    with engine.connect() as conn:
-        conn.execute(
-            text(
-                """
-                CREATE TABLE IF NOT EXISTS lookup_name_types (
-                  code TEXT PRIMARY KEY,
-                  description TEXT NOT NULL
-                )
-                """
-            )
-        )
-        conn.execute(
-            text(
-                """
-                INSERT OR IGNORE INTO lookup_name_types (code, description) VALUES
-                  ('birth', 'Birth'),
-                  ('aka', 'Also Known As'),
-                  ('married', 'Married'),
-                  ('maiden', 'Maiden')
-                """
-            )
-        )
-        result = conn.execute(
-            text("SELECT code, description FROM lookup_name_types ORDER BY code")
-        )
-        rows = result.fetchall()
-
-    return [LookupType(code=row[0], description=row[1]) for row in rows]
+    rows = db.execute(text("SELECT code, description FROM lookup_name_types ORDER BY code")).fetchall()
+    return [LookupType(code=r[0], description=r[1]) for r in rows]
 
 
 @router.get("/date-approx", response_model=List[LookupType])
-def get_date_approx_types():
+def get_date_approx_types(db: Session = Depends(get_viewer_tree_db)):
     """Get all approximate date types for dropdowns."""
-    engine = db.init_db_once()
-
-    with engine.connect() as conn:
-        conn.execute(
-            text(
-                """
-                CREATE TABLE IF NOT EXISTS lookup_date_approx_types (
-                  code TEXT PRIMARY KEY,
-                  description TEXT NOT NULL
-                )
-                """
-            )
-        )
-        conn.execute(
-            text(
-                """
-                INSERT OR IGNORE INTO lookup_date_approx_types (code, description) VALUES
-                  ('ABT', 'About'),
-                  ('CAL', 'Calculated'),
-                  ('EST', 'Estimated'),
-                  ('BEF', 'Before'),
-                  ('AFT', 'After'),
-                  ('BET', 'Between X And Y'),
-                  ('FROM', 'From X To Y')
-                """
-            )
-        )
-        result = conn.execute(
-            text("SELECT code, description FROM lookup_date_approx_types ORDER BY code")
-        )
-        rows = result.fetchall()
-
-    return [LookupType(code=row[0], description=row[1]) for row in rows]
-
+    rows = db.execute(text("SELECT code, description FROM lookup_date_approx_types ORDER BY code")).fetchall()
+    return [LookupType(code=r[0], description=r[1]) for r in rows]
