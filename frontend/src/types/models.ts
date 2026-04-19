@@ -188,8 +188,7 @@ export interface LoginRequest {
 }
 
 export interface SignupRequest {
-  editor_id: string;
-  display_name: string;
+  display_name?: string;
   password: string;
   email: string;
 }

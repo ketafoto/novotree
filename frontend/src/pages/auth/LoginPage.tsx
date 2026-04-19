@@ -10,7 +10,7 @@ import { Button } from '../../components/common/Button';
 import toast from 'react-hot-toast';
 
 const step1Schema = z.object({
-  editor_id: z.string().min(1, 'Username is required'),
+  editor_id: z.string().min(1, 'Email or username is required'),
   password: z.string().min(1, 'Password is required'),
 });
 type Step1Data = z.infer<typeof step1Schema>;
@@ -45,7 +45,7 @@ export function LoginPage() {
         setAvailableTrees(trees);
         setStep(2);
       } else {
-        toast.error('Invalid username or password');
+        toast.error('Invalid email or password');
       }
     }
   };
@@ -77,8 +77,9 @@ export function LoginPage() {
           {step === 1 ? (
             <form onSubmit={handleSubmit(onStep1)} className="space-y-4">
               <Input
-                label="Username"
-                autoComplete="username"
+                label="Email"
+                type="email"
+                autoComplete="email"
                 autoFocus
                 {...register('editor_id')}
                 error={errors.editor_id?.message}

@@ -51,14 +51,13 @@ class EditorResponse(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    editor_id: str
+    editor_id: str                   # accepts either username or email
     password: str
     owner_id: Optional[str] = None  # required for contributors with multiple trees
 
 
 class SignupRequest(BaseModel):
-    editor_id: str
-    display_name: str
+    display_name: Optional[str] = None  # derived from email local part if omitted
     password: str
     email: str
 
@@ -97,6 +96,19 @@ class PublicConfig(BaseModel):
 _PASSWORD_HINT = (
     "Password must be at least 8 characters and contain uppercase, lowercase, and a digit."
 )
+
+
+def _derive_editor_id(email: str, db) -> str:
+    """Derive a unique editor_id from the local part of an email address."""
+    import re
+    local = email.split("@")[0]
+    base = re.sub(r"[^a-zA-Z0-9_-]", "_", local)[:32].strip("_") or "user"
+    candidate = base
+    counter = 1
+    while db.query(AuthEditor).filter(AuthEditor.editor_id == candidate).first():
+        candidate = f"{base}_{counter}"
+        counter += 1
+    return candidate
 
 
 def validate_password_strength(password: str) -> None:
@@ -367,9 +379,10 @@ def login(
     response: Response,
     db: Session = Depends(get_system_db),
 ):
-    """Login with editor_id + password. Returns editor info and sets HttpOnly cookies."""
+    """Login with email or username + password. Returns editor info and sets HttpOnly cookies."""
+    from sqlalchemy import or_
     editor = db.query(AuthEditor).filter(
-        AuthEditor.editor_id == body.editor_id,
+        or_(AuthEditor.editor_id == body.editor_id, AuthEditor.email == body.editor_id),
         AuthEditor.is_active == True,
     ).first()
 
@@ -445,23 +458,21 @@ async def signup(
 
     validate_password_strength(body.password)
 
-    # Check for conflicts in both permanent and pending tables
-    if db.query(AuthEditor).filter(AuthEditor.editor_id == body.editor_id).first():
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Username '{body.editor_id}' is already taken",
-        )
+    # Check email conflict
     if db.query(AuthEditor).filter(AuthEditor.email == body.email).first():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="An account with this email already exists",
         )
 
-    # Remove any stale pending row for the same editor_id or email
+    # Derive editor_id and display_name
+    editor_id = _derive_editor_id(body.email, db)
+    display_name = body.display_name or editor_id
+
+    # Remove any stale pending row for the same email
     now = datetime.now(timezone.utc)
     db.query(AuthPendingOwner).filter(
-        (AuthPendingOwner.editor_id == body.editor_id) |
-        (AuthPendingOwner.email == body.email)
+        AuthPendingOwner.email == body.email
     ).delete(synchronize_session=False)
 
     raw_token = secrets.token_urlsafe(32)
@@ -469,8 +480,8 @@ async def signup(
 
     pending = AuthPendingOwner(
         token=raw_token,
-        editor_id=body.editor_id,
-        display_name=body.display_name,
+        editor_id=editor_id,
+        display_name=display_name,
         email=body.email,
         password_hash=hash_password(body.password),
         expires_at=expires_at,
@@ -483,11 +494,11 @@ async def signup(
     path = "/novotree/verify-email" if not settings.is_dev else "/verify-email"
     verify_url = f"{base}{path}?token={raw_token}"
 
-    logger.info(f"Signup pending email verification: {body.editor_id} <{body.email}>")
+    logger.info(f"Signup pending email verification: {editor_id} <{body.email}>")
 
-    emailed = await _send_verification_email(body.email, body.display_name, verify_url)
+    emailed = await _send_verification_email(body.email, display_name, verify_url)
     if not emailed:
-        logger.warning(f"Verification email not sent for {body.editor_id} — SMTP not configured or failed. Link: {verify_url}")
+        logger.warning(f"Verification email not sent for {editor_id} — SMTP not configured or failed. Link: {verify_url}")
 
     return SignupResponse(
         detail="Check your email for a verification link to complete account creation.",

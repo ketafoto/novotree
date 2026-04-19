@@ -13,12 +13,7 @@ import toast from 'react-hot-toast';
 
 const signupSchema = z
   .object({
-    editor_id: z
-      .string()
-      .min(3, 'Username must be at least 3 characters')
-      .max(32, 'Username must be 32 characters or fewer')
-      .regex(/^[a-zA-Z0-9_-]+$/, 'Only letters, numbers, _ and - allowed'),
-    display_name: z.string().min(1, 'Display name is required'),
+    display_name: z.string().optional(),
     email: z.string().email('Invalid email'),
     password: passwordSchema,
     confirm_password: z.string().min(1, 'Please confirm your password'),
@@ -46,8 +41,7 @@ export function SignupPage() {
   const onSubmit = async (data: SignupData) => {
     try {
       await authApi.signup({
-        editor_id: data.editor_id,
-        display_name: data.display_name,
+        display_name: data.display_name || undefined,
         email: data.email,
         password: data.password,
       });
@@ -139,18 +133,9 @@ export function SignupPage() {
               label="Display Name"
               autoComplete="name"
               autoFocus
-              required
               {...register('display_name')}
               error={errors.display_name?.message}
-            />
-
-            <Input
-              label="Username"
-              autoComplete="username"
-              required
-              {...register('editor_id')}
-              error={errors.editor_id?.message}
-              helperText="Letters, numbers, _ and - only"
+              helperText="Optional — your name as shown in the app"
             />
 
             <Input
@@ -160,7 +145,7 @@ export function SignupPage() {
               required
               {...register('email')}
               error={errors.email?.message}
-              helperText="Used for password reset"
+              helperText="Used to log in and for password reset"
             />
 
             <div className="relative">
