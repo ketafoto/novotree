@@ -66,6 +66,7 @@ export function ExportControls({
       link.href = dataUrl;
       link.click();
 
+      onClose();
       toast.success('Tree exported successfully');
     } catch (err) {
       console.error('Export failed:', err);
