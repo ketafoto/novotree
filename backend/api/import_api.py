@@ -15,6 +15,8 @@ from database.owner_info import OwnerInfo
 from database.gedcom_import import import_gedcom
 from backend.api.auth import EditorSession, get_tree_owner_info, require_owner
 
+MAX_IMPORT_SIZE = 2 * 1024 * 1024 * 1024  # 2 GB
+
 router = APIRouter(prefix="/import", tags=["Import"])
 
 
@@ -65,8 +67,11 @@ async def import_gedcom_endpoint(
         with uploaded_path.open("wb") as out:
             shutil.copyfileobj(file.file, out)
 
-        if uploaded_path.stat().st_size == 0:
+        file_size = uploaded_path.stat().st_size
+        if file_size == 0:
             raise HTTPException(status_code=400, detail="Empty file uploaded")
+        if file_size > MAX_IMPORT_SIZE:
+            raise HTTPException(status_code=413, detail="File exceeds 2 GB limit")
 
         gedcom_path: Path | None = None
         media_source: Path | None = None

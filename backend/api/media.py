@@ -33,7 +33,7 @@ ALLOWED_MIME_TYPES = {
     "image/heic",
     "image/heif",
 }
-MAX_UPLOAD_SIZE = 20 * 1024 * 1024  # 20 MB
+MAX_PHOTO_SIZE = 20 * 1024 * 1024  # 20 MB
 
 
 @router.post("/upload", response_model=schemas.Media)
@@ -67,7 +67,7 @@ async def upload_photo(
         )
 
     data = await file.read()
-    if len(data) > MAX_UPLOAD_SIZE:
+    if len(data) > MAX_PHOTO_SIZE:
         raise HTTPException(status_code=400, detail="File exceeds 20 MB limit")
 
     media_dir = Path(owner.media_dir)
@@ -182,7 +182,7 @@ async def recrop_photo(
         )
 
     data = await file.read()
-    if len(data) > MAX_UPLOAD_SIZE:
+    if len(data) > MAX_PHOTO_SIZE:
         raise HTTPException(status_code=400, detail="File exceeds 20 MB limit")
 
     file_path = Path(owner.media_dir) / media.file_path
