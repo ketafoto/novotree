@@ -100,16 +100,17 @@ def update_event(
 @router.delete("/{event_id}")
 def delete_event(
     event_id: int,
-    session: EditorSession = Depends(require_owner),
+    session: EditorSession = Depends(require_editor),
     db: Session = Depends(get_tree_db),
 ):
-    """Delete an event. Owner only."""
+    """Delete an event. Contributors may only delete their own records."""
     event = db.query(database.models.Event).filter(
         database.models.Event.id == event_id
     ).first()
     if event is None:
         raise HTTPException(status_code=404, detail="Event not found")
 
+    _check_edit_permission(session, event.created_by)
     db.delete(event)
     db.commit()
     return {"detail": "Event deleted"}

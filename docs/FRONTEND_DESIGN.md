@@ -331,45 +331,48 @@ frontend/
 
 `NOVOTREE_APP_MODE=admin` bypasses all auth for local development (acts as the default owner).
 
-### 5.2 Owner Signup & Contributor Invitation Flow
+### 5.2 Owner Signup & Contributor Self-Signup Flow
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│               CONTRIBUTOR INVITATION FLOW                       │
+│               CONTRIBUTOR SELF-SIGNUP FLOW                      │
 └─────────────────────────────────────────────────────────────────┘
 
     VISITOR                         OWNER                    BACKEND
       │                               │                        │
       │  1. Opens tree via share link │                        │
-      │  2. Clicks "Contribute"       │                        │
+      │  2. Clicks "Wanna contribute" │                        │
+      │  3. Fills in signup form      │                        │
       ├───────────────────────────────┼───────────────────────►│
-      │     POST /users/invitations   │                        │
-      │     (public, no auth)         │                        │
+      │   POST /auth/contributor-signup                        │
       │                               │                        │
-      │                               │  3. User Manager shows │
-      │                               │  pending request       │
-      │                               │◄───────────────────────┤
-      │                               │                        │
-      │                               │  4. Owner approves     │
-      │                               ├───────────────────────►│
-      │                               │  POST /users/invitations│
-      │                               │  /{id}/approve         │
-      │                               │                        │
-      │                               │  5. Backend creates    │
-      │                               │  contributor + token   │
-      │                               │◄───────────────────────┤
-      │                               │                        │
-      │  6. Receives set-password link│                        │
-      │  (email or shared by owner)   │                        │
-      │◄──────────────────────────────┤                        │
-      │                               │                        │
-      │  7. Opens /set-password?token=│                        │
-      │  chooses username + password  │                        │
-      ├───────────────────────────────┼───────────────────────►│
-      │     POST /auth/set-password   │                        │
-      │                               │                        │
-      │  8. JWT cookies set → logged in                        │
+      │  4. Verification email sent   │                        │
       │◄───────────────────────────────────────────────────────┤
+      │                               │                        │
+      │  5. Clicks link in email      │                        │
+      ├───────────────────────────────┼───────────────────────►│
+      │  POST /auth/verify-contributor-email?token=            │
+      │  (creates inactive account)   │                        │
+      │                               │                        │
+      │  6. "Awaiting owner approval" │                        │
+      │◄───────────────────────────────────────────────────────┤
+      │                               │                        │
+      │                               │  7. User Manager shows │
+      │                               │  contributor awaiting  │
+      │                               │  approval              │
+      │                               │◄───────────────────────┤
+      │                               │                        │
+      │                               │  8. Owner approves     │
+      │                               ├───────────────────────►│
+      │                               │  POST /users/contributors│
+      │                               │  /{editor_id}/activate │
+      │                               │                        │
+      │  9. Notification email sent   │                        │
+      │◄───────────────────────────────────────────────────────┤
+      │                               │                        │
+      │  10. Contributor logs in      │                        │
+      ├───────────────────────────────┼───────────────────────►│
+      │      POST /auth/login         │                        │
 ```
 
 ### 5.3 Password Reset Flow
@@ -390,7 +393,7 @@ When a contributor needs a password reset:
 
 ```
 /auth/*   — signup, login, logout, refresh, me, change-password, set-password
-/users/*  — share-tokens, contributors, invitations (all owner-only except POST /users/invitations)
+/users/*  — share-tokens, contributors (all owner-only except GET /users/owner-info)
 ```
 
 Auth data lives in `datasets/system.sqlite` (global, never committed to git), separate from each owner's `datasets/<owner_id>/data.sqlite`.
@@ -423,11 +426,11 @@ Viewers use a share token in the URL (`?share=<token>`, 90-day rolling expiry); 
 
 ### 5.7 User Manager (Owner-Only UI)
 
-The User Manager page (`/users`, owner-only) has three tabs:
+The User Manager page (`/users`, owner-only) has two tabs:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  USER MANAGER            [Share Links] [Contributors] [Requests]│
+│  USER MANAGER                    [Share Links] [Contributors]   │
 ├─────────────────────────────────────────────────────────────────┤
 │  Share Links tab:                                               │
 │  ┌──────────────────────────┬──────────────┬──────────────────┐ │
@@ -437,21 +440,28 @@ The User Manager page (`/users`, owner-only) has three tabs:
 │  └──────────────────────────┴──────────────┴──────────────────┘ │
 │  [+ Create share link]                                          │
 ├─────────────────────────────────────────────────────────────────┤
-│  Contributors tab:                                              │
-│  ┌────────────┬──────────────┬───────────┬────────────────────┐ │
-│  │ Username   │ Email        │ Status    │ Actions            │ │
-│  ├────────────┼──────────────┼───────────┼────────────────────┤ │
-│  │ john       │ j@mail.com   │ Active    │ [Reset pw] [Deact] │ │
-│  └────────────┴──────────────┴───────────┴────────────────────┘ │
-├─────────────────────────────────────────────────────────────────┤
-│  Requests tab:                                                  │
-│  ┌──────────────┬────────────┬──────────┬─────────────────────┐ │
-│  │ Name         │ Email      │ Status   │ Actions             │ │
-│  ├──────────────┼────────────┼──────────┼─────────────────────┤ │
-│  │ Mary Smith   │ m@mail.com │ Pending  │ [Approve] [Reject]  │ │
-│  └──────────────┴────────────┴──────────┴─────────────────────┘ │
+│  Contributors tab — three sections:                             │
+│                                                                 │
+│  ⏱ Awaiting approval (N)                                        │
+│  ┌────────────┬──────────────┬───────────────────────────────┐  │
+│  │ john       │ j@mail.com   │ [Approve] [Delete]            │  │
+│  └────────────┴──────────────┴───────────────────────────────┘  │
+│                                                                 │
+│  🔒 Frozen (N)                                                   │
+│  ┌────────────┬──────────────┬───────────────────────────────┐  │
+│  │ alice      │ a@mail.com   │ [Unfreeze] [Delete]           │  │
+│  └────────────┴──────────────┴───────────────────────────────┘  │
+│                                                                 │
+│  Active (N)                                                     │
+│  ┌────────────┬──────────────┬───────────────────────────────┐  │
+│  │ bob        │ b@mail.com   │ [Freeze] [Reset pw] [Delete]  │  │
+│  └────────────┴──────────────┴───────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+Delete is only shown when the contributor has made no contributions (`has_contributions=false`).  
+Pending = inactive + never logged in (signed up, email verified, awaiting approval).  
+Frozen = inactive + has logged in before (owner froze them).
 
 ---
 
@@ -1618,10 +1628,10 @@ sudo systemctl restart rsyslog
 - [x] Create basic layout components (Header, Sidebar, Footer)
 - [x] Create global auth database (`datasets/system.sqlite`)
 - [x] Implement auth endpoints (signup, login, logout, refresh, set-password, me)
-- [x] Implement user management endpoints (/users/share-tokens, /users/contributors, /users/invitations)
+- [x] Implement user management endpoints (/users/share-tokens, /users/contributors, /users/owner-info)
 - [x] Implement AuthContext with OCV role detection and share-token support
-- [x] Create Login, Signup, SetPassword pages
-- [x] Create User Manager page (Share Links, Contributors, Requests tabs)
+- [x] Create Login, Owner Signup, Contributor Signup, SetPassword, Verify Email pages
+- [x] Create User Manager page (Share Links, Contributors tabs)
 - [x] Create ProtectedRoute with minRole prop (viewer / contributor / owner)
 
 **Deliverable:** Owner can sign up, share a viewer link, invite contributors, contributors can log in

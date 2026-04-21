@@ -8,6 +8,7 @@ import { Button } from '../../components/common/Button';
 import { Card } from '../../components/common/Card';
 import { Spinner } from '../../components/common/Spinner';
 import toast from 'react-hot-toast';
+import { apiErrorMessage } from '../../utils/apiError';
 import type { Individual } from '../../types/models';
 import { getLatestName, formatIndividualName } from '../../utils/nameUtils';
 
@@ -37,8 +38,8 @@ export function BulkEditIndividualsPage() {
       setEditingId(null);
       toast.success('Individual updated');
     },
-    onError: () => {
-      toast.error('Failed to update individual');
+    onError: (err) => {
+      toast.error(apiErrorMessage(err, 'Failed to update individual'));
     },
   });
 
@@ -48,8 +49,8 @@ export function BulkEditIndividualsPage() {
       queryClient.invalidateQueries({ queryKey: ['individuals'] });
       toast.success('Individual deleted');
     },
-    onError: () => {
-      toast.error('Failed to delete individual');
+    onError: (err) => {
+      toast.error(apiErrorMessage(err, 'Failed to delete individual'));
     },
   });
 
@@ -309,7 +310,7 @@ export function BulkEditIndividualsPage() {
                         )}
                       </td>
                       <td className="py-2 px-2 text-xs text-gray-400">
-                        {individual.created_by || '—'}
+                        {individual.created_by_display_name || individual.created_by || '—'}
                       </td>
                       <td className="py-2 px-2 text-right">
                         {isEditing ? (

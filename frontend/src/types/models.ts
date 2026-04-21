@@ -34,6 +34,7 @@ export interface Individual {
   notes?: string;
   names: IndividualName[];
   created_by?: string;
+  created_by_display_name?: string;
   created_at?: string;
 }
 
@@ -187,7 +188,7 @@ export interface LoginRequest {
   owner_id?: string;      // required when contributor has multiple trees
 }
 
-export interface SignupRequest {
+export interface OwnerSignupRequest {
   display_name?: string;
   password: string;
   email: string;
@@ -238,7 +239,7 @@ export interface ShareTokenCreate {
   expires_after_days?: number;
 }
 
-// ==================== Contributors / Invitations ====================
+// ==================== Contributors ====================
 export interface Contributor {
   editor_id: string;
   display_name: string;
@@ -247,24 +248,21 @@ export interface Contributor {
   created_at: string;
   last_login_at?: string;
   approved_at?: string;
+  message?: string;
+  has_contributions: boolean;
 }
 
-export interface Invitation {
-  id: number;
+export interface ContributorSignupRequest {
+  display_name?: string;
+  email: string;
+  password: string;
   owner_id: string;
-  display_name: string;
-  email?: string;
   message?: string;
-  status: 'pending' | 'approved' | 'rejected';
-  created_at: string;
-  processed_at?: string;
 }
 
-export interface ContributeRequest {
+export interface OwnerInfo {
   owner_id: string;
   display_name: string;
-  email?: string;
-  message?: string;
 }
 
 // ==================== Tree Visualization ====================

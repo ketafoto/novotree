@@ -15,15 +15,22 @@ const step1Schema = z.object({
 });
 type Step1Data = z.infer<typeof step1Schema>;
 
+type TreeOption = { owner_id: string; display_name: string; role: string };
+
+const ROLE_BADGE: Record<string, string> = {
+  owner: 'bg-emerald-100 text-emerald-700',
+  contributor: 'bg-blue-100 text-blue-700',
+};
+
 export function LoginPage() {
   const navigate = useNavigate();
   const { login } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
 
-  // Step 2: multi-tree contributor selection
+  // Step 2: multi-tree selection
   const [step, setStep] = useState<1 | 2>(1);
   const [savedCreds, setSavedCreds] = useState<Step1Data | null>(null);
-  const [availableTrees, setAvailableTrees] = useState<string[]>([]);
+  const [availableTrees, setAvailableTrees] = useState<TreeOption[]>([]);
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<Step1Data>({
     resolver: zodResolver(step1Schema),
@@ -34,16 +41,24 @@ export function LoginPage() {
       await login(data.editor_id, data.password);
       navigate('/');
     } catch (err: unknown) {
-      // HTTP 300 → contributor with multiple trees
-      const status = (err as { response?: { status?: number; data?: { detail?: { trees?: string[] } } } })
-        ?.response?.status;
-      const trees = (err as { response?: { data?: { detail?: { trees?: string[] } } } })
+      // HTTP 300 → multiple trees available
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      const trees = (err as { response?: { data?: { detail?: { trees?: TreeOption[] } } } })
         ?.response?.data?.detail?.trees;
 
       if (status === 300 && Array.isArray(trees)) {
         setSavedCreds(data);
         setAvailableTrees(trees);
         setStep(2);
+      } else if (status === 403) {
+        const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? '';
+        if (detail.includes('suspended') || detail.includes('frozen')) {
+          toast.error('Your access has been suspended — contact the tree owner');
+        } else if (detail.includes('approval')) {
+          toast.error('Your account is awaiting owner approval');
+        } else {
+          toast.error(detail || 'Access denied');
+        }
       } else {
         toast.error('Invalid email or password');
       }
@@ -116,14 +131,16 @@ export function LoginPage() {
                 </p>
               </div>
               <div className="space-y-2">
-                {availableTrees.map((owner_id) => (
+                {availableTrees.map((tree) => (
                   <button
-                    key={owner_id}
-                    onClick={() => void onSelectTree(owner_id)}
-                    className="w-full text-left px-4 py-3 rounded-lg border border-gray-200 hover:border-emerald-500 hover:bg-emerald-50 transition-colors"
+                    key={tree.owner_id}
+                    onClick={() => void onSelectTree(tree.owner_id)}
+                    className="w-full text-left px-4 py-3 rounded-lg border border-gray-200 hover:border-emerald-500 hover:bg-emerald-50 transition-colors flex items-center justify-between"
                   >
-                    <span className="font-medium text-gray-800">{owner_id}</span>
-                    <span className="text-xs text-gray-400 ml-2">tree</span>
+                    <span className="font-medium text-gray-800">{tree.display_name}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ROLE_BADGE[tree.role] ?? 'bg-gray-100 text-gray-600'}`}>
+                      {tree.role}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -139,7 +156,7 @@ export function LoginPage() {
 
         <p className="text-center text-sm text-gray-500 mt-6">
           Owner?{' '}
-          <Link to="/signup" className="text-emerald-600 hover:underline font-medium">
+          <Link to="/owner-signup" className="text-emerald-600 hover:underline font-medium">
             Create an account
           </Link>
         </p>

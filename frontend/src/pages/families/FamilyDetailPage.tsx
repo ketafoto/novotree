@@ -29,6 +29,7 @@ import { ModalSpouses } from '../../components/families/ModalSpouses';
 import { ModalChildren } from '../../components/families/ModalChildren';
 import { ModalFamilyMedia } from '../../components/families/ModalFamilyMedia';
 import toast from 'react-hot-toast';
+import { apiErrorMessage } from '../../utils/apiError';
 import type { Event } from '../../types/models';
 
 type FamilySectionModal = 'spouses' | 'children' | 'marriage' | 'divorce' | 'events' | 'notes' | 'media' | null;
@@ -38,7 +39,7 @@ export function FamilyDetailPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const { data: family, isLoading } = useQuery({
+  const { data: family, isLoading, isError, error } = useQuery({
     queryKey: ['families', id],
     queryFn: () => familiesApi.get(Number(id)),
     enabled: !!id,
@@ -75,8 +76,8 @@ export function FamilyDetailPage() {
       toast.success('Family deleted');
       navigate('/families');
     },
-    onError: () => {
-      toast.error('Failed to delete family');
+    onError: (err) => {
+      toast.error(apiErrorMessage(err, 'Failed to delete family'));
     },
   });
 
@@ -95,7 +96,7 @@ export function FamilyDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['events', { family_id: Number(id) }] });
       toast.success('Event deleted');
     },
-    onError: () => toast.error('Failed to delete event'),
+    onError: (err) => toast.error(apiErrorMessage(err, 'Failed to delete event')),
   });
 
   // Helper to get individual by ID
@@ -120,10 +121,13 @@ export function FamilyDetailPage() {
     );
   }
 
-  if (!family) {
+  if (isError || !family) {
+    const is401 = (error as { response?: { status?: number } })?.response?.status === 401;
     return (
       <div className="text-center py-12">
-        <p className="text-gray-600">Family not found</p>
+        <p className="text-gray-600">
+          {is401 ? 'Session expired — please log in again' : 'Family not found'}
+        </p>
         <Link to="/families" className="text-emerald-600 hover:underline">
           Back to list
         </Link>

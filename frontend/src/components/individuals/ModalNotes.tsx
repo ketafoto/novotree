@@ -5,6 +5,7 @@ import { individualsApi } from '../../api/individuals';
 import { Button } from '../common/Button';
 import { Modal } from '../common/Modal';
 import toast from 'react-hot-toast';
+import { apiErrorMessage } from '../../utils/apiError';
 import type { Individual } from '../../types/models';
 
 interface ModalNotesProps {
@@ -37,7 +38,7 @@ export function ModalNotes({ open, onClose, individual, onSaved }: ModalNotesPro
       onClose();
       onSaved?.();
     },
-    onError: () => toast.error('Failed to update'),
+    onError: (err) => toast.error(apiErrorMessage(err, 'Failed to update')),
   });
 
   return (

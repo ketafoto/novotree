@@ -6,6 +6,7 @@ import { individualsApi } from '../../api/individuals';
 import { Card } from '../../components/common/Card';
 import { Spinner } from '../../components/common/Spinner';
 import toast from 'react-hot-toast';
+import { apiErrorMessage } from '../../utils/apiError';
 import { formatIndividualName, getLatestName } from '../../utils/nameUtils';
 import type { Family } from '../../types/models';
 
@@ -33,8 +34,8 @@ export function BulkEditFamiliesPage() {
       setEditingId(null);
       toast.success('Family updated');
     },
-    onError: () => {
-      toast.error('Failed to update family');
+    onError: (err) => {
+      toast.error(apiErrorMessage(err, 'Failed to update family'));
     },
   });
 
@@ -44,8 +45,8 @@ export function BulkEditFamiliesPage() {
       queryClient.invalidateQueries({ queryKey: ['families'] });
       toast.success('Family deleted');
     },
-    onError: () => {
-      toast.error('Failed to delete family');
+    onError: (err) => {
+      toast.error(apiErrorMessage(err, 'Failed to delete family'));
     },
   });
 

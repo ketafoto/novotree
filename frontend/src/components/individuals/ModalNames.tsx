@@ -10,6 +10,7 @@ import { Button } from '../common/Button';
 import { Input } from '../common/Input';
 import { Modal } from '../common/Modal';
 import toast from 'react-hot-toast';
+import { apiErrorMessage } from '../../utils/apiError';
 import type { Individual } from '../../types/models';
 
 const nameSchema = z.object({
@@ -70,7 +71,7 @@ export function ModalNames({ open, onClose, individual, onSaved }: ModalNamesPro
       onClose();
       onSaved?.();
     },
-    onError: () => toast.error('Failed to update'),
+    onError: (err) => toast.error(apiErrorMessage(err, 'Failed to update')),
   });
 
   return (

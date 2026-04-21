@@ -9,8 +9,9 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isOwner: boolean;
   isContributor: boolean;
-  isViewer: boolean;         // share-token anonymous access
-  shareToken: string | null; // detected from URL ?share=...
+  isViewer: boolean;              // share-token anonymous access
+  shareToken: string | null;      // detected from URL ?share=...
+  viewerOwnerId: string | null;   // owner_id resolved from share token
   login: (editor_id: string, password: string, owner_id?: string) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -38,6 +39,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [editor, setEditor] = useState<Editor | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [shareToken, setShareToken] = useState<string | null>(null);
+  const [viewerOwnerId, setViewerOwnerId] = useState<string | null>(null);
 
   const fetchMe = useCallback(async () => {
     try {
@@ -59,14 +61,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (token) {
-      // Share token viewer — no auth call needed
-      setIsLoading(false);
+      // Share token viewer — resolve owner_id from the token
+      authApi.getShareInfo(token)
+        .then((info) => setViewerOwnerId(info.owner_id))
+        .catch(() => {/* token may be expired; viewer access will fail naturally */})
+        .finally(() => setIsLoading(false));
       return;
     }
 
     // Try to restore session from access token cookie
     fetchMe().finally(() => setIsLoading(false));
   }, [fetchMe]);
+
+  // Poll /auth/me every 30 s so a frozen/deleted contributor is redirected to login
+  // without needing a manual page refresh. Skip in dev mode and for share-token viewers.
+  useEffect(() => {
+    if (isDevMode || !editor) return;
+
+    const checkSession = async () => {
+      try {
+        await authApi.me();
+      } catch (err: unknown) {
+        const httpStatus = (err as { response?: { status?: number } })?.response?.status;
+        if (httpStatus === 401) {
+          setEditor(null);
+          window.location.href = '/novotree/login';
+        }
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') checkSession();
+    };
+
+    const interval = setInterval(checkSession, 30_000);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [editor]);
 
   const login = useCallback(async (editor_id: string, password: string, owner_id?: string) => {
     const res = await authApi.login({ editor_id, password, owner_id });
@@ -78,6 +112,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setEditor(null);
     sessionStorage.removeItem('share_token');
     setShareToken(null);
+    setViewerOwnerId(null);
     window.location.href = '/novotree/login';
   }, []);
 
@@ -104,6 +139,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isContributor: isContributor ?? false,
       isViewer,
       shareToken,
+      viewerOwnerId,
       login,
       logout,
       refresh,

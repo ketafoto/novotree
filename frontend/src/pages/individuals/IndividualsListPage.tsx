@@ -7,6 +7,7 @@ import { Button } from '../../components/common/Button';
 import { Card } from '../../components/common/Card';
 import { Spinner } from '../../components/common/Spinner';
 import toast from 'react-hot-toast';
+import { apiErrorMessage } from '../../utils/apiError';
 import { formatIndividualName, getLatestName } from '../../utils/nameUtils';
 
 export function IndividualsListPage() {
@@ -36,8 +37,8 @@ export function IndividualsListPage() {
       queryClient.invalidateQueries({ queryKey: ['individuals'] });
       toast.success('Individual deleted');
     },
-    onError: () => {
-      toast.error('Failed to delete individual');
+    onError: (err) => {
+      toast.error(apiErrorMessage(err, 'Failed to delete individual'));
     },
   });
 

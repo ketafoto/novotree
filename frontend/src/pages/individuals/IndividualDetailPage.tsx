@@ -30,6 +30,7 @@ import { ModalEventsSection } from '../../components/individuals/ModalEventsSect
 import { ModalPhotosSection } from '../../components/individuals/ModalPhotosSection';
 import { ModalFamiliesSection } from '../../components/individuals/ModalFamiliesSection';
 import toast from 'react-hot-toast';
+import { apiErrorMessage } from '../../utils/apiError';
 import { formatIndividualName, getLatestName } from '../../utils/nameUtils';
 import { sortEventsChronologically } from '../../utils/eventSort';
 import type { Event, Media } from '../../types/models';
@@ -45,7 +46,7 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const { data: individual, isLoading } = useQuery({
+  const { data: individual, isLoading, isError, error } = useQuery({
     queryKey: ['individuals', id],
     queryFn: () => individualsApi.get(Number(id)),
     enabled: !!id,
@@ -118,8 +119,8 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
       toast.success('Individual deleted');
       navigate('/individuals');
     },
-    onError: () => {
-      toast.error('Failed to delete individual');
+    onError: (err) => {
+      toast.error(apiErrorMessage(err, 'Failed to delete individual'));
     },
   });
 
@@ -129,7 +130,7 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
       queryClient.invalidateQueries({ queryKey: ['media', { individual_id: Number(id) }] });
       toast.success('Photo deleted');
     },
-    onError: () => toast.error('Failed to delete photo'),
+    onError: (err) => toast.error(apiErrorMessage(err, 'Failed to delete photo')),
   });
 
   const deleteEventMutation = useMutation({
@@ -138,7 +139,7 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
       queryClient.invalidateQueries({ queryKey: ['events', { individual_id: Number(id) }] });
       toast.success('Event deleted');
     },
-    onError: () => toast.error('Failed to delete event'),
+    onError: (err) => toast.error(apiErrorMessage(err, 'Failed to delete event')),
   });
 
   const setDefaultMutation = useMutation({
@@ -147,7 +148,7 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
       queryClient.invalidateQueries({ queryKey: ['media', { individual_id: Number(id) }] });
       toast.success('Default photo updated');
     },
-    onError: () => toast.error('Failed to set default'),
+    onError: (err) => toast.error(apiErrorMessage(err, 'Failed to set default')),
   });
 
   const handlePhotoUpload = async ({
@@ -210,10 +211,13 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
     );
   }
 
-  if (!individual) {
+  if (isError || !individual) {
+    const is401 = (error as { response?: { status?: number } })?.response?.status === 401;
     return (
       <div className="text-center py-12">
-        <p className="text-gray-600">Individual not found</p>
+        <p className="text-gray-600">
+          {is401 ? 'Session expired — please log in again' : 'Individual not found'}
+        </p>
         <Link to={readOnly ? '/tree' : '/individuals'} className="text-emerald-600 hover:underline">
           {readOnly ? 'Back to tree' : 'Back to list'}
         </Link>

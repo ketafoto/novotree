@@ -14,6 +14,7 @@ import { ApproxDateInput } from '../../components/common/ApproxDateInput';
 import { ComboSelect } from '../../components/common/ComboSelect';
 import { IndividualFormDialog } from '../../components/individuals/IndividualFormDialog';
 import toast from 'react-hot-toast';
+import { apiErrorMessage } from '../../utils/apiError';
 import { formatIndividualName, getLatestName } from '../../utils/nameUtils';
 import type { Individual } from '../../types/models';
 
@@ -139,8 +140,8 @@ export function FamilyFormPage() {
       toast.success('Family created successfully');
       navigate(`/families/${data.id}`);
     },
-    onError: () => {
-      toast.error('Failed to create family');
+    onError: (err) => {
+      toast.error(apiErrorMessage(err, 'Failed to create family'));
     },
   });
 
@@ -152,8 +153,8 @@ export function FamilyFormPage() {
       toast.success('Family updated successfully');
       navigate(`/families/${id}`);
     },
-    onError: () => {
-      toast.error('Failed to update family');
+    onError: (err) => {
+      toast.error(apiErrorMessage(err, 'Failed to update family'));
     },
   });
 
@@ -266,8 +267,8 @@ export function FamilyFormPage() {
           );
           queryClient.invalidateQueries({ queryKey: ['individuals'] });
           toast.success('Created individuals deleted');
-        } catch {
-          toast.error('Some individuals could not be deleted');
+        } catch (err) {
+          toast.error(apiErrorMessage(err, 'Some individuals could not be deleted'));
         }
       }
     }

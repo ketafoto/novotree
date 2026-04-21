@@ -82,17 +82,21 @@ UNIQUE on (`editor_id`, `owner_id`). A contributor can have access to multiple t
 | `created_at` | TEXT | ISO-8601 UTC |
 | `last_used_at` | TEXT | ISO-8601 UTC; updated on each use (rolling window) |
 
-#### `auth_invitations` — pending Contribute requests
+#### `auth_pending_contributors` — email-verification holding area for contributor signups
 
 | Column | Type | Notes |
 |--------|------|-------|
-| `owner_id` | TEXT | Which tree the visitor wants to join |
-| `display_name` | TEXT | Supplied by the visitor |
-| `email` | TEXT | Optional |
-| `message` | TEXT | Optional note from the visitor |
-| `status` | TEXT | `'pending'` \| `'approved'` \| `'rejected'` |
+| `token` | TEXT | URL-safe random token (32 bytes), unique |
+| `editor_id` | TEXT | Derived from email local part, unique |
+| `display_name` | TEXT | |
+| `email` | TEXT | |
+| `password_hash` | TEXT | bcrypt hash, computed at signup time |
+| `owner_id` | TEXT | Which tree they want to contribute to |
+| `message` | TEXT | Optional note to the owner |
+| `expires_at` | TEXT | ISO-8601 UTC; 24-hour TTL |
 | `created_at` | TEXT | ISO-8601 UTC |
-| `resolved_at` | TEXT | ISO-8601 UTC |
+
+Row is deleted once the verification link is clicked and the account is promoted to `auth_editors` (inactive, awaiting owner approval).
 
 #### `auth_pending_owners` — email-verification holding area for new owner signups
 
@@ -128,8 +132,11 @@ Row is deleted once the verification link is clicked and the account is promoted
 |--------|------|------|-------------|
 | GET | `/auth/me` | Cookie | Return current editor identity |
 | POST | `/auth/login` | — | Login with `editor_id` + `password`; sets HttpOnly cookies |
-| POST | `/auth/signup` | — | Owner self-registration — stores pending row and sends verification email |
-| POST | `/auth/verify-email?token=` | — | Complete owner signup after email verification |
+| POST | `/auth/owner-signup` | — | Owner self-registration — stores pending row and sends verification email |
+| POST | `/auth/verify-owner-email?token=` | — | Complete owner signup after email verification |
+| POST | `/auth/resend-owner-verification?email=` | — | Resend owner verification email |
+| POST | `/auth/contributor-signup` | — | Contributor self-signup — stores pending row and sends verification email |
+| POST | `/auth/verify-contributor-email?token=` | — | Complete contributor signup (creates inactive account, awaits owner approval) |
 | POST | `/auth/refresh` | Refresh cookie | Silently re-issue access token |
 | POST | `/auth/logout` | Cookie | Clear auth cookies |
 | POST | `/auth/change-password` | Cookie | Change own password |
@@ -145,10 +152,9 @@ Row is deleted once the verification link is clicked and the account is promoted
 | GET | `/users/contributors` | Owner | List contributors for this tree |
 | POST | `/users/contributors/set-active` | Owner | Activate / deactivate contributor |
 | POST | `/users/contributors/reset-password` | Owner | Generate new set-password link (emails if SMTP configured) |
-| POST | `/users/invitations` | **Public** | Submit Contribute request (no auth) |
-| GET | `/users/invitations` | Owner | List all Contribute requests |
-| POST | `/users/invitations/{id}/approve` | Owner | Approve request → create contributor + set-password token |
-| POST | `/users/invitations/{id}/reject` | Owner | Reject request |
+| POST | `/users/contributors/{editor_id}/activate` | Owner | Approve pending contributor (sets active + sends notification) |
+| DELETE | `/users/contributors/{editor_id}` | Owner | Delete contributor (only if no contributions) |
+| GET | `/users/owner-info?owner_id=` | **Public** | Return `{owner_id, display_name}` for a tree owner |
 
 ---
 
@@ -240,20 +246,23 @@ Multiple owners can be served simultaneously — each request opens a session fr
 ## Flows
 
 ### Owner signup
-1. `POST /auth/signup` → validates credentials → creates `auth_pending_owners` row (1-hour TTL) → sends verification email → returns 202.
-2. User clicks link in email → `POST /auth/verify-email?token=<token>` → promotes pending row to `auth_editors` (role=owner) → calls `get_engine(owner_id)` to initialise the owner's DB → sets JWT cookies → redirect to Dashboard.
+1. `POST /auth/owner-signup` → validates credentials → creates `auth_pending_owners` row (1-hour TTL) → sends verification email → returns 202.
+2. User clicks link in email → `POST /auth/verify-owner-email?token=<token>` → promotes pending row to `auth_editors` (role=owner) → calls `get_engine(owner_id)` to initialise the owner's DB → sets JWT cookies → redirect to Dashboard.
 
-### Contributor invitation
-1. Visitor sees tree via share link → clicks "Contribute" button.
-2. `POST /users/invitations` (public) — stores pending invitation.
-3. Owner opens User Manager → "Requests" tab → clicks Approve.
-4. `POST /users/invitations/{id}/approve` — creates placeholder `auth_editors` row + `auth_editor_trees` row + `auth_set_password_tokens` row.
-5. If SMTP configured: invitation email sent automatically. Otherwise: owner copies the set-password link from the UI.
-6. Contributor opens `/set-password?token=<token>` — chooses username, display name, password.
-7. `POST /auth/set-password` — sets password, marks token used, issues JWT cookies → redirect to tree.
+### Contributor self-signup
+1. Visitor sees tree via share link → clicks "Wanna contribute to this tree?" button.
+2. Fills in signup form (display name, email, password, optional message to owner).
+3. `POST /auth/contributor-signup` — validates credentials, checks owner exists, creates `auth_pending_contributors` row (24-hour TTL) → sends verification email → returns 202.
+4. Visitor clicks link in email → `POST /auth/verify-contributor-email?token=<token>` → creates inactive `auth_editors` row (role=contributor) + `auth_editor_trees` row. No cookies issued.
+5. Visitor sees "Awaiting owner approval" screen.
+6. Owner opens User Manager → Contributors tab → "Awaiting approval" section → clicks Approve.
+7. `POST /users/contributors/{editor_id}/activate` → sets `is_active=True` → sends notification email to contributor.
+8. Contributor logs in normally.
 
 ### Contributor login (multiple trees)
-If a contributor has access to more than one owner tree, `POST /auth/login` returns HTTP 300 with the list of accessible `owner_ids`. The frontend shows a tree selector on step 2; the user picks one, and the login request is re-submitted with `owner_id`.
+`POST /auth/login` checks how many trees the editor can access:
+- **1 tree (owner or contributor)**: logs in directly, no picker.
+- **Multiple trees**: returns HTTP 300 with `{trees: [{owner_id, display_name, role}]}`. Frontend shows tree picker; user selects one; login re-submitted with `owner_id`. Role in JWT reflects relationship to chosen tree (`owner` for own tree, `contributor` otherwise).
 
 ### Password reset (owner-initiated)
 Owner opens User Manager → Contributors tab → Reset Password for a contributor.  

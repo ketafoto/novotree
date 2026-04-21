@@ -19,14 +19,14 @@ import { useAuth } from '../../contexts/AuthContext';
  */
 export function TreeOverviewPage() {
   const navigate = useNavigate();
-  const { isViewer, editor } = useAuth();
+  const { isViewer, editor, viewerOwnerId } = useAuth();
   const [photoIntervalSec, setPhotoIntervalSec] = useState(3);
   const [showExport, setShowExport] = useState(false);
   const [showContribute, setShowContribute] = useState(false);
   const viewportRef = useRef<HTMLDivElement | null>(null);
 
-  // Derive owner info for the Contribute dialog
-  const ownerOwnerId = editor?.owner_id ?? '';
+  // For authenticated editors, owner_id comes from the session; for viewers, from the share token
+  const ownerOwnerId = editor?.owner_id ?? viewerOwnerId ?? '';
 
   const { data: treeData, isLoading, isError } = useQuery({
     queryKey: ['tree', 'full'],
@@ -88,15 +88,15 @@ export function TreeOverviewPage() {
             />
           </div>
 
-          {/* Contribute button — visible to viewers (share token) and anonymous */}
+          {/* Contribute button — visible to viewers (share token) only */}
           {isViewer && ownerOwnerId && (
             <button
               onClick={() => setShowContribute(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors"
-              title="Request to contribute data"
+              title="Sign up as a contributor to this tree"
             >
               <UserPlus className="w-3.5 h-3.5" />
-              Contribute
+              Wanna contribute to this tree? 🌿
             </button>
           )}
 

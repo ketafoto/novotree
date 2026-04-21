@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ReactFlowProvider } from '@xyflow/react';
-import { X, Download, GitBranch } from 'lucide-react';
+import { X, Download, GitBranch, UserPlus } from 'lucide-react';
 
 import { treeApi } from '../../api/tree';
 import { individualsApi } from '../../api/individuals';
@@ -11,6 +11,8 @@ import { TreeCanvas } from '../../components/tree/TreeCanvas';
 import { DepthSlider } from '../../components/tree/DepthSlider';
 import { TreeLegend } from '../../components/tree/TreeLegend';
 import { ExportControls } from '../../components/tree/ExportControls';
+import { ContributeDialog } from '../../components/common/ContributeDialog';
+import { useAuth } from '../../contexts/AuthContext';
 import { isPublicApp } from '../../config/appMode';
 import { formatIndividualName, getLatestName } from '../../utils/nameUtils';
 
@@ -22,13 +24,17 @@ import { formatIndividualName, getLatestName } from '../../utils/nameUtils';
 export function TreePage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { isViewer, editor, viewerOwnerId } = useAuth();
   const individualId = Number(id);
 
   const [ancestorDepth, setAncestorDepth] = useState(1);
   const [descendantDepth, setDescendantDepth] = useState(1);
   const [photoIntervalSec, setPhotoIntervalSec] = useState(3);
   const [showExport, setShowExport] = useState(false);
+  const [showContribute, setShowContribute] = useState(false);
   const viewportRef = useRef<HTMLDivElement | null>(null);
+
+  const ownerOwnerId = editor?.owner_id ?? viewerOwnerId ?? '';
 
   // Reset depths when navigating to a different person's tree
   useEffect(() => {
@@ -141,6 +147,18 @@ export function TreePage() {
             />
           </div>
 
+          {/* Contribute button — visible to viewers (share token) only */}
+          {isViewer && ownerOwnerId && (
+            <button
+              onClick={() => setShowContribute(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors"
+              title="Sign up as a contributor to this tree"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              Wanna contribute to this tree? 🌿
+            </button>
+          )}
+
           {/* Export button */}
           <button
             onClick={() => setShowExport(!showExport)}
@@ -213,6 +231,13 @@ export function TreePage() {
           </div>
         )}
       </div>
+
+      {showContribute && (
+        <ContributeDialog
+          ownerOwnerId={ownerOwnerId}
+          onClose={() => setShowContribute(false)}
+        />
+      )}
     </div>
   );
 }

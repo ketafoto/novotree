@@ -4,6 +4,7 @@ import apiClient from '../../api/client';
 import { Button } from '../../components/common/Button';
 import { Card } from '../../components/common/Card';
 import toast from 'react-hot-toast';
+import { apiErrorMessage } from '../../utils/apiError';
 
 type ExportStatus = 'idle' | 'generating' | 'ready' | 'error';
 
@@ -47,7 +48,7 @@ export function ExportPage() {
       document.body.removeChild(link);
     } catch (error) {
       setStatus('error');
-      toast.error('Failed to generate export');
+      toast.error(apiErrorMessage(error, 'Failed to generate export'));
     }
   };
 
@@ -85,7 +86,7 @@ export function ExportPage() {
       document.body.removeChild(link);
     } catch (error) {
       setRawStatus('error');
-      toast.error('Failed to generate raw export');
+      toast.error(apiErrorMessage(error, 'Failed to generate raw export'));
     }
   };
 

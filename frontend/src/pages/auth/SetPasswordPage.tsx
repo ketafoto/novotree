@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Eye, EyeOff, TreeDeciduous } from 'lucide-react';
+import { Eye, EyeOff, TreeDeciduous, Clock } from 'lucide-react';
 import { authApi } from '../../api/auth';
 import { useAuth } from '../../contexts/AuthContext';
 import { Input } from '../../components/common/Input';
@@ -36,6 +36,7 @@ export function SetPasswordPage() {
   const { refresh } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [pendingApproval, setPendingApproval] = useState(false);
 
   const token = searchParams.get('token') ?? '';
 
@@ -58,15 +59,40 @@ export function SetPasswordPage() {
     );
   }
 
+  if (pendingApproval) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="w-full max-w-sm text-center">
+          <div className="inline-flex items-center justify-center w-14 h-14 bg-amber-500 rounded-xl mb-6">
+            <Clock className="w-8 h-8 text-white" />
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Account ready!</h1>
+          <p className="text-gray-600 text-sm mb-6">
+            Your account has been set up. The tree owner will review and approve your
+            access — you'll receive an email notification once you can log in.
+          </p>
+          <Link to="/login" className="text-emerald-600 hover:underline text-sm">
+            Go to login page
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   const onSubmit = async (data: FormData) => {
     try {
-      await authApi.setPassword({
+      const result = await authApi.setPassword({
         token,
         editor_id: data.editor_id,
         display_name: data.display_name,
         email: data.email || undefined,
         password: data.password,
       });
+      if (!result.editor.is_active) {
+        // Contributor is inactive — awaiting owner approval, no session issued
+        setPendingApproval(true);
+        return;
+      }
       // Cookies are now set — pull fresh editor state
       await refresh();
       toast.success('Account created! Welcome.');

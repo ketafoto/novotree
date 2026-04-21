@@ -13,6 +13,7 @@ import { Card } from '../../components/common/Card';
 import { Spinner } from '../../components/common/Spinner';
 import { ApproxDateInput } from '../../components/common/ApproxDateInput';
 import toast from 'react-hot-toast';
+import { apiErrorMessage } from '../../utils/apiError';
 
 const nameSchema = z.object({
   name_type: z.string().optional(),
@@ -119,8 +120,8 @@ export function IndividualFormPage() {
       toast.success('Individual created successfully');
       navigate(`/individuals/${data.id}`);
     },
-    onError: () => {
-      toast.error('Failed to create individual');
+    onError: (err) => {
+      toast.error(apiErrorMessage(err, 'Failed to create individual'));
     },
   });
 
@@ -132,8 +133,8 @@ export function IndividualFormPage() {
       toast.success('Individual updated successfully');
       navigate(`/individuals/${id}`);
     },
-    onError: () => {
-      toast.error('Failed to update individual');
+    onError: (err) => {
+      toast.error(apiErrorMessage(err, 'Failed to update individual'));
     },
   });
 
@@ -276,6 +277,14 @@ export function IndividualFormPage() {
                 ))}
               </select>
             </div>
+            {isEditing && (
+              <div className="space-y-1">
+                <label className="block text-sm font-medium text-gray-700">Added by</label>
+                <p className="px-3 py-2 text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-lg">
+                  {individual?.created_by_display_name || individual?.created_by || '—'}
+                </p>
+              </div>
+            )}
           </div>
         </Card>
 

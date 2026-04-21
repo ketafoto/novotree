@@ -9,18 +9,18 @@ import {
   Plus,
   Users,
   UserCheck,
-  UserX,
   RefreshCw,
-  CheckCircle,
-  XCircle,
   Link as LinkIcon,
-  Mail,
+  ShieldOff,
+  ShieldCheck,
+  Clock,
 } from 'lucide-react';
 import { usersApi } from '../../api/auth';
 import { Button } from '../../components/common/Button';
 import { Card } from '../../components/common/Card';
 import { Spinner } from '../../components/common/Spinner';
 import toast from 'react-hot-toast';
+import { apiErrorMessage } from '../../utils/apiError';
 
 function copyToClipboard(text: string) {
   if (navigator.clipboard) {
@@ -65,8 +65,8 @@ function ShareTokensTab() {
       toast.success('Share link created');
       setLabel('');
       setShowCreate(false);
-    } catch {
-      toast.error('Failed to create share link');
+    } catch (err) {
+      toast.error(apiErrorMessage(err, 'Failed to create share link'));
     } finally {
       setIsCreating(false);
     }
@@ -83,8 +83,8 @@ function ShareTokensTab() {
       await usersApi.revokeShareToken(id);
       qc.invalidateQueries({ queryKey: ['share-tokens'] });
       toast.success('Link revoked');
-    } catch {
-      toast.error('Failed to revoke');
+    } catch (err) {
+      toast.error(apiErrorMessage(err, 'Failed to revoke'));
     }
   };
 
@@ -196,20 +196,54 @@ function ContributorsTab() {
   const { data: contributors = [], isLoading } = useQuery({
     queryKey: ['contributors'],
     queryFn: usersApi.listContributors,
+    staleTime: 0,
   });
 
   const [resetLinks, setResetLinks] = useState<Record<string, string>>({});
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null); // "<editor_id>:<action>"
 
-  const toggleActive = async (editor_id: string, is_active: boolean) => {
-    try {
-      await usersApi.setContributorActive(editor_id, !is_active);
-      qc.invalidateQueries({ queryKey: ['contributors'] });
-    } catch {
-      toast.error('Failed to update status');
-    }
+  const isBusy = (editor_id: string, action: string) => busy === `${editor_id}:${action}`;
+  const anyBusy = (editor_id: string) => busy?.startsWith(`${editor_id}:`) ?? false;
+
+  const withBusy = async (editor_id: string, action: string, fn: () => Promise<void>) => {
+    const key = `${editor_id}:${action}`;
+    if (busy) return;
+    setBusy(key);
+    try { await fn(); } finally { setBusy(null); }
   };
 
-  const resetPassword = async (editor_id: string) => {
+  const approve = (editor_id: string) => withBusy(editor_id, 'approve', async () => {
+    try {
+      await usersApi.activateContributor(editor_id);
+      qc.invalidateQueries({ queryKey: ['contributors'] });
+      toast.success('Contributor approved — they can now log in');
+    } catch (err) {
+      toast.error(apiErrorMessage(err, 'Failed to approve'));
+    }
+  });
+
+  const freeze = (editor_id: string) => withBusy(editor_id, 'freeze', async () => {
+    try {
+      await usersApi.setContributorActive(editor_id, false);
+      qc.invalidateQueries({ queryKey: ['contributors'] });
+      toast.success('Account frozen — login and edits disabled');
+    } catch (err) {
+      toast.error(apiErrorMessage(err, 'Failed to freeze account'));
+    }
+  });
+
+  const unfreeze = (editor_id: string) => withBusy(editor_id, 'unfreeze', async () => {
+    try {
+      await usersApi.setContributorActive(editor_id, true);
+      qc.invalidateQueries({ queryKey: ['contributors'] });
+      toast.success('Account unfrozen');
+    } catch (err) {
+      toast.error(apiErrorMessage(err, 'Failed to unfreeze account'));
+    }
+  });
+
+  const resetPassword = (editor_id: string) => withBusy(editor_id, 'reset', async () => {
     try {
       const res = await usersApi.resetContributorPassword(editor_id);
       if (res.emailed) {
@@ -218,12 +252,31 @@ function ContributorsTab() {
         setResetLinks((prev) => ({ ...prev, [editor_id]: res.link }));
         toast.success('Reset link generated');
       }
-    } catch {
-      toast.error('Failed to reset password');
+    } catch (err) {
+      toast.error(apiErrorMessage(err, 'Failed to reset password'));
     }
-  };
+  });
+
+  const deleteContributor = (editor_id: string) => withBusy(editor_id, 'delete', async () => {
+    try {
+      await usersApi.deleteContributor(editor_id);
+      qc.invalidateQueries({ queryKey: ['contributors'] });
+      setConfirmDelete(null);
+      toast.success('Contributor account deleted');
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail ?? 'Failed to delete';
+      toast.error(msg);
+      setConfirmDelete(null);
+    }
+  });
 
   if (isLoading) return <div className="py-8 flex justify-center"><Spinner /></div>;
+
+  // pending approval: inactive and never logged in (signed up, email verified, awaiting owner)
+  // frozen: inactive but has logged in before (owner froze them)
+  const pendingApproval = contributors.filter((c) => !c.is_active && !c.last_login_at);
+  const frozen = contributors.filter((c) => !c.is_active && !!c.last_login_at);
+  const active = contributors.filter((c) => c.is_active);
 
   if (contributors.length === 0) {
     return (
@@ -234,196 +287,180 @@ function ContributorsTab() {
     );
   }
 
-  return (
-    <div className="divide-y divide-gray-100">
-      {contributors.map((c) => (
-        <div key={c.editor_id} className="py-4 space-y-2">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-800">{c.display_name}</p>
-              <p className="text-xs text-gray-500">
-                @{c.editor_id}
-                {c.email && <> · {c.email}</>}
-              </p>
-              {c.last_login_at && (
-                <p className="text-xs text-gray-400">
-                  Last login {new Date(c.last_login_at).toLocaleDateString()}
-                </p>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => void toggleActive(c.editor_id, c.is_active)}
-                className={`p-1.5 rounded ${c.is_active ? 'hover:bg-red-50' : 'hover:bg-emerald-50'}`}
-                title={c.is_active ? 'Deactivate' : 'Activate'}
-              >
-                {c.is_active
-                  ? <UserX className="w-4 h-4 text-red-400" />
-                  : <UserCheck className="w-4 h-4 text-emerald-500" />
-                }
-              </button>
-              <button
-                onClick={() => void resetPassword(c.editor_id)}
-                className="p-1.5 hover:bg-gray-100 rounded"
-                title="Reset password"
-              >
-                <RefreshCw className="w-4 h-4 text-gray-500" />
-              </button>
-            </div>
-          </div>
-          {resetLinks[c.editor_id] && (
-            <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-              <LinkIcon className="w-4 h-4 text-amber-600 flex-shrink-0" />
-              <span className="text-xs font-mono text-amber-700 truncate flex-1">
-                {resetLinks[c.editor_id]}
-              </span>
-              <button
-                onClick={() => copyToClipboard(resetLinks[c.editor_id])}
-                className="text-xs text-amber-700 hover:underline flex-shrink-0"
-              >
-                Copy
-              </button>
-            </div>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ──────────────────────────────────────────────────────────────
-// Requests tab (pending invitations)
-// ──────────────────────────────────────────────────────────────
-function RequestsTab() {
-  const qc = useQueryClient();
-  const { data: invitations = [], isLoading } = useQuery({
-    queryKey: ['invitations'],
-    queryFn: usersApi.listInvitations,
-  });
-
-  const [approveLinks, setApproveLinks] = useState<Record<number, string>>({});
-
-  const approve = async (id: number) => {
-    try {
-      const res = await usersApi.approveInvitation(id);
-      qc.invalidateQueries({ queryKey: ['invitations'] });
-      qc.invalidateQueries({ queryKey: ['contributors'] });
-      if (res.emailed) {
-        toast.success('Approved — set-password email sent');
-      } else if (res.needs_set_password) {
-        setApproveLinks((prev) => ({ ...prev, [id]: res.link }));
-        toast.success('Approved — share the link below');
-      } else {
-        toast.success('Approved');
-      }
-    } catch {
-      toast.error('Failed to approve');
-    }
-  };
-
-  const reject = async (id: number) => {
-    try {
-      await usersApi.rejectInvitation(id);
-      qc.invalidateQueries({ queryKey: ['invitations'] });
-      toast.success('Request rejected');
-    } catch {
-      toast.error('Failed to reject');
-    }
-  };
-
-  if (isLoading) return <div className="py-8 flex justify-center"><Spinner /></div>;
-
-  const pending = invitations.filter((inv) => inv.status === 'pending');
-  const processed = invitations.filter((inv) => inv.status !== 'pending');
+  const renderDeleteButton = (editor_id: string) =>
+    confirmDelete === editor_id ? (
+      <span className="flex items-center gap-1">
+        <button
+          onClick={() => void deleteContributor(editor_id)}
+          disabled={anyBusy(editor_id)}
+          className="flex items-center gap-1 px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isBusy(editor_id, 'delete') ? <Spinner size="sm" /> : null}
+          Confirm delete
+        </button>
+        <button
+          onClick={() => setConfirmDelete(null)}
+          disabled={anyBusy(editor_id)}
+          className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Cancel
+        </button>
+      </span>
+    ) : (
+      <button
+        onClick={() => setConfirmDelete(editor_id)}
+        disabled={anyBusy(editor_id)}
+        className="p-1.5 hover:bg-red-50 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+        title="Delete account"
+      >
+        <Trash2 className="w-4 h-4 text-red-400" />
+      </button>
+    );
 
   return (
     <div className="space-y-6">
-      {pending.length === 0 && (
-        <div className="text-center py-8 text-gray-400">
-          <Mail className="w-10 h-10 mx-auto mb-2" />
-          <p className="text-sm">No pending requests.</p>
-        </div>
-      )}
-
-      {pending.length > 0 && (
+      {/* Pending approval */}
+      {pendingApproval.length > 0 && (
         <div>
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-            Pending ({pending.length})
+          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+            <Clock className="w-3.5 h-3.5" />
+            Awaiting approval ({pendingApproval.length})
           </h3>
           <div className="divide-y divide-gray-100">
-            {pending.map((inv) => (
-              <div key={inv.id} className="py-4 space-y-2">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-800">{inv.display_name}</p>
-                    {inv.email && <p className="text-xs text-gray-500">{inv.email}</p>}
-                    {inv.message && (
-                      <p className="text-xs text-gray-600 italic mt-1 bg-gray-50 rounded px-2 py-1">
-                        "{inv.message}"
+            {pendingApproval.map((c) => (
+              <div key={c.editor_id} className="py-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-800">{c.display_name}</p>
+                    <p className="text-xs text-gray-500">
+                      @{c.editor_id}
+                      {c.email && <> · {c.email}</>}
+                    </p>
+                    {c.created_at && (
+                      <p className="text-xs text-gray-400">
+                        Signed up {new Date(c.created_at).toLocaleDateString()}
                       </p>
                     )}
-                    <p className="text-xs text-gray-400 mt-1">
-                      Requested {new Date(inv.created_at).toLocaleDateString()}
-                    </p>
+                    {c.message && (
+                      <div className="mt-1 bg-gray-50 rounded px-2 py-1">
+                        <p className="text-xs text-gray-400 mb-0.5">Signup note from {c.display_name}:</p>
+                        <p className="text-xs text-gray-600 italic">"{c.message}"</p>
+                      </div>
+                    )}
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex items-center gap-2">
                     <button
-                      onClick={() => void approve(inv.id)}
-                      className="p-1.5 hover:bg-emerald-50 rounded"
-                      title="Approve"
+                      onClick={() => void approve(c.editor_id)}
+                      disabled={anyBusy(c.editor_id)}
+                      className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Approve — enable login for this contributor"
                     >
-                      <CheckCircle className="w-5 h-5 text-emerald-500" />
+                      {isBusy(c.editor_id, 'approve') ? <Spinner size="sm" /> : <UserCheck className="w-4 h-4" />}
+                      Approve
                     </button>
-                    <button
-                      onClick={() => void reject(inv.id)}
-                      className="p-1.5 hover:bg-red-50 rounded"
-                      title="Reject"
-                    >
-                      <XCircle className="w-5 h-5 text-red-400" />
-                    </button>
+                    {!c.has_contributions && renderDeleteButton(c.editor_id)}
                   </div>
                 </div>
-                {approveLinks[inv.id] && (
-                  <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
-                    <LinkIcon className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                    <span className="text-xs font-mono text-emerald-700 truncate flex-1">
-                      {approveLinks[inv.id]}
-                    </span>
-                    <button
-                      onClick={() => copyToClipboard(approveLinks[inv.id])}
-                      className="text-xs text-emerald-700 hover:underline flex-shrink-0"
-                    >
-                      Copy
-                    </button>
-                  </div>
-                )}
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {processed.length > 0 && (
+      {/* Frozen accounts */}
+      {frozen.length > 0 && (
         <div>
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-            Processed
+          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+            <ShieldOff className="w-3.5 h-3.5" />
+            Frozen ({frozen.length})
           </h3>
           <div className="divide-y divide-gray-100">
-            {processed.map((inv) => (
-              <div key={inv.id} className="py-3 flex items-center justify-between">
+            {frozen.map((c) => (
+              <div key={c.editor_id} className="py-4 flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-700">{inv.display_name}</p>
-                  {inv.email && <p className="text-xs text-gray-400">{inv.email}</p>}
+                  <p className="text-sm font-medium text-gray-500">{c.display_name}</p>
+                  <p className="text-xs text-gray-400">
+                    @{c.editor_id}
+                    {c.email && <> · {c.email}</>}
+                  </p>
                 </div>
-                <span
-                  className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                    inv.status === 'approved'
-                      ? 'bg-emerald-100 text-emerald-700'
-                      : 'bg-red-100 text-red-600'
-                  }`}
-                >
-                  {inv.status}
-                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => void unfreeze(c.editor_id)}
+                    disabled={anyBusy(c.editor_id)}
+                    className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Unfreeze — re-enable login"
+                  >
+                    {isBusy(c.editor_id, 'unfreeze') ? <Spinner size="sm" /> : <ShieldCheck className="w-3.5 h-3.5" />}
+                    Unfreeze
+                  </button>
+                  {!c.has_contributions && renderDeleteButton(c.editor_id)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Active contributors */}
+      {active.length > 0 && (
+        <div>
+          {(pendingApproval.length > 0 || frozen.length > 0) && (
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+              Active ({active.length})
+            </h3>
+          )}
+          <div className="divide-y divide-gray-100">
+            {active.map((c) => (
+              <div key={c.editor_id} className="py-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-800">{c.display_name}</p>
+                    <p className="text-xs text-gray-500">
+                      @{c.editor_id}
+                      {c.email && <> · {c.email}</>}
+                    </p>
+                    {c.last_login_at && (
+                      <p className="text-xs text-gray-400">
+                        Last login {new Date(c.last_login_at).toLocaleDateString()}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => void freeze(c.editor_id)}
+                      disabled={anyBusy(c.editor_id)}
+                      className="flex items-center gap-1 px-2.5 py-1.5 hover:bg-amber-50 text-amber-600 text-xs font-medium rounded-lg transition-colors border border-transparent hover:border-amber-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Freeze — disable login and edits immediately"
+                    >
+                      {isBusy(c.editor_id, 'freeze') ? <Spinner size="sm" /> : <ShieldOff className="w-3.5 h-3.5" />}
+                      Freeze
+                    </button>
+                    <button
+                      onClick={() => void resetPassword(c.editor_id)}
+                      disabled={anyBusy(c.editor_id)}
+                      className="p-1.5 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Reset password"
+                    >
+                      {isBusy(c.editor_id, 'reset') ? <Spinner size="sm" /> : <RefreshCw className="w-4 h-4 text-gray-500" />}
+                    </button>
+                    {!c.has_contributions && renderDeleteButton(c.editor_id)}
+                  </div>
+                </div>
+                {resetLinks[c.editor_id] && (
+                  <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    <LinkIcon className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                    <span className="text-xs font-mono text-amber-700 truncate flex-1">
+                      {resetLinks[c.editor_id]}
+                    </span>
+                    <button
+                      onClick={() => copyToClipboard(resetLinks[c.editor_id])}
+                      className="text-xs text-amber-700 hover:underline flex-shrink-0"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -436,7 +473,7 @@ function RequestsTab() {
 // ──────────────────────────────────────────────────────────────
 // Page root
 // ──────────────────────────────────────────────────────────────
-type Tab = 'share' | 'contributors' | 'requests';
+type Tab = 'share' | 'contributors';
 
 export function UserManagerPage() {
   const [tab, setTab] = useState<Tab>('share');
@@ -444,14 +481,13 @@ export function UserManagerPage() {
   const tabs: { id: Tab; label: string }[] = [
     { id: 'share', label: 'Share Links' },
     { id: 'contributors', label: 'Contributors' },
-    { id: 'requests', label: 'Requests' },
   ];
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">User Manager</h1>
-        <p className="text-gray-600 mt-1">Manage share links, contributors, and access requests</p>
+        <p className="text-gray-600 mt-1">Manage share links and contributors</p>
       </div>
 
       <Card>
@@ -476,7 +512,6 @@ export function UserManagerPage() {
 
         {tab === 'share' && <ShareTokensTab />}
         {tab === 'contributors' && <ContributorsTab />}
-        {tab === 'requests' && <RequestsTab />}
       </Card>
     </div>
   );

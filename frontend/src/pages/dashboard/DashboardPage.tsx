@@ -14,6 +14,7 @@ import { Spinner } from '../../components/common/Spinner';
 import { formatIndividualName, getLatestName } from '../../utils/nameUtils';
 import { useAuth } from '../../contexts/AuthContext';
 import toast from 'react-hot-toast';
+import { apiErrorMessage } from '../../utils/apiError';
 
 interface StatCardProps {
   title: string;
@@ -57,8 +58,8 @@ function ShareLinksWidget() {
       await usersApi.createShareToken({ description: 'Family share link' });
       qc.invalidateQueries({ queryKey: ['share-tokens'] });
       toast.success('Share link created');
-    } catch {
-      toast.error('Failed to create share link');
+    } catch (err) {
+      toast.error(apiErrorMessage(err, 'Failed to create share link'));
     } finally {
       setIsCreating(false);
     }
@@ -73,8 +74,8 @@ function ShareLinksWidget() {
     try {
       await usersApi.revokeShareToken(id);
       qc.invalidateQueries({ queryKey: ['share-tokens'] });
-    } catch {
-      toast.error('Failed to revoke');
+    } catch (err) {
+      toast.error(apiErrorMessage(err, 'Failed to revoke'));
     }
   };
 

@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams, useNavigate, Link } from 'react-router-dom';
-import { TreeDeciduous } from 'lucide-react';
+import { useSearchParams, Link } from 'react-router-dom';
+import { TreeDeciduous, Clock } from 'lucide-react';
 import { authApi } from '../../api/auth';
-import { useAuth } from '../../contexts/AuthContext';
 import { usePublicConfig } from '../../hooks/usePublicConfig';
 
 type State = 'verifying' | 'success' | 'error';
@@ -12,10 +11,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   'Verification link has expired — please sign up again': 'This verification link has expired. Please sign up again.',
 };
 
-export function VerifyOwnerEmailPage() {
+export function VerifyContributorEmailPage() {
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
-  const { refresh } = useAuth();
   const { adminEmail } = usePublicConfig();
   const [state, setState] = useState<State>('verifying');
   const [errorMsg, setErrorMsg] = useState('Verification failed. The link may be invalid or expired.');
@@ -28,11 +25,9 @@ export function VerifyOwnerEmailPage() {
       return;
     }
 
-    authApi.verifyOwnerEmail(token)
-      .then(async () => {
-        await refresh();
+    authApi.verifyContributorEmail(token)
+      .then(() => {
         setState('success');
-        setTimeout(() => navigate('/'), 2000);
       })
       .catch((err) => {
         const detail = err?.response?.data?.detail ?? '';
@@ -57,8 +52,18 @@ export function VerifyOwnerEmailPage() {
 
         {state === 'success' && (
           <>
+            <Clock className="w-10 h-10 text-amber-500 mx-auto mb-3" />
             <h1 className="text-xl font-bold text-gray-900 mb-2">Email verified!</h1>
-            <p className="text-gray-500 text-sm">Your account is ready. Redirecting…</p>
+            <p className="text-gray-600 text-sm mb-4">
+              Your request has been submitted to the tree owner. You'll be notified
+              by email once your access is approved — then you can log in.
+            </p>
+            <Link
+              to="/login"
+              className="inline-block text-sm text-emerald-600 hover:underline"
+            >
+              Go to login page
+            </Link>
           </>
         )}
 
@@ -66,9 +71,6 @@ export function VerifyOwnerEmailPage() {
           <>
             <h1 className="text-xl font-bold text-gray-900 mb-2">Verification failed</h1>
             <p className="text-gray-600 text-sm mb-4">{errorMsg}</p>
-            <Link to="/owner-signup" className="text-emerald-600 hover:underline text-sm">
-              Sign up again
-            </Link>
             {adminEmail && (
               <p className="text-xs text-gray-400 mt-4">
                 Having trouble?{' '}

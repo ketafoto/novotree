@@ -8,6 +8,7 @@ import { Input } from '../common/Input';
 import { Modal } from '../common/Modal';
 import { ApproxDateInput } from '../common/ApproxDateInput';
 import toast from 'react-hot-toast';
+import { apiErrorMessage } from '../../utils/apiError';
 import type { Event, EventCreate } from '../../types/models';
 
 interface EventFormDialogProps {
@@ -96,7 +97,7 @@ export function EventFormDialog({
       onClose();
       onSaved?.();
     },
-    onError: () => toast.error('Failed to add event'),
+    onError: (err) => toast.error(apiErrorMessage(err, 'Failed to add event')),
   });
 
   const updateMutation = useMutation({
@@ -108,7 +109,7 @@ export function EventFormDialog({
       onClose();
       onSaved?.();
     },
-    onError: () => toast.error('Failed to update event'),
+    onError: (err) => toast.error(apiErrorMessage(err, 'Failed to update event')),
   });
 
   const onSubmit = (data: FormData) => {

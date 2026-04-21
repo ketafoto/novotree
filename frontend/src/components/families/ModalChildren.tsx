@@ -7,6 +7,7 @@ import { individualsApi } from '../../api/individuals';
 import { Button } from '../common/Button';
 import { Modal } from '../common/Modal';
 import toast from 'react-hot-toast';
+import { apiErrorMessage } from '../../utils/apiError';
 import { formatIndividualName, getLatestName } from '../../utils/nameUtils';
 import type { Family } from '../../types/models';
 
@@ -55,7 +56,7 @@ export function ModalChildren({ open, onClose, family, onSaved }: ModalChildrenP
       onClose();
       onSaved?.();
     },
-    onError: () => toast.error('Failed to update'),
+    onError: (err) => toast.error(apiErrorMessage(err, 'Failed to update')),
   });
 
   useEffect(() => {

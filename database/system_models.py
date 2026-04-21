@@ -2,11 +2,13 @@
 SQLAlchemy ORM models for the global auth / system database (datasets/system.sqlite).
 
 Tables:
-- auth_editors        : all authenticated users (owners + contributors)
-- auth_editor_trees   : contributor → owner_id access grants (many-to-many)
-- auth_share_tokens   : viewer share links with rolling 90-day expiry
-- auth_invitations    : pending Contribute requests awaiting owner approval
+- auth_editors             : all authenticated users (owners + contributors)
+- auth_editor_trees        : contributor → owner_id access grants (many-to-many)
+- auth_share_tokens        : viewer share links with rolling 90-day expiry
+- auth_pending_owners      : email-verification staging for owner signups (1-hour TTL)
+- auth_pending_contributors: email-verification staging for contributor self-signups (24-hour TTL)
 - auth_set_password_tokens : one-time tokens for contributor onboarding / password reset
+- auth_invitations         : legacy invitation records (kept for data; no longer used by UI)
 """
 
 from sqlalchemy import (
@@ -44,6 +46,7 @@ class AuthEditor(SystemBase):
 
     password_hash = Column(String, nullable=True)  # NULL until set-password completed
     is_active = Column(Boolean, nullable=False, default=True)
+    message = Column(String, nullable=True)         # optional intro note from contributor signup
 
     created_at = Column(String, nullable=True)      # ISO-8601 UTC
     last_login_at = Column(String, nullable=True)   # ISO-8601 UTC
@@ -52,7 +55,7 @@ class AuthEditor(SystemBase):
 class AuthEditorTree(SystemBase):
     """
     Grants a contributor access to a specific owner's tree.
-    An owner can grant multiple contributors; a contributor can access multiple trees.
+    is_active is per-tree: one owner can freeze a contributor without affecting other trees.
     """
 
     __tablename__ = "auth_editor_trees"
@@ -63,6 +66,7 @@ class AuthEditorTree(SystemBase):
     id = Column(Integer, primary_key=True, autoincrement=True)
     editor_id = Column(String, nullable=False)
     owner_id = Column(String, nullable=False)
+    is_active = Column(Boolean, nullable=False, default=True)  # per-tree freeze/unfreeze
 
 
 class AuthShareToken(SystemBase):
@@ -134,4 +138,27 @@ class AuthPendingOwner(SystemBase):
     email = Column(String, nullable=False)
     password_hash = Column(String, nullable=False)        # already hashed at signup time
     expires_at = Column(String, nullable=False)           # ISO-8601 UTC; 1-hour TTL
+    created_at = Column(String, nullable=False)           # ISO-8601 UTC
+
+
+class AuthPendingContributor(SystemBase):
+    """
+    Temporary holding area for contributor self-signups awaiting email verification.
+    After verification the row is promoted to an inactive auth_editors row (is_active=False)
+    and an auth_editor_trees row granting access to the target owner's tree.
+    The owner then sees the request in User Manager and can approve (activate) or reject (delete).
+    Expires after 24 hours.
+    """
+
+    __tablename__ = "auth_pending_contributors"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    token = Column(String, nullable=False, unique=True)   # URL-safe random token (32 bytes)
+    editor_id = Column(String, nullable=False, unique=True)
+    display_name = Column(String, nullable=False)
+    email = Column(String, nullable=False)
+    password_hash = Column(String, nullable=False)        # already hashed at signup time
+    owner_id = Column(String, nullable=False)             # which tree they want to contribute to
+    message = Column(String, nullable=True)               # optional intro message
+    expires_at = Column(String, nullable=False)           # ISO-8601 UTC; 24-hour TTL
     created_at = Column(String, nullable=False)           # ISO-8601 UTC

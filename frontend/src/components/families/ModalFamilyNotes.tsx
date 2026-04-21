@@ -5,6 +5,7 @@ import { familiesApi } from '../../api/families';
 import { Button } from '../common/Button';
 import { Modal } from '../common/Modal';
 import toast from 'react-hot-toast';
+import { apiErrorMessage } from '../../utils/apiError';
 import type { Family } from '../../types/models';
 
 interface ModalFamilyNotesProps {
@@ -37,7 +38,7 @@ export function ModalFamilyNotes({ open, onClose, family, onSaved }: ModalFamily
       onClose();
       onSaved?.();
     },
-    onError: () => toast.error('Failed to update'),
+    onError: (err) => toast.error(apiErrorMessage(err, 'Failed to update')),
   });
 
   return (

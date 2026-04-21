@@ -26,10 +26,11 @@ from backend.api import individuals, families, events, media, header, auth, type
 from backend.api import users as users_api
 from backend.api.auth import DEFAULT_OWNER_ID, _ALGORITHM
 from backend.config import settings
-from backend.logging import setup_logging
+from backend.logging import setup_logging, request_user
 
 setup_logging()
 logger = logging.getLogger("novotree.backend")
+access_logger = logging.getLogger("novotree.access")
 
 
 # ---------------------------------------------------------------------------
@@ -41,6 +42,14 @@ async def lifespan(app: FastAPI):
     # Initialize global system database (auth)
     init_system_db()
     logger.info("System database initialized")
+
+    # Suppress uvicorn's own access log. We emit our own from inside owner_db_router
+    # middleware where request_user ContextVar is already set, so _UserFilter can inject
+    # the username. Uvicorn emits its access log from a different asyncio task context
+    # (the protocol handler), so the ContextVar would be empty there.
+    uvicorn_access = logging.getLogger("uvicorn.access")
+    uvicorn_access.setLevel(logging.WARNING)
+    uvicorn_access.propagate = False
 
     if not settings.cookie_secure and not settings.is_dev:
         logger.warning(
@@ -95,10 +104,11 @@ app.add_middleware(
 WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 # Paths that don't need an owner database
 AUTH_ONLY_PATHS = {
-    "/auth/login", "/auth/signup", "/auth/logout", "/auth/refresh",
-    "/auth/me", "/auth/set-password", "/auth/verify-email",
-    "/auth/resend-verification", "/auth/public-config",
-    "/users/invitations",    # POST from public (Contribute button)
+    # Auth endpoints — no tree DB needed
+    "/auth/login", "/auth/logout", "/auth/refresh",
+    "/auth/me", "/auth/set-password", "/auth/public-config", "/auth/share-info",
+    "/auth/owner-signup", "/auth/verify-owner-email", "/auth/resend-owner-verification",
+    "/auth/contributor-signup", "/auth/verify-contributor-email", "/auth/resend-contributor-verification",
     "/health",
 }
 _request_windows: dict[str, deque[float]] = defaultdict(deque)
@@ -178,6 +188,21 @@ async def owner_db_router(request: Request, call_next):
             return JSONResponse(status_code=429, content={"detail": "Too many requests"})
         window.append(now)
 
+    # Inject current user into logging context
+    access_token = request.cookies.get("access_token")
+    if settings.is_dev:
+        request_user.set(DEFAULT_OWNER_ID)
+    elif access_token:
+        try:
+            payload = jwt.decode(access_token, settings.jwt_secret_key, algorithms=[_ALGORITHM])
+            request_user.set(payload.get("sub", ""))
+        except JWTError:
+            request_user.set("")
+    elif request.query_params.get("share"):
+        request_user.set("viewer")
+    else:
+        request_user.set("")
+
     # Skip DB routing for pure-auth and health paths
     is_auth_path = any(path == p or path.startswith(p + "/") for p in AUTH_ONLY_PATHS)
     if not is_auth_path:
@@ -193,17 +218,24 @@ async def owner_db_router(request: Request, call_next):
             if is_share_token and request.method in WRITE_METHODS:
                 return JSONResponse(status_code=403, content={"detail": "Read-only viewer access"})
 
-            # Switch active owner database for this request
-            current_owner = db.get_active_owner()
-            if not current_owner or current_owner.owner_id != owner_id:
-                try:
-                    db.reset_engine()
-                    db.init_db_once(OwnerInfo(owner_id=owner_id))
-                except Exception as e:
-                    logger.error(f"Failed to open database for owner '{owner_id}': {e}")
-                    return JSONResponse(status_code=500, content={"detail": "Database unavailable"})
+            # Ensure the owner's DB engine is in the pool (idempotent — no-op if already cached).
+            try:
+                db.init_db_once(OwnerInfo(owner_id=owner_id))
+            except Exception as e:
+                logger.error(f"Failed to open database for owner '{owner_id}': {e}")
+                return JSONResponse(status_code=500, content={"detail": "Database unavailable"})
 
     response = await call_next(request)
+
+    # Emit access log from here so request_user ContextVar (set above) is visible to _UserFilter.
+    access_logger.info(
+        '%s - "%s %s HTTP/%s" %d',
+        _get_client_ip(request),
+        request.method,
+        path,
+        request.scope.get("http_version", "1.1"),
+        response.status_code,
+    )
 
     # Security headers
     response.headers["X-Content-Type-Options"] = "nosniff"

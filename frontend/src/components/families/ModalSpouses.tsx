@@ -9,6 +9,7 @@ import { Button } from '../common/Button';
 import { ComboSelect } from '../common/ComboSelect';
 import { Modal } from '../common/Modal';
 import toast from 'react-hot-toast';
+import { apiErrorMessage } from '../../utils/apiError';
 import { formatIndividualName, getLatestName } from '../../utils/nameUtils';
 import type { Family } from '../../types/models';
 
@@ -61,7 +62,7 @@ export function ModalSpouses({ open, onClose, family, onSaved }: ModalSpousesPro
       onClose();
       onSaved?.();
     },
-    onError: () => toast.error('Failed to update'),
+    onError: (err) => toast.error(apiErrorMessage(err, 'Failed to update')),
   });
 
   useEffect(() => {

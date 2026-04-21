@@ -8,6 +8,7 @@ import { Input } from '../common/Input';
 import { ApproxDateInput } from '../common/ApproxDateInput';
 import { Modal } from '../common/Modal';
 import toast from 'react-hot-toast';
+import { apiErrorMessage } from '../../utils/apiError';
 import type { Individual } from '../../types/models';
 
 interface ModalDeathProps {
@@ -54,7 +55,7 @@ export function ModalDeath({ open, onClose, individual, onSaved }: ModalDeathPro
       onClose();
       onSaved?.();
     },
-    onError: () => toast.error('Failed to update'),
+    onError: (err) => toast.error(apiErrorMessage(err, 'Failed to update')),
   });
 
   return (

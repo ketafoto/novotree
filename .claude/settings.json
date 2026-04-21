@@ -7,6 +7,10 @@
       "Bash(npm *)",
       "Bash(npx *)",
       "Bash(python -c *)",
+      "Bash(python -m pytest *)",
+      "Bash(source .venv/bin/activate && python -c *)",
+      "Bash(source .venv/bin/activate && python -m pytest *)",
+      "Bash(source .venv/bin/activate *)",
       "Bash(sqlite3 *)"
     ],
     "deny": []

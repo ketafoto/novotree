@@ -1,8 +1,8 @@
 """
-User management API — share tokens, contributors, and contribution invitations.
+User management API — share tokens and contributors.
 
 All endpoints here are owner-only except:
-  POST /users/invitations  — public (no auth), used by the Contribute button on shared trees
+  GET  /users/owner-info   — public, returns owner display_name for the contributor signup form
 """
 
 import logging
@@ -66,8 +66,15 @@ class ContributorResponse(BaseModel):
     is_active: bool
     created_at: Optional[str] = None
     last_login_at: Optional[str] = None
+    message: Optional[str] = None
+    has_contributions: bool = False
 
     model_config = {"from_attributes": True}
+
+
+class OwnerInfoResponse(BaseModel):
+    owner_id: str
+    display_name: str
 
 
 class SetActiveRequest(BaseModel):
@@ -175,6 +182,25 @@ def _make_set_password_token(
 
 
 # ---------------------------------------------------------------------------
+# Public endpoints
+# ---------------------------------------------------------------------------
+
+@router.get("/owner-info", response_model=OwnerInfoResponse)
+def get_owner_info(
+    owner_id: str,
+    db: Session = Depends(get_system_db),
+):
+    """Public — return the display name of an owner. Used by the contributor signup form."""
+    owner = db.query(AuthEditor).filter(
+        AuthEditor.editor_id == owner_id,
+        AuthEditor.role == "owner",
+    ).first()
+    if not owner:
+        raise HTTPException(status_code=404, detail="Owner not found")
+    return OwnerInfoResponse(owner_id=owner.editor_id, display_name=owner.display_name)
+
+
+# ---------------------------------------------------------------------------
 # Share token endpoints (owner only)
 # ---------------------------------------------------------------------------
 
@@ -235,12 +261,149 @@ def revoke_share_token(
 # Contributor endpoints (owner only)
 # ---------------------------------------------------------------------------
 
+def _has_contributions(editor_id: str, owner_id: str) -> bool:
+    """Check if a contributor created any records in the owner's tree database."""
+    try:
+        from database.db import get_db as _get_db
+        from database.models import Family, Individual, Event, Media
+        db_gen = _get_db(owner_id)
+        tree_db = next(db_gen)
+        try:
+            has = (
+                tree_db.query(Individual).filter(Individual.created_by == editor_id).first() is not None
+                or tree_db.query(Family).filter(Family.created_by == editor_id).first() is not None
+                or tree_db.query(Event).filter(Event.created_by == editor_id).first() is not None
+                or tree_db.query(Media).filter(Media.created_by == editor_id).first() is not None
+            )
+        finally:
+            try:
+                next(db_gen)
+            except StopIteration:
+                pass
+        return has
+    except Exception:
+        return True  # safe default — prevent accidental deletion
+
+
+_INACTIVITY_MONTHS = 2
+_INACTIVITY_DAYS = _INACTIVITY_MONTHS * 30
+
+
+def _last_edit_time(editor_id: str, owner_id: str) -> Optional[datetime]:
+    """Return the most recent created_at across all four contribution tables, or None."""
+    try:
+        from database.db import get_db as _get_db
+        from database.models import Event, Family, Individual, Media
+        from sqlalchemy import func as sa_func
+
+        db_gen = _get_db(owner_id)
+        tree_db = next(db_gen)
+        try:
+            candidates = []
+            for model in (Individual, Family, Event, Media):
+                row = (
+                    tree_db.query(sa_func.max(model.created_at))
+                    .filter(model.created_by == editor_id)
+                    .scalar()
+                )
+                if row:
+                    candidates.append(row)
+        finally:
+            try:
+                next(db_gen)
+            except StopIteration:
+                pass
+        if not candidates:
+            return None
+        latest_str = max(candidates)
+        return datetime.fromisoformat(latest_str.replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
+async def cleanup_inactive_contributors(owner_id: str, db: Session, base_url: str) -> None:
+    """
+    Called on every owner login.  Enforces two inactivity rules:
+      Rule 1 — Active contributor whose last edit is older than _INACTIVITY_DAYS: freeze.
+      Rule 2 — Approved contributor (has_contributions=False) whose account is older
+               than _INACTIVITY_DAYS: delete (they never contributed after being approved).
+    Sends notification emails in both cases.
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(days=_INACTIVITY_DAYS)
+
+    links = db.query(AuthEditorTree).filter(
+        AuthEditorTree.owner_id == owner_id,
+    ).all()
+
+    for link in links:
+        editor = db.query(AuthEditor).filter(
+            AuthEditor.editor_id == link.editor_id,
+        ).first()
+        if not editor:
+            continue
+
+        # Skip editors who are still pending approval (never logged in)
+        if editor.last_login_at is None:
+            continue
+
+        has_contrib = _has_contributions(link.editor_id, owner_id)
+
+        if not has_contrib:
+            # Rule 2: approved, never edited — delete if account old enough
+            if editor.created_at:
+                try:
+                    created = datetime.fromisoformat(editor.created_at.replace("Z", "+00:00"))
+                except ValueError:
+                    created = None
+                if created and created < cutoff:
+                    email = editor.email
+                    display_name = editor.display_name
+                    db.delete(link)
+                    db.delete(editor)
+                    db.commit()
+                    if email and settings.smtp_enabled:
+                        await _send_email(
+                            to=email,
+                            subject="Your Novotree contributor account has been removed",
+                            body=(
+                                f"Hello {display_name},\n\n"
+                                f"Your contributor access to the family tree has been automatically removed "
+                                f"because no contributions were made within {_INACTIVITY_MONTHS} months "
+                                f"of account creation.\n\n"
+                                f"If you wish to contribute again, please sign up via the tree's share link.\n"
+                            ),
+                        )
+                    logger.info("Auto-deleted inactive contributor %s (no contributions)", link.editor_id)
+                    continue
+        else:
+            # Rule 1: has contributions — freeze if last edit is too old and still active
+            if link.is_active:
+                last_edit = _last_edit_time(link.editor_id, owner_id)
+                if last_edit and last_edit < cutoff:
+                    link.is_active = False
+                    db.commit()
+                    login_url = f"{base_url}{'/novotree/login' if not settings.is_dev else '/login'}"
+                    if editor.email and settings.smtp_enabled:
+                        await _send_email(
+                            to=editor.email,
+                            subject="Your Novotree contributor access has been suspended",
+                            body=(
+                                f"Hello {editor.display_name},\n\n"
+                                f"Your contributor access to the family tree has been automatically suspended "
+                                f"due to {_INACTIVITY_MONTHS} months of inactivity.\n\n"
+                                f"Please contact the tree owner to restore your access.\n\n"
+                                f"When access is restored, you can log in at: {login_url}\n"
+                            ),
+                        )
+                    logger.info("Auto-frozen inactive contributor %s (last edit: %s)", link.editor_id, last_edit)
+
+
 @router.get("/contributors", response_model=list[ContributorResponse])
 def list_contributors(
     session: EditorSession = Depends(require_owner),
     db: Session = Depends(get_system_db),
 ):
-    """List all contributors who have access to the owner's tree."""
+    """List all contributors who have access to the owner's tree (active and inactive)."""
     editor_ids = [
         row.editor_id
         for row in db.query(AuthEditorTree).filter(
@@ -249,18 +412,41 @@ def list_contributors(
     ]
     if not editor_ids:
         return []
+    link_map = {
+        row.editor_id: row
+        for row in db.query(AuthEditorTree).filter(
+            AuthEditorTree.owner_id == session.owner_id,
+            AuthEditorTree.editor_id.in_(editor_ids),
+        ).all()
+    }
     editors = db.query(AuthEditor).filter(AuthEditor.editor_id.in_(editor_ids)).all()
-    return editors
+    result = []
+    for ed in editors:
+        link = link_map.get(ed.editor_id)
+        # is_active for UI: pending approval uses global flag; frozen uses per-tree link flag
+        is_active = ed.is_active and (link.is_active if link else False)
+        contrib = ContributorResponse(
+            editor_id=ed.editor_id,
+            display_name=ed.display_name,
+            email=ed.email,
+            is_active=is_active,
+            created_at=ed.created_at,
+            last_login_at=ed.last_login_at,
+            message=ed.message,
+            has_contributions=_has_contributions(ed.editor_id, session.owner_id),
+        )
+        result.append(contrib)
+    return result
 
 
 @router.post("/contributors/set-active", status_code=status.HTTP_204_NO_CONTENT)
-def set_contributor_active(
+async def set_contributor_active(
     body: SetActiveRequest,
+    request: Request,
     session: EditorSession = Depends(require_owner),
     db: Session = Depends(get_system_db),
 ):
-    """Activate or deactivate a contributor's account."""
-    # Verify contributor belongs to this owner's tree
+    """Freeze or unfreeze a contributor's access to this owner's tree (per-tree)."""
     link = db.query(AuthEditorTree).filter(
         AuthEditorTree.editor_id == body.editor_id,
         AuthEditorTree.owner_id == session.owner_id,
@@ -272,8 +458,135 @@ def set_contributor_active(
     if not editor:
         raise HTTPException(status_code=404, detail="Editor not found")
 
-    editor.is_active = body.is_active
+    link.is_active = body.is_active
     db.commit()
+
+    if editor.email and settings.smtp_enabled:
+        login_url = (
+            f"{request.url.scheme}://{request.url.netloc}"
+            f"{'/novotree/login' if not settings.is_dev else '/login'}"
+        )
+        if body.is_active:
+            await _send_email(
+                to=editor.email,
+                subject="Your Novotree contributor access has been restored",
+                body=(
+                    f"Hello {editor.display_name},\n\n"
+                    f"Your contributor access to the family tree has been restored by the tree owner.\n\n"
+                    f"You can log in again at: {login_url}\n"
+                ),
+            )
+        else:
+            await _send_email(
+                to=editor.email,
+                subject="Your Novotree contributor access has been suspended",
+                body=(
+                    f"Hello {editor.display_name},\n\n"
+                    f"Your contributor access to the family tree has been temporarily suspended "
+                    f"by the tree owner.\n\n"
+                    f"If you believe this is a mistake, please contact the tree owner directly.\n\n"
+                    f"When access is restored, you can log in at: {login_url}\n"
+                ),
+            )
+
+
+@router.post("/contributors/{editor_id}/activate", status_code=status.HTTP_204_NO_CONTENT)
+async def activate_contributor(
+    editor_id: str,
+    request: Request,
+    session: EditorSession = Depends(require_owner),
+    db: Session = Depends(get_system_db),
+):
+    """
+    Approve a pending contributor: set is_active=True and notify them by email.
+    Also used to re-activate a previously frozen account.
+    """
+    link_row = db.query(AuthEditorTree).filter(
+        AuthEditorTree.editor_id == editor_id,
+        AuthEditorTree.owner_id == session.owner_id,
+    ).first()
+    if not link_row:
+        raise HTTPException(status_code=404, detail="Contributor not found in your tree")
+
+    editor = db.query(AuthEditor).filter(AuthEditor.editor_id == editor_id).first()
+    if not editor:
+        raise HTTPException(status_code=404, detail="Editor not found")
+
+    was_frozen = not link_row.is_active and editor.last_login_at is not None
+    link_row.is_active = True
+    # Also ensure the global AuthEditor row is active (covers first-time approval)
+    editor.is_active = True
+    db.commit()
+
+    login_url = (
+        f"{request.url.scheme}://{request.url.netloc}"
+        f"{'/novotree/login' if not settings.is_dev else '/login'}"
+    )
+
+    if editor.email and settings.smtp_enabled:
+        if was_frozen:
+            subject = "Your Novotree contributor access has been restored"
+            body = (
+                f"Hello {editor.display_name},\n\n"
+                f"Your contributor access has been restored by the tree owner.\n\n"
+                f"You can log in again at: {login_url}\n"
+            )
+        else:
+            subject = "Your Novotree contributor access has been approved"
+            message_line = f"\nYour note to the owner: \"{editor.message}\"\n" if editor.message else ""
+            body = (
+                f"Hello {editor.display_name},\n\n"
+                f"Great news! The tree owner has approved your contributor access.{message_line}\n"
+                f"You can now log in at: {login_url}\n\n"
+                f"Welcome to the team!"
+            )
+        await _send_email(to=editor.email, subject=subject, body=body)
+
+
+@router.delete("/contributors/{editor_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_contributor(
+    editor_id: str,
+    session: EditorSession = Depends(require_owner),
+    db: Session = Depends(get_system_db),
+):
+    """
+    Delete a contributor account. Only allowed if the contributor has made no contributions
+    (no Individuals, Events, or Media created by them in the owner's tree).
+    """
+    link_row = db.query(AuthEditorTree).filter(
+        AuthEditorTree.editor_id == editor_id,
+        AuthEditorTree.owner_id == session.owner_id,
+    ).first()
+    if not link_row:
+        raise HTTPException(status_code=404, detail="Contributor not found in your tree")
+
+    editor = db.query(AuthEditor).filter(AuthEditor.editor_id == editor_id).first()
+    if not editor:
+        raise HTTPException(status_code=404, detail="Editor not found")
+
+    if _has_contributions(editor_id, session.owner_id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot delete a contributor who has added data to the tree",
+        )
+
+    email = editor.email
+    display_name = editor.display_name
+
+    db.delete(link_row)
+    db.delete(editor)
+    db.commit()
+
+    if email and settings.smtp_enabled:
+        await _send_email(
+            to=email,
+            subject="Your Novotree contributor access has been removed",
+            body=(
+                f"Hello {display_name},\n\n"
+                f"Your contributor access to the family tree has been removed by the owner.\n\n"
+                f"If you believe this is a mistake, please contact the tree owner directly."
+            ),
+        )
 
 
 @router.post("/contributors/reset-password", response_model=ResetPasswordResponse)
@@ -408,7 +721,7 @@ async def approve_invitation(
         role="contributor",
         owner_id=None,
         password_hash=None,
-        is_active=True,
+        is_active=False,  # inactive until set-password completed; activate separately
         created_at=now,
     )
     db.add(editor)

@@ -10,6 +10,7 @@ import { Input } from '../../components/common/Input';
 import { Card } from '../../components/common/Card';
 import { passwordSchema, PASSWORD_HINT } from '../../utils/passwordValidation';
 import toast from 'react-hot-toast';
+import { apiErrorMessage } from '../../utils/apiError';
 
 const profileSchema = z.object({
   display_name: z.string().min(1, 'Display name is required'),
@@ -58,8 +59,8 @@ export function SettingsPage() {
       await authApi.updateProfile(data.display_name);
       await refresh();
       toast.success('Profile updated');
-    } catch {
-      toast.error('Failed to update profile');
+    } catch (err) {
+      toast.error(apiErrorMessage(err, 'Failed to update profile'));
     }
   };
 
@@ -71,8 +72,8 @@ export function SettingsPage() {
       });
       toast.success('Password changed successfully');
       reset();
-    } catch {
-      toast.error('Failed to change password. Please check your current password.');
+    } catch (err) {
+      toast.error(apiErrorMessage(err, 'Failed to change password. Please check your current password.'));
     }
   };
 

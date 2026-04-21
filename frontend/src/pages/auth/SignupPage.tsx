@@ -25,7 +25,7 @@ const signupSchema = z
 
 type SignupData = z.infer<typeof signupSchema>;
 
-export function SignupPage() {
+export function OwnerSignupPage() {
   const [submittedEmail, setSubmittedEmail] = useState<string | null>(null);
   const [resending, setResending] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -40,7 +40,7 @@ export function SignupPage() {
 
   const onSubmit = async (data: SignupData) => {
     try {
-      await authApi.signup({
+      await authApi.ownerSignup({
         display_name: data.display_name || undefined,
         email: data.email,
         password: data.password,
@@ -56,7 +56,7 @@ export function SignupPage() {
     if (!submittedEmail) return;
     setResending(true);
     try {
-      await authApi.resendVerification(submittedEmail);
+      await authApi.resendOwnerVerification(submittedEmail);
       toast.success('Verification email resent');
     } catch {
       toast.error('Failed to resend — please try again');

@@ -11,6 +11,7 @@ import { Card } from '../common/Card';
 import { Modal } from '../common/Modal';
 import { ApproxDateInput } from '../common/ApproxDateInput';
 import toast from 'react-hot-toast';
+import { apiErrorMessage } from '../../utils/apiError';
 import type { Individual } from '../../types/models';
 
 const nameSchema = z.object({
@@ -90,8 +91,8 @@ export function IndividualFormDialog({
       reset({ names: [{ given_name: '', family_name: '' }] });
       onCreated(data);
     },
-    onError: () => {
-      toast.error('Failed to create individual');
+    onError: (err) => {
+      toast.error(apiErrorMessage(err, 'Failed to create individual'));
     },
   });
 

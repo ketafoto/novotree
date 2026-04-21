@@ -3,7 +3,7 @@ import type {
   Editor,
   AuthResponse,
   LoginRequest,
-  SignupRequest,
+  OwnerSignupRequest,
   SignupResponse,
   PublicConfig,
   SetPasswordRequest,
@@ -11,8 +11,8 @@ import type {
   ShareToken,
   ShareTokenCreate,
   Contributor,
-  Invitation,
-  ContributeRequest,
+  ContributorSignupRequest,
+  OwnerInfo,
 } from '../types/models';
 
 export const authApi = {
@@ -26,23 +26,28 @@ export const authApi = {
     return res.data;
   },
 
-  signup: async (body: SignupRequest): Promise<SignupResponse> => {
-    const res = await apiClient.post<SignupResponse>('/auth/signup', body);
+  ownerSignup: async (body: OwnerSignupRequest): Promise<SignupResponse> => {
+    const res = await apiClient.post<SignupResponse>('/auth/owner-signup', body);
     return res.data;
   },
 
-  verifyEmail: async (token: string): Promise<AuthResponse> => {
-    const res = await apiClient.post<AuthResponse>('/auth/verify-email', null, { params: { token } });
+  verifyOwnerEmail: async (token: string): Promise<AuthResponse> => {
+    const res = await apiClient.post<AuthResponse>('/auth/verify-owner-email', null, { params: { token } });
     return res.data;
   },
 
-  resendVerification: async (email: string): Promise<SignupResponse> => {
-    const res = await apiClient.post<SignupResponse>('/auth/resend-verification', null, { params: { email } });
+  resendOwnerVerification: async (email: string): Promise<SignupResponse> => {
+    const res = await apiClient.post<SignupResponse>('/auth/resend-owner-verification', null, { params: { email } });
     return res.data;
   },
 
   getPublicConfig: async (): Promise<PublicConfig> => {
     const res = await apiClient.get<PublicConfig>('/auth/public-config');
+    return res.data;
+  },
+
+  getShareInfo: async (share: string): Promise<{ owner_id: string; display_name: string }> => {
+    const res = await apiClient.get('/auth/share-info', { params: { share } });
     return res.data;
   },
 
@@ -65,6 +70,21 @@ export const authApi = {
 
   setPassword: async (body: SetPasswordRequest): Promise<AuthResponse> => {
     const res = await apiClient.post<AuthResponse>('/auth/set-password', body);
+    return res.data;
+  },
+
+  contributorSignup: async (body: ContributorSignupRequest): Promise<SignupResponse> => {
+    const res = await apiClient.post<SignupResponse>('/auth/contributor-signup', body);
+    return res.data;
+  },
+
+  verifyContributorEmail: async (token: string): Promise<AuthResponse> => {
+    const res = await apiClient.post<AuthResponse>('/auth/verify-contributor-email', null, { params: { token } });
+    return res.data;
+  },
+
+  resendContributorVerification: async (email: string): Promise<SignupResponse> => {
+    const res = await apiClient.post<SignupResponse>('/auth/resend-contributor-verification', null, { params: { email } });
     return res.data;
   },
 };
@@ -103,22 +123,18 @@ export const usersApi = {
     return res.data;
   },
 
-  // Invitations
-  listInvitations: async (): Promise<Invitation[]> => {
-    const res = await apiClient.get<Invitation[]>('/users/invitations');
+  // Owner info (public)
+  getOwnerInfo: async (owner_id: string): Promise<OwnerInfo> => {
+    const res = await apiClient.get<OwnerInfo>('/users/owner-info', { params: { owner_id } });
     return res.data;
   },
 
-  submitContributeRequest: async (body: ContributeRequest): Promise<void> => {
-    await apiClient.post('/users/invitations', body);
+  // Contributor management
+  activateContributor: async (editor_id: string): Promise<void> => {
+    await apiClient.post(`/users/contributors/${editor_id}/activate`);
   },
 
-  approveInvitation: async (id: number): Promise<{ link: string; emailed: boolean; needs_set_password: boolean }> => {
-    const res = await apiClient.post(`/users/invitations/${id}/approve`);
-    return res.data;
-  },
-
-  rejectInvitation: async (id: number): Promise<void> => {
-    await apiClient.post(`/users/invitations/${id}/reject`);
+  deleteContributor: async (editor_id: string): Promise<void> => {
+    await apiClient.delete(`/users/contributors/${editor_id}`);
   },
 };

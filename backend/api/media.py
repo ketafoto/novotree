@@ -291,11 +291,11 @@ def update_media(
 @router.delete("/{media_id}")
 def delete_media(
     media_id: int,
-    session: EditorSession = Depends(require_owner),
+    session: EditorSession = Depends(require_editor),
     db: Session = Depends(get_tree_db),
     owner: OwnerInfo = Depends(get_tree_owner_info),
 ):
-    """Delete a media record and its file on disk."""
+    """Delete a media record and its file on disk. Contributors may only delete their own records."""
     media = (
         db.query(database.models.Media)
         .filter(database.models.Media.id == media_id)
@@ -303,6 +303,8 @@ def delete_media(
     )
     if media is None:
         raise HTTPException(status_code=404, detail="Media not found")
+
+    _check_edit_permission(session, media.created_by)
 
     if media.file_path:
         file_path = Path(owner.media_dir) / media.file_path

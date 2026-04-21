@@ -48,6 +48,9 @@ class IndividualUpdate(IndividualBase):
 class Individual(IndividualBase):
     id: int
     names: List[IndividualName] = []
+    created_by: Optional[str] = None
+    created_by_display_name: Optional[str] = None
+    created_at: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

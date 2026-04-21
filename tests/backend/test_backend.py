@@ -7,10 +7,10 @@ import pytest
 class TestIndividualsCRUD:
     """Test suite for Individual CRUD operations - merged into single test."""
 
-    def test_crud_individuals_workflow(self, client, db_utils, individual_verifier, sample_individual_data, log_test_step):
+    def test_crud_individuals_workflow(self, tree_db_client, db_utils, individual_verifier, sample_individual_data, log_test_step):
 
         log_test_step("Creating first individual with auto-generated GEDCOM ID")
-        response = client.post("/individuals", json=sample_individual_data)
+        response = tree_db_client.post("/individuals", json=sample_individual_data)
         assert response.status_code == 200, f"Failed to create individual: {response.json()}"
         data = response.json()
         assert "gedcom_id" in data
@@ -52,7 +52,7 @@ class TestIndividualsCRUD:
                 }
             ]
         }
-        response = client.post("/individuals", json=sample_individual_data_2)
+        response = tree_db_client.post("/individuals", json=sample_individual_data_2)
         assert response.status_code == 200, f"Failed to create second individual: {response.json()}"
         data = response.json()
 
@@ -60,7 +60,7 @@ class TestIndividualsCRUD:
         auto_gedcom_id_2 = data["gedcom_id"]
 
         log_test_step("Creating third individual with explicit GEDCOM ID")
-        response = client.post("/individuals", json={
+        response = tree_db_client.post("/individuals", json={
             "gedcom_id": "I999",
             "sex_code": "M",
             "birth_date": "1975-03-10",
@@ -81,7 +81,7 @@ class TestIndividualsCRUD:
         assert data["gedcom_id"] == "I999"
 
         log_test_step("Testing duplicate GEDCOM ID rejection")
-        response = client.post("/individuals", json={
+        response = tree_db_client.post("/individuals", json={
             "gedcom_id": "I999",
             "sex_code": "F",
             "birth_date": "1990-01-01",
@@ -104,7 +104,7 @@ class TestIndividualsCRUD:
         assert len(individuals) == 1, f"Expected 1 individual with GEDCOM ID I999, found {len(individuals)}"
 
         log_test_step("Fetching list of all individuals")
-        response = client.get("/individuals")
+        response = tree_db_client.get("/individuals")
         assert response.status_code == 200
         data = response.json()
         assert len(data) >= 3, "Should have at least 3 individuals"
@@ -117,13 +117,13 @@ class TestIndividualsCRUD:
         assert len(all_individuals) >= 3, f"Expected at least 3 individuals in DB, got {len(all_individuals)}"
 
         log_test_step("Testing pagination (skip=1, limit=2)")
-        response = client.get("/individuals?skip=1&limit=2")
+        response = tree_db_client.get("/individuals?skip=1&limit=2")
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 2, f"Expected exactly 2 individuals with skip=1&limit=2, got {len(data)}"
 
         log_test_step(f"Fetching individual by id={individual_id_1}")
-        response = client.get(f"/individuals/{individual_id_1}")
+        response = tree_db_client.get(f"/individuals/{individual_id_1}")
         assert response.status_code == 200
         data = response.json()
         assert data["id"] == individual_id_1
@@ -134,7 +134,7 @@ class TestIndividualsCRUD:
         assert individual_verifier.individual_exists(individual_id_1)
 
         log_test_step("Testing fetch of non-existent individual id=99999")
-        response = client.get("/individuals/99999")
+        response = tree_db_client.get("/individuals/99999")
         assert response.status_code == 404
         assert "Individual not found" in response.json()["detail"]
 
@@ -152,7 +152,7 @@ class TestIndividualsCRUD:
                 }
             ]
         }
-        response = client.put(f"/individuals/{individual_id_1}", json=update_data)
+        response = tree_db_client.put(f"/individuals/{individual_id_1}", json=update_data)
         assert response.status_code == 200, f"Failed to update individual: {response.json()}"
         data = response.json()
         assert data["birth_place"] == "Boston, USA"
@@ -176,24 +176,24 @@ class TestIndividualsCRUD:
         assert names[0]["family_name"] == "Doe"
 
         log_test_step("Testing update of non-existent individual id=99999")
-        response = client.put("/individuals/99999", json={"notes": "Will fail"})
+        response = tree_db_client.put("/individuals/99999", json={"notes": "Will fail"})
         assert response.status_code == 404
         assert "Individual not found" in response.json()["detail"]
 
         log_test_step(f"Deleting individual id={individual_id_2}")
-        response = client.delete(f"/individuals/{individual_id_2}")
+        response = tree_db_client.delete(f"/individuals/{individual_id_2}")
         assert response.status_code == 200
         assert "Individual deleted" in response.json()["detail"]
 
         log_test_step("Verifying deleted individual returns 404")
-        get_response = client.get(f"/individuals/{individual_id_2}")
+        get_response = tree_db_client.get(f"/individuals/{individual_id_2}")
         assert get_response.status_code == 404
 
         log_test_step("Verifying individual removed from database")
         assert not individual_verifier.individual_exists(individual_id_2)
 
         log_test_step("Testing delete of non-existent individual id=99999")
-        response = client.delete("/individuals/99999")
+        response = tree_db_client.delete("/individuals/99999")
         assert response.status_code == 404
         assert "Individual not found" in response.json()["detail"]
 
@@ -215,7 +215,7 @@ class TestIndividualsCRUD:
                 {"given_name": "Anya", "family_name": "S."},
             ]
         }
-        response = client.post("/individuals", json=create_data)
+        response = tree_db_client.post("/individuals", json=create_data)
         assert response.status_code == 200
         ind = response.json()
         assert len(ind["names"]) == 2
@@ -226,7 +226,7 @@ class TestIndividualsCRUD:
         update_names = {"names": [
             {"given_name": "Annabelle", "family_name": "Smithers"}
         ]}
-        response = client.put(f"/individuals/{ind['id']}", json=update_names)
+        response = tree_db_client.put(f"/individuals/{ind['id']}", json=update_names)
         assert response.status_code == 200
         updated = response.json()
         assert len(updated["names"]) == 1
@@ -234,15 +234,15 @@ class TestIndividualsCRUD:
         assert updated["names"][0]["family_name"] == "Smithers"
 
         log_test_step(f"Deleting individual id={ind['id']} and confirming cascade delete of names")
-        response = client.delete(f"/individuals/{ind['id']}")
+        response = tree_db_client.delete(f"/individuals/{ind['id']}")
         assert response.status_code == 200
-        response_get = client.get(f"/individuals/{ind['id']}")
+        response_get = tree_db_client.get(f"/individuals/{ind['id']}")
         assert response_get.status_code == 404
 
 class TestFamiliesCRUD:
     """Test suite for Family CRUD operations."""
 
-    def test_families_crud_workflow(self, client, db_utils, log_test_step):
+    def test_families_crud_workflow(self, tree_db_client, db_utils, log_test_step):
         """Test complete CRUD workflows for families including children management."""
 
         log_test_step("Creating four individuals: 2 parents + 2 children")
@@ -254,7 +254,7 @@ class TestFamiliesCRUD:
             "birth_place": "Moscow, USSR",
             "names": [{"given_name": "Ivan", "family_name": "Petrov"}]
         }
-        response = client.post("/individuals", json=ind1_data)
+        response = tree_db_client.post("/individuals", json=ind1_data)
         assert response.status_code == 200
         ind1_id = response.json()["id"]
         log_test_step(f"Individual 1 (father) created with id={ind1_id}")
@@ -266,7 +266,7 @@ class TestFamiliesCRUD:
             "birth_place": "Saint Petersburg, USSR",
             "names": [{"given_name": "Maria", "family_name": "Petrova"}]
         }
-        response = client.post("/individuals", json=ind2_data)
+        response = tree_db_client.post("/individuals", json=ind2_data)
         assert response.status_code == 200
         ind2_id = response.json()["id"]
         log_test_step(f"Individual 2 (mother) created with id={ind2_id}")
@@ -278,7 +278,7 @@ class TestFamiliesCRUD:
             "birth_place": "Moscow, Russia",
             "names": [{"given_name": "Alexei", "family_name": "Petrov"}]
         }
-        response = client.post("/individuals", json=ind3_data)
+        response = tree_db_client.post("/individuals", json=ind3_data)
         assert response.status_code == 200
         ind3_id = response.json()["id"]
         log_test_step(f"Individual 3 (child 1) created with id={ind3_id}")
@@ -290,7 +290,7 @@ class TestFamiliesCRUD:
             "birth_place": "Moscow, Russia",
             "names": [{"given_name": "Natasha", "family_name": "Petrova"}]
         }
-        response = client.post("/individuals", json=ind4_data)
+        response = tree_db_client.post("/individuals", json=ind4_data)
         assert response.status_code == 200
         ind4_id = response.json()["id"]
         log_test_step(f"Individual 4 (child 2) created with id={ind4_id}")
@@ -310,7 +310,7 @@ class TestFamiliesCRUD:
                 {"child_id": ind4_id}
             ]
         }
-        response = client.post("/families", json=family_data)
+        response = tree_db_client.post("/families", json=family_data)
         assert response.status_code == 200
         family = response.json()
         family_id = family["id"]
@@ -362,7 +362,7 @@ class TestFamiliesCRUD:
         assert ind4_id in child_individual_ids
 
         log_test_step(f"Fetching family by id={family_id}")
-        response = client.get(f"/families/{family_id}")
+        response = tree_db_client.get(f"/families/{family_id}")
         assert response.status_code == 200
         fetched_family = response.json()
         assert fetched_family["id"] == family_id
@@ -377,7 +377,7 @@ class TestFamiliesCRUD:
             "birth_place": "Moscow, Russia",
             "names": [{"given_name": "Dmitri", "family_name": "Petrov"}]
         }
-        response = client.post("/individuals", json=ind5_data)
+        response = tree_db_client.post("/individuals", json=ind5_data)
         assert response.status_code == 200
         ind5_id = response.json()["id"]
         log_test_step(f"Individual 5 (new child) created with id={ind5_id}")
@@ -390,7 +390,7 @@ class TestFamiliesCRUD:
                 {"child_id": ind5_id}
             ]
         }
-        response = client.put(f"/families/{family_id}", json=family_update)
+        response = tree_db_client.put(f"/families/{family_id}", json=family_update)
         assert response.status_code == 200
         updated_family = response.json()
         assert len(updated_family["children"]) == 3
@@ -407,7 +407,7 @@ class TestFamiliesCRUD:
         log_test_step(f"Confirmed 3 children in database for family_id={family_id}")
 
         log_test_step(f"Fetching family after adding child")
-        response = client.get(f"/families/{family_id}")
+        response = tree_db_client.get(f"/families/{family_id}")
         assert response.status_code == 200
         fetched_family = response.json()
         assert len(fetched_family["children"]) == 3
@@ -420,7 +420,7 @@ class TestFamiliesCRUD:
                 {"child_id": ind5_id}
             ]
         }
-        response = client.put(f"/families/{family_id}", json=family_update)
+        response = tree_db_client.put(f"/families/{family_id}", json=family_update)
         assert response.status_code == 200
         updated_family = response.json()
         assert len(updated_family["children"]) == 2
@@ -439,7 +439,7 @@ class TestFamiliesCRUD:
         log_test_step(f"Confirmed modification: family now has only children {ind4_id} and {ind5_id}")
 
         log_test_step(f"Fetching family after modification")
-        response = client.get(f"/families/{family_id}")
+        response = tree_db_client.get(f"/families/{family_id}")
         assert response.status_code == 200
         fetched_family = response.json()
         assert len(fetched_family["children"]) == 2
@@ -451,7 +451,7 @@ class TestFamiliesCRUD:
         family_update = {
             "children": []
         }
-        response = client.put(f"/families/{family_id}", json=family_update)
+        response = tree_db_client.put(f"/families/{family_id}", json=family_update)
         assert response.status_code == 200
         updated_family = response.json()
         assert len(updated_family["children"]) == 0
@@ -466,7 +466,7 @@ class TestFamiliesCRUD:
         log_test_step(f"Confirmed: no children remain in family")
 
         log_test_step(f"Fetching family after removing all children")
-        response = client.get(f"/families/{family_id}")
+        response = tree_db_client.get(f"/families/{family_id}")
         assert response.status_code == 200
         fetched_family = response.json()
         assert len(fetched_family["children"]) == 0
@@ -480,7 +480,7 @@ class TestFamiliesCRUD:
                 {"child_id": ind5_id}
             ]
         }
-        response = client.put(f"/families/{family_id}", json=family_update)
+        response = tree_db_client.put(f"/families/{family_id}", json=family_update)
         assert response.status_code == 200
         updated_family = response.json()
         assert len(updated_family["children"]) == 3
@@ -499,7 +499,7 @@ class TestFamiliesCRUD:
             "divorce_date": "2020-12-15",
             "notes": "Updated family with children restored"
         }
-        response = client.put(f"/families/{family_id}", json=family_update)
+        response = tree_db_client.put(f"/families/{family_id}", json=family_update)
         assert response.status_code == 200
         updated_family = response.json()
         assert updated_family["divorce_date"] is not None
@@ -523,11 +523,11 @@ class TestFamiliesCRUD:
         log_test_step(f"All data confirmed in database")
 
         log_test_step(f"Deleting family id={family_id}")
-        response = client.delete(f"/families/{family_id}")
+        response = tree_db_client.delete(f"/families/{family_id}")
         assert response.status_code == 200
 
         log_test_step("Verifying deleted family returns 404")
-        response = client.get(f"/families/{family_id}")
+        response = tree_db_client.get(f"/families/{family_id}")
         assert response.status_code == 404
 
         log_test_step(f"Verifying family deleted from database")
@@ -556,7 +556,7 @@ class TestFamiliesCRUD:
 class TestEventsCRUD:
     """Test suite for Event CRUD operations."""
 
-    def test_events_crud_workflow(self, client, db_utils, log_test_step):
+    def test_events_crud_workflow(self, tree_db_client, db_utils, log_test_step):
         """Test complete CRUD workflows for events."""
 
         log_test_step("Creating individual for event testing")
@@ -566,7 +566,7 @@ class TestEventsCRUD:
             "birth_place": "Moscow, USSR",
             "names": [{"given_name": "Boris", "family_name": "Ivanov"}]
         }
-        response = client.post("/individuals", json=ind_data)
+        response = tree_db_client.post("/individuals", json=ind_data)
         assert response.status_code == 200
         ind_id = response.json()["id"]
         log_test_step(f"Individual created with id={ind_id}")
@@ -578,7 +578,7 @@ class TestEventsCRUD:
             "event_date": "1975-03-10",
             "event_place": "Moscow, USSR"
         }
-        response = client.post("/events", json=event_data)
+        response = tree_db_client.post("/events", json=event_data)
         assert response.status_code == 200
         event1 = response.json()
         event1_id = event1["id"]
@@ -592,69 +592,69 @@ class TestEventsCRUD:
             "event_place": "Church of Christ, Moscow",
             "description": "Baptism ceremony"
         }
-        response = client.post("/events", json=event_data_2)
+        response = tree_db_client.post("/events", json=event_data_2)
         assert response.status_code == 200
         event2 = response.json()
         event2_id = event2["id"]
         log_test_step(f"Baptism event created with id={event2_id}")
 
         log_test_step(f"Fetching event by id={event1_id}")
-        response = client.get(f"/events/{event1_id}")
+        response = tree_db_client.get(f"/events/{event1_id}")
         assert response.status_code == 200
         fetched_event = response.json()
         assert fetched_event["event_type_code"] == "BIRT"
         assert fetched_event["individual_id"] == ind_id
 
         log_test_step(f"Fetching events for individual id={ind_id}")
-        response = client.get(f"/events?individual_id={ind_id}")
+        response = tree_db_client.get(f"/events?individual_id={ind_id}")
         assert response.status_code == 200
         events_list = response.json()
         assert len(events_list) >= 2
 
         log_test_step("Listing all events")
-        response = client.get("/events")
+        response = tree_db_client.get("/events")
         assert response.status_code == 200
         all_events = response.json()
         assert len(all_events) >= 2
 
         log_test_step(f"Updating event with description")
         event_update = {"description": "Birth in Moscow, Russia"}
-        response = client.put(f"/events/{event1_id}", json=event_update)
+        response = tree_db_client.put(f"/events/{event1_id}", json=event_update)
         assert response.status_code == 200
         updated_event = response.json()
         assert updated_event["description"] == "Birth in Moscow, Russia"
 
         log_test_step(f"Deleting event id={event2_id}")
-        response = client.delete(f"/events/{event2_id}")
+        response = tree_db_client.delete(f"/events/{event2_id}")
         assert response.status_code == 200
 
         log_test_step("Verifying deleted event returns 404")
-        response = client.get(f"/events/{event2_id}")
+        response = tree_db_client.get(f"/events/{event2_id}")
         assert response.status_code == 404
 
         log_test_step("Events CRUD tests completed successfully!")
 
-    def test_events_error_handling(self, client, db_utils, log_test_step):
+    def test_events_error_handling(self, tree_db_client, db_utils, log_test_step):
         """Test event API error handling."""
 
         log_test_step("Testing fetch of non-existent event id=99999")
-        response = client.get("/events/99999")
+        response = tree_db_client.get("/events/99999")
         assert response.status_code == 404
         assert "Event not found" in response.json()["detail"]
 
         log_test_step("Testing update of non-existent event id=99999")
-        response = client.put("/events/99999", json={"description": "Will fail"})
+        response = tree_db_client.put("/events/99999", json={"description": "Will fail"})
         assert response.status_code == 404
         assert "Event not found" in response.json()["detail"]
 
         log_test_step("Testing delete of non-existent event id=99999")
-        response = client.delete("/events/99999")
+        response = tree_db_client.delete("/events/99999")
         assert response.status_code == 404
         assert "Event not found" in response.json()["detail"]
 
         log_test_step("Event error handling tests completed!")
 
-    def test_events_with_family(self, client, db_utils, log_test_step):
+    def test_events_with_family(self, tree_db_client, db_utils, log_test_step):
         """Test events associated with families."""
 
         log_test_step("Creating two individuals for family")
@@ -663,7 +663,7 @@ class TestEventsCRUD:
             "birth_date": "1980-05-15",
             "names": [{"given_name": "Peter", "family_name": "Smith"}]
         }
-        response = client.post("/individuals", json=ind1_data)
+        response = tree_db_client.post("/individuals", json=ind1_data)
         assert response.status_code == 200
         ind1_id = response.json()["id"]
 
@@ -672,7 +672,7 @@ class TestEventsCRUD:
             "birth_date": "1982-08-20",
             "names": [{"given_name": "Mary", "family_name": "Jones"}]
         }
-        response = client.post("/individuals", json=ind2_data)
+        response = tree_db_client.post("/individuals", json=ind2_data)
         assert response.status_code == 200
         ind2_id = response.json()["id"]
         log_test_step(f"Created individuals: husband={ind1_id}, wife={ind2_id}")
@@ -686,7 +686,7 @@ class TestEventsCRUD:
                 {"individual_id": ind2_id, "role": "wife"}
             ]
         }
-        response = client.post("/families", json=family_data)
+        response = tree_db_client.post("/families", json=family_data)
         assert response.status_code == 200
         family_id = response.json()["id"]
         log_test_step(f"Family created with id={family_id}")
@@ -699,7 +699,7 @@ class TestEventsCRUD:
             "event_place": "City Hall, Boston",
             "description": "Wedding ceremony"
         }
-        response = client.post("/events", json=event_data)
+        response = tree_db_client.post("/events", json=event_data)
         assert response.status_code == 200
         event = response.json()
         assert event["family_id"] == family_id
@@ -708,7 +708,7 @@ class TestEventsCRUD:
         log_test_step(f"Family event created with id={event_id}")
 
         log_test_step(f"Fetching events for family id={family_id}")
-        response = client.get(f"/events?family_id={family_id}")
+        response = tree_db_client.get(f"/events?family_id={family_id}")
         assert response.status_code == 200
         events_list = response.json()
         assert len(events_list) >= 1
@@ -721,11 +721,11 @@ class TestEventsCRUD:
             "event_type_code": "OCCU",
             "description": "Started new job"
         }
-        response = client.post("/events", json=ind_event)
+        response = tree_db_client.post("/events", json=ind_event)
         assert response.status_code == 200
 
         log_test_step("Verifying individual filter excludes family events")
-        response = client.get(f"/events?individual_id={ind1_id}")
+        response = tree_db_client.get(f"/events?individual_id={ind1_id}")
         assert response.status_code == 200
         ind_events = response.json()
         for e in ind_events:
@@ -733,7 +733,7 @@ class TestEventsCRUD:
 
         log_test_step("Family events test completed!")
 
-    def test_events_all_gedcom_types(self, client, db_utils, log_test_step):
+    def test_events_all_gedcom_types(self, tree_db_client, db_utils, log_test_step):
         """Test creating events with all GEDCOM 5.5.1 event types."""
 
         log_test_step("Creating individual for event type testing")
@@ -742,7 +742,7 @@ class TestEventsCRUD:
             "birth_date": "1990-01-01",
             "names": [{"given_name": "Test", "family_name": "Person"}]
         }
-        response = client.post("/individuals", json=ind_data)
+        response = tree_db_client.post("/individuals", json=ind_data)
         assert response.status_code == 200
         ind_id = response.json()["id"]
 
@@ -764,7 +764,7 @@ class TestEventsCRUD:
                 "event_type_code": event_type,
                 "description": description
             }
-            response = client.post("/events", json=event_data)
+            response = tree_db_client.post("/events", json=event_data)
             assert response.status_code == 200, f"Failed to create {event_type} event"
             created_events.append(response.json())
 
@@ -772,14 +772,14 @@ class TestEventsCRUD:
         assert len(created_events) == len(event_types)
 
         log_test_step("Verifying all events for individual")
-        response = client.get(f"/events?individual_id={ind_id}")
+        response = tree_db_client.get(f"/events?individual_id={ind_id}")
         assert response.status_code == 200
         events = response.json()
         assert len(events) >= len(event_types)
 
         log_test_step("All GEDCOM event types test completed!")
 
-    def test_events_database_persistence(self, client, db_utils, log_test_step):
+    def test_events_database_persistence(self, tree_db_client, db_utils, log_test_step):
         """Test that events are properly persisted in database."""
 
         log_test_step("Creating individual for persistence test")
@@ -788,7 +788,7 @@ class TestEventsCRUD:
             "birth_date": "1965-12-25",
             "names": [{"given_name": "Nick", "family_name": "Holiday"}]
         }
-        response = client.post("/individuals", json=ind_data)
+        response = tree_db_client.post("/individuals", json=ind_data)
         assert response.status_code == 200
         ind_id = response.json()["id"]
 
@@ -800,7 +800,7 @@ class TestEventsCRUD:
             "event_place": "North Pole",
             "description": "A special birthday"
         }
-        response = client.post("/events", json=event_data)
+        response = tree_db_client.post("/events", json=event_data)
         assert response.status_code == 200
         event_id = response.json()["id"]
 
@@ -817,7 +817,7 @@ class TestEventsCRUD:
         assert event_row["description"] == "A special birthday"
 
         log_test_step("Testing update persistence")
-        response = client.put(f"/events/{event_id}", json={
+        response = tree_db_client.put(f"/events/{event_id}", json={
             "event_place": "Santa's Workshop",
             "description": "Updated description"
         })
@@ -831,7 +831,7 @@ class TestEventsCRUD:
         assert events[0]["description"] == "Updated description"
 
         log_test_step("Testing delete persistence")
-        response = client.delete(f"/events/{event_id}")
+        response = tree_db_client.delete(f"/events/{event_id}")
         assert response.status_code == 200
 
         events = db_utils.execute_query(
@@ -842,7 +842,7 @@ class TestEventsCRUD:
 
         log_test_step("Event persistence tests completed!")
 
-    def test_events_pagination(self, client, db_utils, log_test_step):
+    def test_events_pagination(self, tree_db_client, db_utils, log_test_step):
         """Test event pagination with skip and limit."""
 
         log_test_step("Creating individual for pagination test")
@@ -850,7 +850,7 @@ class TestEventsCRUD:
             "sex_code": "M",
             "names": [{"given_name": "Page", "family_name": "Test"}]
         }
-        response = client.post("/individuals", json=ind_data)
+        response = tree_db_client.post("/individuals", json=ind_data)
         assert response.status_code == 200
         ind_id = response.json()["id"]
 
@@ -861,17 +861,17 @@ class TestEventsCRUD:
                 "event_type_code": "EVEN",
                 "description": f"Event number {i+1}"
             }
-            response = client.post("/events", json=event_data)
+            response = tree_db_client.post("/events", json=event_data)
             assert response.status_code == 200
 
         log_test_step("Testing skip=0, limit=2")
-        response = client.get("/events?skip=0&limit=2")
+        response = tree_db_client.get("/events?skip=0&limit=2")
         assert response.status_code == 200
         events = response.json()
         assert len(events) == 2
 
         log_test_step("Testing skip=2, limit=2")
-        response = client.get("/events?skip=2&limit=2")
+        response = tree_db_client.get("/events?skip=2&limit=2")
         assert response.status_code == 200
         events = response.json()
         assert len(events) == 2
@@ -881,7 +881,7 @@ class TestEventsCRUD:
 class TestMediaCRUD:
     """Test suite for Media CRUD operations."""
 
-    def test_media_crud_workflow(self, client, db_utils, log_test_step):
+    def test_media_crud_workflow(self, tree_db_client, db_utils, log_test_step):
         """Test complete CRUD workflows for media."""
 
         log_test_step("Creating individual for media testing")
@@ -891,7 +891,7 @@ class TestMediaCRUD:
             "birth_place": "Saint Petersburg, Russia",
             "names": [{"given_name": "Olga", "family_name": "Smirnova"}]
         }
-        response = client.post("/individuals", json=ind_data)
+        response = tree_db_client.post("/individuals", json=ind_data)
         assert response.status_code == 200
         ind_id = response.json()["id"]
         log_test_step(f"Individual created with id={ind_id}")
@@ -904,7 +904,7 @@ class TestMediaCRUD:
             "media_date": "1990-05-10",
             "description": "Black and white portrait"
         }
-        response = client.post("/media", json=media_data)
+        response = tree_db_client.post("/media", json=media_data)
         assert response.status_code == 200
         media1 = response.json()
         media1_id = media1["id"]
@@ -917,69 +917,69 @@ class TestMediaCRUD:
             "media_type_code": "photo",
             "description": "Wedding photo"
         }
-        response = client.post("/media", json=media_data_2)
+        response = tree_db_client.post("/media", json=media_data_2)
         assert response.status_code == 200
         media2 = response.json()
         media2_id = media2["id"]
         log_test_step(f"Media 2 created with id={media2_id}")
 
         log_test_step(f"Fetching media by id={media1_id}")
-        response = client.get(f"/media/{media1_id}")
+        response = tree_db_client.get(f"/media/{media1_id}")
         assert response.status_code == 200
         fetched_media = response.json()
         assert fetched_media["individual_id"] == ind_id
         assert fetched_media["description"] == "Black and white portrait"
 
         log_test_step(f"Fetching media for individual id={ind_id}")
-        response = client.get(f"/media?individual_id={ind_id}")
+        response = tree_db_client.get(f"/media?individual_id={ind_id}")
         assert response.status_code == 200
         media_list = response.json()
         assert len(media_list) >= 2
 
         log_test_step("Listing all media records")
-        response = client.get("/media")
+        response = tree_db_client.get("/media")
         assert response.status_code == 200
         all_media = response.json()
         assert len(all_media) >= 2
 
         log_test_step("Updating media with new description")
         media_update = {"description": "Portrait in good condition"}
-        response = client.put(f"/media/{media1_id}", json=media_update)
+        response = tree_db_client.put(f"/media/{media1_id}", json=media_update)
         assert response.status_code == 200
         updated_media = response.json()
         assert updated_media["description"] == "Portrait in good condition"
 
         log_test_step(f"Deleting media id={media2_id}")
-        response = client.delete(f"/media/{media2_id}")
+        response = tree_db_client.delete(f"/media/{media2_id}")
         assert response.status_code == 200
 
         log_test_step("Verifying deleted media returns 404")
-        response = client.get(f"/media/{media2_id}")
+        response = tree_db_client.get(f"/media/{media2_id}")
         assert response.status_code == 404
 
         log_test_step("Media CRUD tests completed successfully!")
 
-    def test_media_error_handling(self, client, db_utils, log_test_step):
+    def test_media_error_handling(self, tree_db_client, db_utils, log_test_step):
         """Test media API error handling."""
 
         log_test_step("Testing fetch of non-existent media id=99999")
-        response = client.get("/media/99999")
+        response = tree_db_client.get("/media/99999")
         assert response.status_code == 404
         assert "Media not found" in response.json()["detail"]
 
         log_test_step("Testing update of non-existent media id=99999")
-        response = client.put("/media/99999", json={"description": "Will fail"})
+        response = tree_db_client.put("/media/99999", json={"description": "Will fail"})
         assert response.status_code == 404
         assert "Media not found" in response.json()["detail"]
 
         log_test_step("Testing delete of non-existent media id=99999")
-        response = client.delete("/media/99999")
+        response = tree_db_client.delete("/media/99999")
         assert response.status_code == 404
         assert "Media not found" in response.json()["detail"]
 
         log_test_step("Media error handling tests completed!")
 
-    def test_media_with_family(self, client, db_utils, log_test_step):
+    def test_media_with_family(self, tree_db_client, db_utils, log_test_step):
         """Test media associated with families."""
 
         log_test_step("Creating two individuals for family media test")
@@ -988,7 +988,7 @@ class TestMediaCRUD:
             "birth_date": "1975-03-10",
             "names": [{"given_name": "John", "family_name": "Doe"}]
         }
-        response = client.post("/individuals", json=ind1_data)
+        response = tree_db_client.post("/individuals", json=ind1_data)
         assert response.status_code == 200
         ind1_id = response.json()["id"]
 
@@ -997,7 +997,7 @@ class TestMediaCRUD:
             "birth_date": "1978-11-25",
             "names": [{"given_name": "Jane", "family_name": "Doe"}]
         }
-        response = client.post("/individuals", json=ind2_data)
+        response = tree_db_client.post("/individuals", json=ind2_data)
         assert response.status_code == 200
         ind2_id = response.json()["id"]
 
@@ -1009,7 +1009,7 @@ class TestMediaCRUD:
                 {"individual_id": ind2_id, "role": "wife"}
             ]
         }
-        response = client.post("/families", json=family_data)
+        response = tree_db_client.post("/families", json=family_data)
         assert response.status_code == 200
         family_id = response.json()["id"]
         log_test_step(f"Family created with id={family_id}")
@@ -1022,7 +1022,7 @@ class TestMediaCRUD:
             "media_date": "2000-08-15",
             "description": "Wedding ceremony photo"
         }
-        response = client.post("/media", json=media_data)
+        response = tree_db_client.post("/media", json=media_data)
         assert response.status_code == 200
         media = response.json()
         assert media["family_id"] == family_id
@@ -1031,7 +1031,7 @@ class TestMediaCRUD:
         log_test_step(f"Family media created with id={media_id}")
 
         log_test_step(f"Fetching media for family id={family_id}")
-        response = client.get(f"/media?family_id={family_id}")
+        response = tree_db_client.get(f"/media?family_id={family_id}")
         assert response.status_code == 200
         media_list = response.json()
         assert len(media_list) >= 1
@@ -1039,7 +1039,7 @@ class TestMediaCRUD:
 
         log_test_step("Family media test completed!")
 
-    def test_media_all_types(self, client, db_utils, log_test_step):
+    def test_media_all_types(self, tree_db_client, db_utils, log_test_step):
         """Test creating media with all supported media types."""
 
         log_test_step("Creating individual for media type testing")
@@ -1048,7 +1048,7 @@ class TestMediaCRUD:
             "birth_date": "1950-01-01",
             "names": [{"given_name": "Media", "family_name": "Tester"}]
         }
-        response = client.post("/individuals", json=ind_data)
+        response = tree_db_client.post("/individuals", json=ind_data)
         assert response.status_code == 200
         ind_id = response.json()["id"]
 
@@ -1068,7 +1068,7 @@ class TestMediaCRUD:
                 "media_type_code": media_type,
                 "description": description
             }
-            response = client.post("/media", json=media_data)
+            response = tree_db_client.post("/media", json=media_data)
             assert response.status_code == 200, f"Failed to create {media_type} media"
             created_media.append(response.json())
 
@@ -1076,14 +1076,14 @@ class TestMediaCRUD:
         assert len(created_media) == len(media_types)
 
         log_test_step("Verifying all media for individual")
-        response = client.get(f"/media?individual_id={ind_id}")
+        response = tree_db_client.get(f"/media?individual_id={ind_id}")
         assert response.status_code == 200
         media_list = response.json()
         assert len(media_list) >= len(media_types)
 
         log_test_step("All media types test completed!")
 
-    def test_media_database_persistence(self, client, db_utils, log_test_step):
+    def test_media_database_persistence(self, tree_db_client, db_utils, log_test_step):
         """Test that media records are properly persisted in database."""
 
         log_test_step("Creating individual for persistence test")
@@ -1092,7 +1092,7 @@ class TestMediaCRUD:
             "birth_date": "1920-05-05",
             "names": [{"given_name": "Historic", "family_name": "Person"}]
         }
-        response = client.post("/individuals", json=ind_data)
+        response = tree_db_client.post("/individuals", json=ind_data)
         assert response.status_code == 200
         ind_id = response.json()["id"]
 
@@ -1104,7 +1104,7 @@ class TestMediaCRUD:
             "media_date": "1940-06-15",
             "description": "Vintage portrait from 1940"
         }
-        response = client.post("/media", json=media_data)
+        response = tree_db_client.post("/media", json=media_data)
         assert response.status_code == 200
         media_id = response.json()["id"]
 
@@ -1121,7 +1121,7 @@ class TestMediaCRUD:
         assert media_row["description"] == "Vintage portrait from 1940"
 
         log_test_step("Testing update persistence")
-        response = client.put(f"/media/{media_id}", json={
+        response = tree_db_client.put(f"/media/{media_id}", json={
             "file_path": "/archive/photos/restored_portrait.jpg",
             "description": "Restored vintage portrait"
         })
@@ -1135,7 +1135,7 @@ class TestMediaCRUD:
         assert media_records[0]["description"] == "Restored vintage portrait"
 
         log_test_step("Testing delete persistence")
-        response = client.delete(f"/media/{media_id}")
+        response = tree_db_client.delete(f"/media/{media_id}")
         assert response.status_code == 200
 
         media_records = db_utils.execute_query(
@@ -1146,7 +1146,7 @@ class TestMediaCRUD:
 
         log_test_step("Media persistence tests completed!")
 
-    def test_media_pagination(self, client, db_utils, log_test_step):
+    def test_media_pagination(self, tree_db_client, db_utils, log_test_step):
         """Test media pagination with skip and limit."""
 
         log_test_step("Creating individual for pagination test")
@@ -1154,7 +1154,7 @@ class TestMediaCRUD:
             "sex_code": "F",
             "names": [{"given_name": "Photo", "family_name": "Album"}]
         }
-        response = client.post("/individuals", json=ind_data)
+        response = tree_db_client.post("/individuals", json=ind_data)
         assert response.status_code == 200
         ind_id = response.json()["id"]
 
@@ -1166,24 +1166,24 @@ class TestMediaCRUD:
                 "media_type_code": "photo",
                 "description": f"Photo number {i+1}"
             }
-            response = client.post("/media", json=media_data)
+            response = tree_db_client.post("/media", json=media_data)
             assert response.status_code == 200
 
         log_test_step("Testing skip=0, limit=2")
-        response = client.get("/media?skip=0&limit=2")
+        response = tree_db_client.get("/media?skip=0&limit=2")
         assert response.status_code == 200
         media_list = response.json()
         assert len(media_list) == 2
 
         log_test_step("Testing skip=2, limit=2")
-        response = client.get("/media?skip=2&limit=2")
+        response = tree_db_client.get("/media?skip=2&limit=2")
         assert response.status_code == 200
         media_list = response.json()
         assert len(media_list) == 2
 
         log_test_step("Pagination tests completed!")
 
-    def test_media_update_all_fields(self, client, db_utils, log_test_step):
+    def test_media_update_all_fields(self, tree_db_client, db_utils, log_test_step):
         """Test updating all fields of a media record."""
 
         log_test_step("Creating individual for update test")
@@ -1191,7 +1191,7 @@ class TestMediaCRUD:
             "sex_code": "M",
             "names": [{"given_name": "Update", "family_name": "Test"}]
         }
-        response = client.post("/individuals", json=ind_data)
+        response = tree_db_client.post("/individuals", json=ind_data)
         assert response.status_code == 200
         ind_id = response.json()["id"]
 
@@ -1203,7 +1203,7 @@ class TestMediaCRUD:
             "media_date": "2000-01-01",
             "description": "Original description"
         }
-        response = client.post("/media", json=media_data)
+        response = tree_db_client.post("/media", json=media_data)
         assert response.status_code == 200
         media_id = response.json()["id"]
 
@@ -1214,7 +1214,7 @@ class TestMediaCRUD:
             "media_date": "2020-12-25",
             "description": "Updated description"
         }
-        response = client.put(f"/media/{media_id}", json=update_data)
+        response = tree_db_client.put(f"/media/{media_id}", json=update_data)
         assert response.status_code == 200
         updated = response.json()
 
@@ -1232,11 +1232,11 @@ class TestHeaderCRUD:
     Only GET and PUT operations are supported, no CREATE/DELETE.
     """
 
-    def test_header_get_creates_default(self, client, db_utils, log_test_step):
+    def test_header_get_creates_default(self, tree_db_client, db_utils, log_test_step):
         """Test that GET /header/ creates a default header if none exists."""
 
         log_test_step("Fetching header (should create default if not exists)")
-        response = client.get("/header")
+        response = tree_db_client.get("/header")
         assert response.status_code == 200
         header = response.json()
 
@@ -1255,11 +1255,11 @@ class TestHeaderCRUD:
 
         log_test_step("Header GET default test completed!")
 
-    def test_header_update(self, client, db_utils, log_test_step):
+    def test_header_update(self, tree_db_client, db_utils, log_test_step):
         """Test updating header fields."""
 
         log_test_step("Ensuring header exists")
-        response = client.get("/header")
+        response = tree_db_client.get("/header")
         assert response.status_code == 200
 
         log_test_step("Updating header with source system info")
@@ -1270,7 +1270,7 @@ class TestHeaderCRUD:
             "language": "English",
             "copyright": "Copyright 2025 Test User"
         }
-        response = client.put("/header", json=update_data)
+        response = tree_db_client.put("/header", json=update_data)
         assert response.status_code == 200
         updated = response.json()
 
@@ -1287,11 +1287,11 @@ class TestHeaderCRUD:
 
         log_test_step("Header update test completed!")
 
-    def test_header_submitter_update(self, client, db_utils, log_test_step):
+    def test_header_submitter_update(self, tree_db_client, db_utils, log_test_step):
         """Test updating submitter information via dedicated endpoint."""
 
         log_test_step("Ensuring header exists")
-        response = client.get("/header")
+        response = tree_db_client.get("/header")
         assert response.status_code == 200
 
         log_test_step("Updating submitter contact details")
@@ -1306,7 +1306,7 @@ class TestHeaderCRUD:
             "submitter_email": "john.doe@example.com",
             "submitter_www": "https://example.com"
         }
-        response = client.put("/header/submitter", json=submitter_data)
+        response = tree_db_client.put("/header/submitter", json=submitter_data)
         assert response.status_code == 200
         updated = response.json()
 
@@ -1327,7 +1327,7 @@ class TestHeaderCRUD:
 
         log_test_step("Submitter update test completed!")
 
-    def test_header_submitter_get(self, client, db_utils, log_test_step):
+    def test_header_submitter_get(self, tree_db_client, db_utils, log_test_step):
         """Test getting submitter information only."""
 
         log_test_step("Ensuring header with submitter exists")
@@ -1335,11 +1335,11 @@ class TestHeaderCRUD:
             "submitter_name": "Jane Smith",
             "submitter_email": "jane@example.com"
         }
-        response = client.put("/header/submitter", json=submitter_data)
+        response = tree_db_client.put("/header/submitter", json=submitter_data)
         assert response.status_code == 200
 
         log_test_step("Fetching submitter info via dedicated endpoint")
-        response = client.get("/header/submitter")
+        response = tree_db_client.get("/header/submitter")
         assert response.status_code == 200
         submitter = response.json()
 
@@ -1356,11 +1356,11 @@ class TestHeaderCRUD:
 
         log_test_step("Submitter GET test completed!")
 
-    def test_header_protected_fields(self, client, db_utils, log_test_step):
+    def test_header_protected_fields(self, tree_db_client, db_utils, log_test_step):
         """Test that protected fields cannot be updated via API."""
 
         log_test_step("Ensuring header exists")
-        response = client.get("/header")
+        response = tree_db_client.get("/header")
         assert response.status_code == 200
         original = response.json()
         original_id = original["id"]
@@ -1372,7 +1372,7 @@ class TestHeaderCRUD:
             "creation_date": "01 JAN 2000",  # Should be ignored
             "submitter_name": "Valid Update"  # Should be accepted
         }
-        response = client.put("/header", json=update_data)
+        response = tree_db_client.put("/header", json=update_data)
         assert response.status_code == 200
         updated = response.json()
 
@@ -1382,7 +1382,7 @@ class TestHeaderCRUD:
 
         log_test_step("Protected fields test completed!")
 
-    def test_header_partial_update(self, client, db_utils, log_test_step):
+    def test_header_partial_update(self, tree_db_client, db_utils, log_test_step):
         """Test partial updates preserve other fields."""
 
         log_test_step("Setting up initial header values")
@@ -1391,12 +1391,12 @@ class TestHeaderCRUD:
             "submitter_email": "initial@example.com",
             "language": "English"
         }
-        response = client.put("/header", json=initial_data)
+        response = tree_db_client.put("/header", json=initial_data)
         assert response.status_code == 200
 
         log_test_step("Performing partial update (only language)")
         partial_update = {"language": "Russian"}
-        response = client.put("/header", json=partial_update)
+        response = tree_db_client.put("/header", json=partial_update)
         assert response.status_code == 200
         updated = response.json()
 
@@ -1407,15 +1407,15 @@ class TestHeaderCRUD:
 
         log_test_step("Partial update test completed!")
 
-    def test_header_last_modified_timestamp(self, client, db_utils, log_test_step):
+    def test_header_last_modified_timestamp(self, tree_db_client, db_utils, log_test_step):
         """Test that last_modified is updated on changes."""
 
         log_test_step("Ensuring header exists")
-        response = client.get("/header")
+        response = tree_db_client.get("/header")
         assert response.status_code == 200
 
         log_test_step("Updating header and checking last_modified")
-        response = client.put("/header", json={"note": "Test update"})
+        response = tree_db_client.put("/header", json={"note": "Test update"})
         assert response.status_code == 200
         updated = response.json()
 

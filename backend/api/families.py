@@ -155,16 +155,17 @@ def update_family(
 @router.delete("/{family_id}")
 def delete_family(
     family_id: int,
-    session: EditorSession = Depends(require_owner),
+    session: EditorSession = Depends(require_editor),
     db: Session = Depends(get_tree_db),
 ):
-    """Delete a family. Owner only."""
+    """Delete a family. Contributors may only delete their own records."""
     family = db.query(database.models.Family).filter(
         database.models.Family.id == family_id
     ).first()
     if family is None:
         raise HTTPException(status_code=404, detail="Family not found")
 
+    _check_edit_permission(session, family.created_by)
     db.delete(family)
     db.commit()
     return {"detail": "Family deleted"}

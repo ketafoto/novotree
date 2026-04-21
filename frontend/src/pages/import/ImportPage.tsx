@@ -4,6 +4,7 @@ import apiClient from '../../api/client';
 import { Button } from '../../components/common/Button';
 import { Card } from '../../components/common/Card';
 import toast from 'react-hot-toast';
+import { apiErrorMessage } from '../../utils/apiError';
 import { useQueryClient } from '@tanstack/react-query';
 
 type ImportStatus = 'idle' | 'uploading' | 'success' | 'error';
@@ -85,7 +86,7 @@ export function ImportPage() {
         if (resp?.data?.detail) detail = resp.data.detail;
       }
       setErrorMessage(detail);
-      toast.error('Import failed');
+      toast.error(detail);
     }
   };
 

@@ -79,10 +79,15 @@ def _seed_lookup_tables(eng: Engine) -> None:
         conn.commit()
 
 
-def get_engine(owner_id: str) -> Engine:
-    """Return (creating if needed) the SQLAlchemy engine for an owner."""
+def get_engine(owner_id: str, owner_info: Optional[OwnerInfo] = None) -> Engine:
+    """Return (creating if needed) the SQLAlchemy engine for an owner.
+
+    Pass owner_info to use a custom base_dir (e.g. test temp dirs).
+    When omitted, OwnerInfo is constructed from owner_id using the default datasets/ dir.
+    """
     if owner_id not in _pool:
-        owner_info = OwnerInfo(owner_id=owner_id)
+        if owner_info is None:
+            owner_info = OwnerInfo(owner_id=owner_id)
         engine = create_engine(
             f"sqlite:///{owner_info.db_file}",
             connect_args={"check_same_thread": False},
@@ -137,12 +142,12 @@ def engine_from_url(url: str, create_tables: bool = True) -> Engine:
 def init_db_once(owner_info: Optional[Union[OwnerInfo, str]] = None) -> Engine:
     """Legacy: initialize (or return cached) engine for an owner."""
     if owner_info is None:
-        owner_id = OwnerInfo().owner_id
+        owner_info_obj = OwnerInfo()
     elif isinstance(owner_info, str):
-        owner_id = owner_info
+        owner_info_obj = OwnerInfo(owner_id=owner_info)
     else:
-        owner_id = owner_info.owner_id
-    return get_engine(owner_id)  # type: ignore[arg-type]
+        owner_info_obj = owner_info  # preserves custom base_dir (e.g. test temp dirs)
+    return get_engine(owner_info_obj.owner_id, owner_info_obj)
 
 
 def reset_engine() -> None:

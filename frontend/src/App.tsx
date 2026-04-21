@@ -10,9 +10,10 @@ import { typesApi } from './api/types';
 
 // Auth pages (no layout wrapper)
 import { LoginPage } from './pages/auth/LoginPage';
-import { SignupPage } from './pages/auth/SignupPage';
+import { OwnerSignupPage } from './pages/auth/SignupPage';
 import { SetPasswordPage } from './pages/auth/SetPasswordPage';
-import { VerifyEmailPage } from './pages/auth/VerifyEmailPage';
+import { VerifyOwnerEmailPage } from './pages/auth/VerifyEmailPage';
+import { VerifyContributorEmailPage } from './pages/auth/VerifyContributorEmailPage';
 
 // Main pages
 import { DashboardPage } from './pages/dashboard/DashboardPage';
@@ -45,7 +46,11 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 5 * 60 * 1000,
-      retry: 1,
+      retry: (failureCount, error) => {
+        // Never retry 401 — the session is gone, retrying just delays the redirect
+        if ((error as { response?: { status?: number } })?.response?.status === 401) return false;
+        return failureCount < 1;
+      },
     },
   },
 });
@@ -79,9 +84,10 @@ function App() {
           <Routes>
             {/* ── Public auth pages (no Layout wrapper) ── */}
             <Route path="/login" element={<LoginPage />} />
-            <Route path="/signup" element={<SignupPage />} />
+            <Route path="/owner-signup" element={<OwnerSignupPage />} />
             <Route path="/set-password" element={<SetPasswordPage />} />
-            <Route path="/verify-email" element={<VerifyEmailPage />} />
+            <Route path="/verify-owner-email" element={<VerifyOwnerEmailPage />} />
+            <Route path="/verify-contributor-email" element={<VerifyContributorEmailPage />} />
 
             {/* ── Viewer-accessible tree routes (share token or authenticated) ── */}
             <Route
