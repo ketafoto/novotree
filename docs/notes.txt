@@ -172,6 +172,16 @@ Frontend (Vite + React + TailWind):
     2. npm run dev
     3. http://localhost:3000 in Browser
 
+Frontend tests (Vitest + React Testing Library):
+    cd frontend
+    npm test                  - run all tests once (CI / pre-commit)
+    npx vitest                - watch mode, reruns on file changes (during development)
+    See frontend/tests/README.md for why tests live under frontend/tests/ and not tests/frontend/
+
+Backend tests (pytest):
+    source venv-linux/bin/activate
+    .venv/bin/pytest tests/backend/
+
 2.
 Use separate databases for different datasets:
 change DEFAULT_OWNER_ID in backend/api/auth.py

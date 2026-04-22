@@ -8,6 +8,7 @@ import ReactCrop, {
 } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 import { X, Camera } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { Button } from '../common/Button';
 import { getCroppedBlob, rotationCoverScale } from './cropImage';
 
@@ -212,7 +213,9 @@ export function PhotoUploadDialog({
   const handleOk = useCallback(async () => {
     const ageNum = parseInt(age, 10);
     if (isNaN(ageNum) || ageNum < 0 || ageNum > 150) {
-      setError('Please enter a valid age (0\u2013150)');
+      const msg = !age.trim() ? 'Age on photo is required' : 'Please enter a valid age (0\u2013150)';
+      setError(msg);
+      toast.error(msg);
       return;
     }
 
@@ -545,8 +548,8 @@ export function PhotoUploadDialog({
             onClick={handleOk}
             disabled={
               (sourceMediaId && !imageModified)
-                ? !age || isUploading
-                : !imageSrc || !completedCrop || !age || isUploading
+                ? isUploading
+                : !imageSrc || !completedCrop || isUploading
             }
             isLoading={isUploading}
           >

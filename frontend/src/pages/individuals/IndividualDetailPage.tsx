@@ -109,6 +109,7 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
       return objectUrl;
     });
     setEditingPhoto(null);
+    setSectionModal(null);
     setShowPhotoDialog(true);
   };
 
@@ -556,6 +557,7 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
                 if (prev) URL.revokeObjectURL(prev);
                 return null;
               });
+              setSectionModal(null);
               setShowPhotoDialog(true);
             }}
             onSetDefault={(mediaId) => setDefaultMutation.mutate(mediaId)}
