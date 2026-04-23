@@ -6,7 +6,8 @@ from typing import List
 
 from .. import schemas
 from .auth import EditorSession, get_tree_db, require_editor, require_owner
-from .api_utils import generate_gedcom_id
+from .api_utils import generate_gedcom_id, fetch_display_names, enrich_created_by
+from database.system_db import get_system_db
 import database.models
 
 
@@ -27,6 +28,7 @@ def create_family(
     family: schemas.FamilyCreate,
     session: EditorSession = Depends(require_editor),
     db: Session = Depends(get_tree_db),
+    db_sys: Session = Depends(get_system_db),
 ):
     """Create a new family."""
     gedcom_id = family.gedcom_id
@@ -69,7 +71,8 @@ def create_family(
     db.add(db_family)
     db.commit()
     db.refresh(db_family)
-    return db_family
+    result = schemas.Family.model_validate(db_family)
+    return result.model_copy(update={"created_by_display_name": session.display_name})
 
 
 @router.get("", response_model=List[schemas.Family])
@@ -77,8 +80,9 @@ def read_families(
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_tree_db),
+    db_sys: Session = Depends(get_system_db),
 ):
-    return (
+    db_rows = (
         db.query(database.models.Family)
         .options(
             joinedload(database.models.Family.members),
@@ -88,12 +92,15 @@ def read_families(
         .limit(limit)
         .all()
     )
+    name_map = fetch_display_names({f.created_by for f in db_rows if f.created_by}, db_sys)
+    return [enrich_created_by(schemas.Family.model_validate(f), name_map) for f in db_rows]
 
 
 @router.get("/{family_id}", response_model=schemas.Family)
 def read_family(
     family_id: int,
     db: Session = Depends(get_tree_db),
+    db_sys: Session = Depends(get_system_db),
 ):
     family = (
         db.query(database.models.Family)
@@ -106,7 +113,8 @@ def read_family(
     )
     if family is None:
         raise HTTPException(status_code=404, detail="Family not found")
-    return family
+    name_map = fetch_display_names({family.created_by} if family.created_by else set(), db_sys)
+    return enrich_created_by(schemas.Family.model_validate(family), name_map)
 
 
 @router.put("/{family_id}", response_model=schemas.Family)

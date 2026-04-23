@@ -6,9 +6,9 @@ from typing import List
 
 from .. import schemas
 from . import api_utils
+from .api_utils import fetch_display_names, enrich_created_by
 from .auth import EditorSession, get_tree_db, require_editor, require_owner
 from database.system_db import get_system_db
-from database.system_models import AuthEditor
 import database.models
 
 
@@ -18,22 +18,6 @@ router = APIRouter(prefix="/individuals", tags=["individuals"])
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
-
-def _fetch_display_names(editor_ids: set, db_sys: Session) -> dict:
-    """Batch-fetch editor display names from the system DB."""
-    if not editor_ids:
-        return {}
-    rows = db_sys.query(AuthEditor.editor_id, AuthEditor.display_name).filter(
-        AuthEditor.editor_id.in_(editor_ids)
-    ).all()
-    return {r.editor_id: r.display_name for r in rows}
-
-
-def _enrich(ind: schemas.Individual, name_map: dict) -> schemas.Individual:
-    """Return ind with created_by_display_name populated from name_map."""
-    if ind.created_by and ind.created_by in name_map:
-        return ind.model_copy(update={"created_by_display_name": name_map[ind.created_by]})
-    return ind
 
 
 def _check_edit_permission(session: EditorSession, record_created_by: str | None) -> None:
@@ -103,15 +87,15 @@ def read_individuals(
     db_sys: Session = Depends(get_system_db),
 ):
     """Read list of individuals with pagination."""
-    orm_list = (
+    db_rows = (
         db.query(database.models.Individual)
         .options(joinedload(database.models.Individual.names))
         .offset(skip)
         .limit(limit)
         .all()
     )
-    name_map = _fetch_display_names({i.created_by for i in orm_list if i.created_by}, db_sys)
-    return [_enrich(schemas.Individual.model_validate(i), name_map) for i in orm_list]
+    name_map = fetch_display_names({i.created_by for i in db_rows if i.created_by}, db_sys)
+    return [enrich_created_by(schemas.Individual.model_validate(i), name_map) for i in db_rows]
 
 
 @router.get("/{individual_id}", response_model=schemas.Individual)
@@ -129,8 +113,8 @@ def read_individual_by_id(
     )
     if individual is None:
         raise HTTPException(status_code=404, detail="Individual not found")
-    name_map = _fetch_display_names({individual.created_by} if individual.created_by else set(), db_sys)
-    return _enrich(schemas.Individual.model_validate(individual), name_map)
+    name_map = fetch_display_names({individual.created_by} if individual.created_by else set(), db_sys)
+    return enrich_created_by(schemas.Individual.model_validate(individual), name_map)
 
 
 @router.put("/{individual_id}", response_model=schemas.Individual)

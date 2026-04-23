@@ -804,3 +804,145 @@ class TestContributorDeleteOwnOnly:
         _contrib_cookie(client)
         r = client.delete(f"/media/{med['id']}")
         assert r.status_code == 403, r.text
+
+
+# ---------------------------------------------------------------------------
+# created_by / created_by_display_name attribution — Family, Event, Media
+# ---------------------------------------------------------------------------
+
+_DISPLAY_NAME = "Test Contributor"
+
+
+class TestFamilyCreatedBy:
+    """Family created_by attribution — POST and GET responses must carry
+    created_by and created_by_display_name when a contributor creates the record."""
+
+    def test_post_returns_created_by(self, full_client):
+        """POST /families by contributor → created_by == editor_id."""
+        client, db = full_client
+        _setup_owner_and_contrib(db)
+        _contrib_cookie(client)
+        fam = _fam(client)
+        assert fam["created_by"] == "contrib1", fam
+
+    def test_post_returns_display_name(self, full_client):
+        """POST /families by contributor → created_by_display_name populated."""
+        client, db = full_client
+        _setup_owner_and_contrib(db)
+        _contrib_cookie(client)
+        fam = _fam(client)
+        assert fam["created_by_display_name"] == _DISPLAY_NAME, fam
+
+    def test_list_returns_display_name(self, full_client):
+        """GET /families returns created_by_display_name for contributor-created record."""
+        client, db = full_client
+        _setup_owner_and_contrib(db)
+        _contrib_cookie(client)
+        _fam(client)
+        items = client.get("/families").json()
+        assert items[0]["created_by"] == "contrib1"
+        assert items[0]["created_by_display_name"] == _DISPLAY_NAME, items[0]
+
+    def test_get_returns_display_name(self, full_client):
+        """GET /families/{id} returns created_by_display_name."""
+        client, db = full_client
+        _setup_owner_and_contrib(db)
+        _contrib_cookie(client)
+        fam = _fam(client)
+        item = client.get(f"/families/{fam['id']}").json()
+        assert item["created_by"] == "contrib1"
+        assert item["created_by_display_name"] == _DISPLAY_NAME, item
+
+
+class TestEventCreatedBy:
+    """Event created_by attribution — POST and GET responses must carry
+    created_by and created_by_display_name when a contributor creates the record."""
+
+    def test_post_returns_created_by(self, full_client):
+        """POST /events by contributor → created_by == editor_id."""
+        client, db = full_client
+        _setup_owner_and_contrib(db)
+        _contrib_cookie(client)
+        ind = _ind(client)
+        evt = _event(client, ind["id"])
+        assert evt["created_by"] == "contrib1", evt
+
+    def test_post_returns_display_name(self, full_client):
+        """POST /events by contributor → created_by_display_name populated."""
+        client, db = full_client
+        _setup_owner_and_contrib(db)
+        _contrib_cookie(client)
+        ind = _ind(client)
+        evt = _event(client, ind["id"])
+        assert evt["created_by_display_name"] == _DISPLAY_NAME, evt
+
+    def test_list_returns_display_name(self, full_client):
+        """GET /events returns created_by_display_name for contributor-created record."""
+        client, db = full_client
+        _setup_owner_and_contrib(db)
+        _contrib_cookie(client)
+        ind = _ind(client)
+        _event(client, ind["id"])
+        items = client.get(f"/events?individual_id={ind['id']}").json()
+        assert items[0]["created_by"] == "contrib1"
+        assert items[0]["created_by_display_name"] == _DISPLAY_NAME, items[0]
+
+    def test_get_returns_display_name(self, full_client):
+        """GET /events/{id} returns created_by_display_name."""
+        client, db = full_client
+        _setup_owner_and_contrib(db)
+        _contrib_cookie(client)
+        ind = _ind(client)
+        evt = _event(client, ind["id"])
+        item = client.get(f"/events/{evt['id']}").json()
+        assert item["created_by"] == "contrib1"
+        assert item["created_by_display_name"] == _DISPLAY_NAME, item
+
+
+class TestMediaCreatedBy:
+    """Media created_by attribution — POST and GET responses must carry
+    created_by and created_by_display_name when a contributor creates the record."""
+
+    def test_post_returns_created_by(self, full_client):
+        """POST /media by contributor → created_by == editor_id."""
+        client, db = full_client
+        _setup_owner_and_contrib(db)
+        _owner_cookie(client)
+        ind = _ind(client)
+        _contrib_cookie(client)
+        med = _media(client, ind["id"])
+        assert med["created_by"] == "contrib1", med
+
+    def test_post_returns_display_name(self, full_client):
+        """POST /media by contributor → created_by_display_name populated."""
+        client, db = full_client
+        _setup_owner_and_contrib(db)
+        _owner_cookie(client)
+        ind = _ind(client)
+        _contrib_cookie(client)
+        med = _media(client, ind["id"])
+        assert med["created_by_display_name"] == _DISPLAY_NAME, med
+
+    def test_list_returns_display_name(self, full_client):
+        """GET /media returns created_by_display_name for contributor-created record."""
+        client, db = full_client
+        _setup_owner_and_contrib(db)
+        _owner_cookie(client)
+        ind = _ind(client)
+        _contrib_cookie(client)
+        _media(client, ind["id"])
+        items = client.get(f"/media?individual_id={ind['id']}").json()
+        assert items[0]["created_by"] == "contrib1"
+        assert items[0]["created_by_display_name"] == _DISPLAY_NAME, items[0]
+
+    def test_get_returns_display_name(self, full_client):
+        """GET /media/{id} returns created_by_display_name."""
+        client, db = full_client
+        _setup_owner_and_contrib(db)
+        _owner_cookie(client)
+        ind = _ind(client)
+        _contrib_cookie(client)
+        med = _media(client, ind["id"])
+        item = client.get(f"/media/{med['id']}").json()
+        assert item["created_by"] == "contrib1"
+        assert item["created_by_display_name"] == _DISPLAY_NAME, item

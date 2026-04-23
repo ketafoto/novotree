@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import inspect
 import database.models
+from database.system_models import AuthEditor
 
 
 def generate_gedcom_id(db: Session, model) -> str:
@@ -32,3 +33,20 @@ def generate_gedcom_id(db: Session, model) -> str:
                     max_id = num
 
     return f"{max_id + 1:05d}"
+
+
+def fetch_display_names(editor_ids: set, db_sys: Session) -> dict:
+    """Batch-fetch editor display names from the system DB."""
+    if not editor_ids:
+        return {}
+    rows = db_sys.query(AuthEditor.editor_id, AuthEditor.display_name).filter(
+        AuthEditor.editor_id.in_(editor_ids)
+    ).all()
+    return {r.editor_id: r.display_name for r in rows}
+
+
+def enrich_created_by(record, name_map: dict):
+    """Return record with created_by_display_name populated from name_map."""
+    if record.created_by and record.created_by in name_map:
+        return record.model_copy(update={"created_by_display_name": name_map[record.created_by]})
+    return record

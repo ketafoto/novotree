@@ -6,6 +6,8 @@ from typing import List, Optional
 
 from .. import schemas
 from .auth import EditorSession, get_tree_db, require_editor, require_owner
+from .api_utils import fetch_display_names, enrich_created_by
+from database.system_db import get_system_db
 import database.models
 
 
@@ -41,7 +43,8 @@ def create_event(
     db.add(db_event)
     db.commit()
     db.refresh(db_event)
-    return db_event
+    result = schemas.Event.model_validate(db_event)
+    return result.model_copy(update={"created_by_display_name": session.display_name})
 
 
 @router.get("", response_model=List[schemas.Event])
@@ -51,26 +54,31 @@ def read_events(
     individual_id: Optional[int] = None,
     family_id: Optional[int] = None,
     db: Session = Depends(get_tree_db),
+    db_sys: Session = Depends(get_system_db),
 ):
     query = db.query(database.models.Event)
     if individual_id:
         query = query.filter(database.models.Event.individual_id == individual_id)
     if family_id:
         query = query.filter(database.models.Event.family_id == family_id)
-    return query.offset(skip).limit(limit).all()
+    db_rows = query.offset(skip).limit(limit).all()
+    name_map = fetch_display_names({e.created_by for e in db_rows if e.created_by}, db_sys)
+    return [enrich_created_by(schemas.Event.model_validate(e), name_map) for e in db_rows]
 
 
 @router.get("/{event_id}", response_model=schemas.Event)
 def read_event(
     event_id: int,
     db: Session = Depends(get_tree_db),
+    db_sys: Session = Depends(get_system_db),
 ):
     event = db.query(database.models.Event).filter(
         database.models.Event.id == event_id
     ).first()
     if event is None:
         raise HTTPException(status_code=404, detail="Event not found")
-    return event
+    name_map = fetch_display_names({event.created_by} if event.created_by else set(), db_sys)
+    return enrich_created_by(schemas.Event.model_validate(event), name_map)
 
 
 @router.put("/{event_id}", response_model=schemas.Event)

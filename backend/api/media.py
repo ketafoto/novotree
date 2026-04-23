@@ -11,7 +11,9 @@ from datetime import datetime, timezone
 from .. import schemas
 import database.models
 from database.owner_info import OwnerInfo
+from database.system_db import get_system_db
 from .auth import EditorSession, get_tree_db, get_tree_owner_info, get_viewer_tree_db, get_viewer_owner_info, require_editor, require_owner
+from .api_utils import fetch_display_names, enrich_created_by
 
 
 def _now_iso() -> str:
@@ -224,7 +226,8 @@ def create_media(
     db.add(db_media)
     db.commit()
     db.refresh(db_media)
-    return db_media
+    result = schemas.Media.model_validate(db_media)
+    return result.model_copy(update={"created_by_display_name": session.display_name})
 
 
 @router.get("", response_model=List[schemas.Media])
@@ -234,6 +237,7 @@ def read_media(
     individual_id: Optional[int] = None,
     family_id: Optional[int] = None,
     db: Session = Depends(get_viewer_tree_db),
+    db_sys: Session = Depends(get_system_db),
 ):
     """Read list of media with optional filtering."""
     query = db.query(database.models.Media)
@@ -241,13 +245,16 @@ def read_media(
         query = query.filter(database.models.Media.individual_id == individual_id)
     if family_id:
         query = query.filter(database.models.Media.family_id == family_id)
-    return query.offset(skip).limit(limit).all()
+    db_rows = query.offset(skip).limit(limit).all()
+    name_map = fetch_display_names({m.created_by for m in db_rows if m.created_by}, db_sys)
+    return [enrich_created_by(schemas.Media.model_validate(m), name_map) for m in db_rows]
 
 
 @router.get("/{media_id}", response_model=schemas.Media)
 def read_media_by_id(
     media_id: int,
     db: Session = Depends(get_viewer_tree_db),
+    db_sys: Session = Depends(get_system_db),
 ):
     """Read a single media record by ID."""
     media = (
@@ -257,7 +264,8 @@ def read_media_by_id(
     )
     if media is None:
         raise HTTPException(status_code=404, detail="Media not found")
-    return media
+    name_map = fetch_display_names({media.created_by} if media.created_by else set(), db_sys)
+    return enrich_created_by(schemas.Media.model_validate(media), name_map)
 
 
 @router.put("/{media_id}", response_model=schemas.Media)

@@ -101,6 +101,8 @@ class FamilyUpdate(FamilyBase):
 
 class Family(FamilyBase):
     id: int
+    created_by: Optional[str] = None
+    created_by_display_name: Optional[str] = None
     members: List[FamilyMember] = []
     children: List[FamilyChild] = []
 
@@ -127,6 +129,8 @@ class EventUpdate(EventBase):
 
 class Event(EventBase):
     id: int
+    created_by: Optional[str] = None
+    created_by_display_name: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -153,6 +157,8 @@ class MediaUpdate(MediaBase):
 
 class Media(MediaBase):
     id: int
+    created_by: Optional[str] = None
+    created_by_display_name: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
