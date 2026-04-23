@@ -89,6 +89,7 @@ export interface Family {
   members: FamilyMember[];
   children: FamilyChild[];
   created_by?: string;
+  created_by_display_name?: string;
   created_at?: string;
 }
 
@@ -117,6 +118,8 @@ export interface Event {
   event_date_approx?: string;
   event_place?: string;
   description?: string;
+  created_by?: string;
+  created_by_display_name?: string;
 }
 
 export interface EventCreate {
@@ -143,6 +146,8 @@ export interface Media {
   description?: string;
   is_default?: boolean;
   age_on_photo?: number;
+  created_by?: string;
+  created_by_display_name?: string;
 }
 
 export interface MediaCreate {

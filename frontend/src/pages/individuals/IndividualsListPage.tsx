@@ -1,34 +1,46 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, Search, Edit2, Trash2, User, ChevronUp, ChevronDown } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Save, X, User, GitBranch } from 'lucide-react';
 import { individualsApi } from '../../api/individuals';
+import { typesApi } from '../../api/types';
 import { Button } from '../../components/common/Button';
 import { Card } from '../../components/common/Card';
 import { Spinner } from '../../components/common/Spinner';
 import toast from 'react-hot-toast';
 import { apiErrorMessage } from '../../utils/apiError';
-import { formatIndividualName, getLatestName } from '../../utils/nameUtils';
+import type { Individual } from '../../types/models';
+import { getLatestName, formatIndividualName } from '../../utils/nameUtils';
 
 export function IndividualsListPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
-  type SortKey = 'name' | 'gedcom_id' | 'sex' | 'birth' | 'death';
-  const [sortBy, setSortBy] = useState<SortKey>('name');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
-
-  const handleSort = (key: SortKey) => {
-    if (sortBy === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-    else {
-      setSortBy(key);
-      setSortDir('asc');
-    }
-  };
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editData, setEditData] = useState<Partial<Individual>>({});
 
   const { data: individuals, isLoading } = useQuery({
     queryKey: ['individuals'],
     queryFn: () => individualsApi.list(),
+  });
+
+  const { data: sexTypes } = useQuery({
+    queryKey: ['types', 'sex'],
+    queryFn: typesApi.getSexTypes,
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Partial<Individual> }) =>
+      individualsApi.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['individuals'] });
+      setEditingId(null);
+      toast.success('Individual updated');
+    },
+    onError: (err) => {
+      toast.error(apiErrorMessage(err, 'Failed to update individual'));
+    },
   });
 
   const deleteMutation = useMutation({
@@ -42,50 +54,77 @@ export function IndividualsListPage() {
     },
   });
 
-  const handleDelete = (id: number, name: string) => {
-    if (window.confirm(`Are you sure you want to delete "${name}"?`)) {
-      deleteMutation.mutate(id);
+  const filteredIndividuals = useMemo(() => {
+    if (!individuals) return [];
+    if (!searchQuery) return individuals;
+    const query = searchQuery.toLowerCase();
+    return individuals.filter((ind) => {
+      const fullName = formatIndividualName(getLatestName(ind.names), '').toLowerCase();
+      return (
+        fullName.includes(query) ||
+        ind.gedcom_id?.toLowerCase().includes(query) ||
+        ind.birth_place?.toLowerCase().includes(query) ||
+        ind.death_place?.toLowerCase().includes(query)
+      );
+    });
+  }, [individuals, searchQuery]);
+
+  const handleSelectAll = () => {
+    if (selectedIds.size === filteredIndividuals.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredIndividuals.map((i) => i.id)));
     }
   };
 
-  // Filter individuals by search query
-  const filteredIndividuals = (individuals || []).filter((individual) => {
-    if (!searchQuery) return true;
-    const searchLower = searchQuery.toLowerCase();
-    const latestName = getLatestName(individual.names);
-    const fullName = formatIndividualName(latestName, '').toLowerCase();
-    return (
-      fullName.includes(searchLower) ||
-      individual.gedcom_id?.toLowerCase().includes(searchLower) ||
-      individual.birth_place?.toLowerCase().includes(searchLower)
-    );
-  });
-
-  // Sort filtered list
-  const getSortValue = (ind: (typeof filteredIndividuals)[0], key: SortKey): string => {
-    const latestName = getLatestName(ind.names);
-    const displayName = formatIndividualName(latestName, '');
-    switch (key) {
-      case 'name':
-        return displayName.toLowerCase();
-      case 'gedcom_id':
-        return (ind.gedcom_id ?? '').toLowerCase();
-      case 'sex':
-        return (ind.sex_code ?? '').toLowerCase();
-      case 'birth':
-        return (ind.birth_date ?? ind.birth_date_approx ?? '').toLowerCase();
-      case 'death':
-        return (ind.death_date ?? ind.death_date_approx ?? '').toLowerCase();
-      default:
-        return '';
+  const handleSelect = (id: number) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
     }
+    setSelectedIds(newSelected);
   };
-  const sortedIndividuals = [...filteredIndividuals].sort((a, b) => {
-    const va = getSortValue(a, sortBy);
-    const vb = getSortValue(b, sortBy);
-    const cmp = va.localeCompare(vb, undefined, { sensitivity: 'base' });
-    return sortDir === 'asc' ? cmp : -cmp;
-  });
+
+  const toDateInputValue = (v: string | undefined): string => {
+    if (!v) return '';
+    const s = String(v);
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+    return s;
+  };
+
+  const handleEdit = (individual: Individual) => {
+    setEditData({
+      sex_code: individual.sex_code ?? '',
+      birth_date: toDateInputValue(individual.birth_date),
+      birth_date_approx: individual.birth_date_approx ?? '',
+      birth_place: individual.birth_place ?? '',
+      death_date: toDateInputValue(individual.death_date),
+      death_date_approx: individual.death_date_approx ?? '',
+      death_place: individual.death_place ?? '',
+    });
+    setEditingId(individual.id);
+  };
+
+  const handleSave = () => {
+    if (!editingId) return;
+    const payload: Partial<Individual> = {
+      ...editData,
+      birth_date: editData.birth_date || undefined,
+      death_date: editData.death_date || undefined,
+    };
+    updateMutation.mutate({ id: editingId, data: payload });
+  };
+
+  const handleCancel = () => {
+    setEditingId(null);
+    setEditData({});
+  };
+
+  const handleCreateFamily = () => {
+    navigate(`/families/new?members=${Array.from(selectedIds).join(',')}`);
+  };
 
   if (isLoading) {
     return (
@@ -113,21 +152,29 @@ export function IndividualsListPage() {
         </Link>
       </div>
 
-      {/* Search */}
+      {/* Toolbar */}
       <Card>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search by name, GEDCOM ID, or birthplace..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-          />
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="relative flex-1 min-w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search by name, GEDCOM ID, or place..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+            />
+          </div>
+          {selectedIds.size > 0 && (
+            <Button onClick={handleCreateFamily}>
+              <User className="w-4 h-4 mr-2" />
+              Create Family ({selectedIds.size} selected)
+            </Button>
+          )}
         </div>
       </Card>
 
-      {/* Individuals List */}
+      {/* Table */}
       <Card>
         {filteredIndividuals.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
@@ -152,109 +199,180 @@ export function IndividualsListPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-200">
-                  <th
-                    className="text-left py-3 px-4 font-semibold text-gray-600 text-sm cursor-pointer select-none hover:bg-gray-100 rounded-tl-lg"
-                    onClick={() => handleSort('name')}
-                  >
-                    <span className="inline-flex items-center gap-1">
-                      Name
-                      {sortBy === 'name' && (sortDir === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />)}
-                    </span>
+                <tr className="border-b border-gray-200 bg-gray-50">
+                  <th className="py-3 px-2 text-left">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.size === filteredIndividuals.length && filteredIndividuals.length > 0}
+                      onChange={handleSelectAll}
+                      className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                    />
                   </th>
-                  <th
-                    className="text-left py-3 px-4 font-semibold text-gray-600 text-sm cursor-pointer select-none hover:bg-gray-100"
-                    onClick={() => handleSort('gedcom_id')}
-                  >
-                    <span className="inline-flex items-center gap-1">
-                      GEDCOM ID
-                      {sortBy === 'gedcom_id' && (sortDir === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />)}
-                    </span>
-                  </th>
-                  <th
-                    className="text-left py-3 px-4 font-semibold text-gray-600 text-sm cursor-pointer select-none hover:bg-gray-100"
-                    onClick={() => handleSort('sex')}
-                  >
-                    <span className="inline-flex items-center gap-1">
-                      Sex
-                      {sortBy === 'sex' && (sortDir === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />)}
-                    </span>
-                  </th>
-                  <th
-                    className="text-left py-3 px-4 font-semibold text-gray-600 text-sm cursor-pointer select-none hover:bg-gray-100"
-                    onClick={() => handleSort('birth')}
-                  >
-                    <span className="inline-flex items-center gap-1">
-                      Birth
-                      {sortBy === 'birth' && (sortDir === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />)}
-                    </span>
-                  </th>
-                  <th
-                    className="text-left py-3 px-4 font-semibold text-gray-600 text-sm cursor-pointer select-none hover:bg-gray-100"
-                    onClick={() => handleSort('death')}
-                  >
-                    <span className="inline-flex items-center gap-1">
-                      Death
-                      {sortBy === 'death' && (sortDir === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />)}
-                    </span>
-                  </th>
-                  <th className="text-right py-3 px-4 font-semibold text-gray-600 text-sm">
-                    Actions
-                  </th>
+                  <th className="py-3 px-2 text-left font-semibold text-gray-600">ID</th>
+                  <th className="py-3 px-2 text-left font-semibold text-gray-600">Given Name</th>
+                  <th className="py-3 px-2 text-left font-semibold text-gray-600">Family Name</th>
+                  <th className="py-3 px-2 text-left font-semibold text-gray-600">Sex</th>
+                  <th className="py-3 px-2 text-left font-semibold text-gray-600">Birth Date</th>
+                  <th className="py-3 px-2 text-left font-semibold text-gray-600">Birth Place</th>
+                  <th className="py-3 px-2 text-left font-semibold text-gray-600">Death Date</th>
+                  <th className="py-3 px-2 text-left font-semibold text-gray-600">Death Place</th>
+                  <th className="py-3 px-2 text-left font-semibold text-gray-600">Added by</th>
+                  <th className="py-3 px-2 text-right font-semibold text-gray-600">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {sortedIndividuals.map((individual) => {
-                  const latestName = getLatestName(individual.names);
-                  const displayName = formatIndividualName(latestName);
+                {filteredIndividuals.map((individual) => {
+                  const isEditing = editingId === individual.id;
+                  const name = getLatestName(individual.names);
+                  const displayName = formatIndividualName(name);
 
                   return (
                     <tr
                       key={individual.id}
-                      className="hover:bg-gray-50 cursor-pointer"
-                      onClick={() => navigate(`/individuals/${individual.id}`)}
+                      className={`hover:bg-gray-50 ${isEditing ? 'bg-emerald-50' : ''}`}
+                      onDoubleClick={() => !isEditing && navigate(`/individuals/${individual.id}/edit`)}
+                      title={isEditing ? undefined : 'Double-click for full edit'}
                     >
-                      <td className="py-3 px-4">
-                        <span className="font-medium text-gray-900">{displayName}</span>
+                      <td className="py-2 px-2">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(individual.id)}
+                          onChange={() => handleSelect(individual.id)}
+                          className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                        />
                       </td>
-                      <td className="py-3 px-4 text-gray-600">
-                        {individual.gedcom_id || '-'}
+                      <td className="py-2 px-2 text-gray-500 font-mono text-xs">
+                        {individual.gedcom_id}
                       </td>
-                      <td className="py-3 px-4 text-gray-600">
-                        {individual.sex_code || '-'}
-                      </td>
-                      <td className="py-3 px-4 text-gray-600">
-                        {individual.birth_date || individual.birth_date_approx || '-'}
-                        {individual.birth_place && (
-                          <span className="text-gray-400 ml-1">({individual.birth_place})</span>
+                      <td className="py-2 px-2">{name?.given_name || '-'}</td>
+                      <td className="py-2 px-2">{name?.family_name || '-'}</td>
+                      <td className="py-2 px-2">
+                        {isEditing ? (
+                          <select
+                            value={editData.sex_code ?? ''}
+                            onChange={(e) =>
+                              setEditData({ ...editData, sex_code: e.target.value })
+                            }
+                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                          >
+                            <option value="">-</option>
+                            <option value="M">M</option>
+                            <option value="F">F</option>
+                            {sexTypes?.filter((t) => t.code !== 'M' && t.code !== 'F').map((t) => (
+                              <option key={t.code} value={t.code}>
+                                {t.code}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          individual.sex_code || '-'
                         )}
                       </td>
-                      <td className="py-3 px-4 text-gray-600">
-                        {individual.death_date || individual.death_date_approx || '-'}
+                      <td className="py-2 px-2">
+                        {isEditing ? (
+                          <input
+                            type="date"
+                            value={editData.birth_date || ''}
+                            onChange={(e) =>
+                              setEditData({ ...editData, birth_date: e.target.value })
+                            }
+                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                          />
+                        ) : (
+                          individual.birth_date || individual.birth_date_approx || '-'
+                        )}
                       </td>
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigate(`/individuals/${individual.id}/edit`);
-                            }}
-                            className="p-2 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDelete(individual.id, displayName);
-                            }}
-                            className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
+                      <td className="py-2 px-2">
+                        {isEditing ? (
+                          <input
+                            type="text"
+                            value={editData.birth_place || ''}
+                            onChange={(e) =>
+                              setEditData({ ...editData, birth_place: e.target.value })
+                            }
+                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                          />
+                        ) : (
+                          individual.birth_place || '-'
+                        )}
+                      </td>
+                      <td className="py-2 px-2">
+                        {isEditing ? (
+                          <input
+                            type="date"
+                            value={editData.death_date || ''}
+                            onChange={(e) =>
+                              setEditData({ ...editData, death_date: e.target.value })
+                            }
+                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                          />
+                        ) : (
+                          individual.death_date || individual.death_date_approx || '-'
+                        )}
+                      </td>
+                      <td className="py-2 px-2">
+                        {isEditing ? (
+                          <input
+                            type="text"
+                            value={editData.death_place || ''}
+                            onChange={(e) =>
+                              setEditData({ ...editData, death_place: e.target.value })
+                            }
+                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                          />
+                        ) : (
+                          individual.death_place || '-'
+                        )}
+                      </td>
+                      <td className="py-2 px-2 text-xs text-gray-400">
+                        {individual.created_by_display_name || individual.created_by || '—'}
+                      </td>
+                      <td className="py-2 px-2 text-right">
+                        {isEditing ? (
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={handleSave}
+                              className="p-1.5 text-emerald-600 hover:bg-emerald-100 rounded transition-colors"
+                            >
+                              <Save className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={handleCancel}
+                              className="p-1.5 text-gray-400 hover:bg-gray-100 rounded transition-colors"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => navigate(`/individuals/${individual.id}/tree`)}
+                              className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors"
+                              title="View Family Tree"
+                            >
+                              <GitBranch className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleEdit(individual)}
+                              className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
+                              title="Click for quick edit"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (window.confirm(`Are you sure you want to delete "${displayName}"?`)) {
+                                  deleteMutation.mutate(individual.id);
+                                }
+                              }}
+                              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );
@@ -264,7 +382,10 @@ export function IndividualsListPage() {
           </div>
         )}
       </Card>
+
+      <p className="text-sm text-gray-500">
+        Showing {filteredIndividuals.length} of {individuals?.length || 0} individuals
+      </p>
     </div>
   );
 }
-

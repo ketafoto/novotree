@@ -260,7 +260,7 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
             <h1 className="text-2xl font-bold text-gray-900">{displayName}</h1>
             <p className="text-gray-600 mt-1">{individual.gedcom_id}</p>
             {individual.created_by && (
-              <p className="text-xs text-gray-400 mt-0.5">Added by {individual.created_by}</p>
+              <p className="text-xs text-gray-400 mt-0.5">Added by {individual.created_by_display_name || individual.created_by}</p>
             )}
           </div>
         </div>

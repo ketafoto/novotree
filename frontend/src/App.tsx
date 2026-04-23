@@ -23,8 +23,6 @@ import { IndividualFormPage } from './pages/individuals/IndividualFormPage';
 import { FamiliesListPage } from './pages/families/FamiliesListPage';
 import { FamilyDetailPage } from './pages/families/FamilyDetailPage';
 import { FamilyFormPage } from './pages/families/FamilyFormPage';
-import { BulkEditIndividualsPage } from './pages/bulk-edit/BulkEditIndividualsPage';
-import { BulkEditFamiliesPage } from './pages/bulk-edit/BulkEditFamiliesPage';
 import { ExportPage } from './pages/export/ExportPage';
 import { ImportPage } from './pages/import/ImportPage';
 import { SettingsPage } from './pages/settings/SettingsPage';
@@ -136,10 +134,6 @@ function App() {
               <Route path="families/new" element={<FamilyFormPage />} />
               <Route path="families/:id" element={<FamilyDetailPage />} />
               <Route path="families/:id/edit" element={<FamilyFormPage />} />
-
-              {/* Bulk Edit */}
-              <Route path="bulk-edit/individuals" element={<BulkEditIndividualsPage />} />
-              <Route path="bulk-edit/families" element={<BulkEditFamiliesPage />} />
 
               {/* Data Exchange — export for all editors, import for owners only */}
               <Route path="export" element={<ExportPage />} />

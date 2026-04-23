@@ -4,7 +4,6 @@ import {
   User,
   Heart,
   GitBranch,
-  Table2,
   Download,
   Upload,
   ArrowLeftRight,
@@ -104,19 +103,6 @@ export function Sidebar() {
         />
 
         <div className="border-t border-gray-200 my-4" />
-
-        <NavGroup icon={<Table2 className="w-5 h-5" />} label="Bulk Edit">
-          <NavItem
-            to="/bulk-edit/individuals"
-            icon={<span className="w-5 h-5 flex items-center justify-center text-sm">├</span>}
-            label="Individuals"
-          />
-          <NavItem
-            to="/bulk-edit/families"
-            icon={<span className="w-5 h-5 flex items-center justify-center text-sm">└</span>}
-            label="Families"
-          />
-        </NavGroup>
 
         <NavGroup icon={<ArrowLeftRight className="w-5 h-5" />} label="Data Exchange">
           <NavItem

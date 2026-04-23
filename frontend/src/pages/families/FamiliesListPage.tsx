@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, Search, Edit2, Trash2, Heart, User } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Save, X, Heart } from 'lucide-react';
 import { familiesApi } from '../../api/families';
 import { individualsApi } from '../../api/individuals';
 import { Button } from '../../components/common/Button';
@@ -10,11 +10,14 @@ import { Spinner } from '../../components/common/Spinner';
 import toast from 'react-hot-toast';
 import { apiErrorMessage } from '../../utils/apiError';
 import { formatIndividualName, getLatestName } from '../../utils/nameUtils';
+import type { Family } from '../../types/models';
 
 export function FamiliesListPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editData, setEditData] = useState<Partial<Family>>({});
 
   const { data: families, isLoading: loadingFamilies } = useQuery({
     queryKey: ['families'],
@@ -24,6 +27,19 @@ export function FamiliesListPage() {
   const { data: individuals } = useQuery({
     queryKey: ['individuals'],
     queryFn: () => individualsApi.list(),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Partial<Family> }) =>
+      familiesApi.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['families'] });
+      setEditingId(null);
+      toast.success('Family updated');
+    },
+    onError: (err) => {
+      toast.error(apiErrorMessage(err, 'Failed to update family'));
+    },
   });
 
   const deleteMutation = useMutation({
@@ -37,34 +53,46 @@ export function FamiliesListPage() {
     },
   });
 
-  const handleDelete = (id: number, gedcomId: string) => {
-    if (window.confirm(`Are you sure you want to delete family "${gedcomId}"?`)) {
-      deleteMutation.mutate(id);
+  const getIndividualName = (id: number) => {
+    const ind = individuals?.find((i) => i.id === id);
+    if (!ind) return `ID:${id}`;
+    return formatIndividualName(getLatestName(ind.names));
+  };
+
+  const filteredFamilies = useMemo(() => {
+    if (!families) return [];
+    if (!searchQuery) return families;
+    const query = searchQuery.toLowerCase();
+    return families.filter((fam) => {
+      if (fam.gedcom_id?.toLowerCase().includes(query)) return true;
+      if (fam.marriage_place?.toLowerCase().includes(query)) return true;
+      for (const member of fam.members) {
+        if (getIndividualName(member.individual_id).toLowerCase().includes(query)) return true;
+      }
+      return false;
+    });
+  }, [families, searchQuery, individuals]);
+
+  const handleEdit = (family: Family) => {
+    setEditingId(family.id);
+    setEditData({
+      marriage_date: family.marriage_date || '',
+      marriage_place: family.marriage_place || '',
+      divorce_date: family.divorce_date || '',
+      family_type: family.family_type || '',
+    });
+  };
+
+  const handleSave = () => {
+    if (editingId) {
+      updateMutation.mutate({ id: editingId, data: editData });
     }
   };
 
-  const getIndividualName = (individualId: number) => {
-    const individual = individuals?.find((i) => i.id === individualId);
-    if (!individual) return 'Unknown';
-    return formatIndividualName(getLatestName(individual.names));
+  const handleCancel = () => {
+    setEditingId(null);
+    setEditData({});
   };
-
-  // Filter families by search query
-  const filteredFamilies = (families || []).filter((family) => {
-    if (!searchQuery) return true;
-    const searchLower = searchQuery.toLowerCase();
-    
-    // Search by GEDCOM ID
-    if (family.gedcom_id?.toLowerCase().includes(searchLower)) return true;
-    
-    // Search by member names
-    for (const member of family.members) {
-      const name = getIndividualName(member.individual_id);
-      if (name.toLowerCase().includes(searchLower)) return true;
-    }
-    
-    return false;
-  });
 
   if (loadingFamilies) {
     return (
@@ -98,7 +126,7 @@ export function FamiliesListPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
           <input
             type="text"
-            placeholder="Search by GEDCOM ID or member name..."
+            placeholder="Search by GEDCOM ID, place, or member name..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
@@ -106,7 +134,7 @@ export function FamiliesListPage() {
         </div>
       </Card>
 
-      {/* Families List */}
+      {/* Table */}
       <Card>
         {filteredFamilies.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
@@ -130,81 +158,172 @@ export function FamiliesListPage() {
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredFamilies.map((family) => {
-              const spouses = family.members.map((m) => ({
-                name: getIndividualName(m.individual_id),
-                role: m.role,
-              }));
-              const childrenCount = family.children.length;
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200 bg-gray-50">
+                  <th className="py-3 px-2 text-left font-semibold text-gray-600">ID</th>
+                  <th className="py-3 px-2 text-left font-semibold text-gray-600">Members</th>
+                  <th className="py-3 px-2 text-left font-semibold text-gray-600">Children</th>
+                  <th className="py-3 px-2 text-left font-semibold text-gray-600">Marriage Date</th>
+                  <th className="py-3 px-2 text-left font-semibold text-gray-600">Marriage Place</th>
+                  <th className="py-3 px-2 text-left font-semibold text-gray-600">Divorce Date</th>
+                  <th className="py-3 px-2 text-left font-semibold text-gray-600">Type</th>
+                  <th className="py-3 px-2 text-left font-semibold text-gray-600">Added by</th>
+                  <th className="py-3 px-2 text-right font-semibold text-gray-600">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {filteredFamilies.map((family) => {
+                  const isEditing = editingId === family.id;
 
-              return (
-                <div
-                  key={family.id}
-                  className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer"
-                  onClick={() => navigate(`/families/${family.id}`)}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-rose-100 rounded-lg flex items-center justify-center">
-                        <Heart className="w-5 h-5 text-rose-600" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900">{family.gedcom_id}</p>
-                        {family.marriage_date && (
-                          <p className="text-sm text-gray-500">
-                            Married: {family.marriage_date}
-                          </p>
+                  return (
+                    <tr
+                      key={family.id}
+                      className={`hover:bg-gray-50 cursor-pointer ${isEditing ? 'bg-emerald-50' : ''}`}
+                      onClick={() => !isEditing && navigate(`/families/${family.id}`)}
+                      onDoubleClick={() => !isEditing && navigate(`/families/${family.id}/edit`)}
+                      title={isEditing ? undefined : 'Double-click for full edit'}
+                    >
+                      <td className="py-2 px-2 text-gray-500 font-mono text-xs">
+                        {family.gedcom_id}
+                      </td>
+                      <td className="py-2 px-2">
+                        <div className="max-w-48">
+                          {family.members.map((m, i) => (
+                            <span key={m.individual_id}>
+                              {i > 0 && ' & '}
+                              <span className="text-gray-900">
+                                {getIndividualName(m.individual_id)}
+                              </span>
+                              {m.role && (
+                                <span className="text-gray-400 text-xs ml-1">
+                                  ({m.role})
+                                </span>
+                              )}
+                            </span>
+                          ))}
+                          {family.members.length === 0 && '-'}
+                        </div>
+                      </td>
+                      <td className="py-2 px-2 text-center">
+                        {family.children.length || '-'}
+                      </td>
+                      <td className="py-2 px-2">
+                        {isEditing ? (
+                          <input
+                            type="date"
+                            value={editData.marriage_date || ''}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) =>
+                              setEditData({ ...editData, marriage_date: e.target.value })
+                            }
+                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                          />
+                        ) : (
+                          family.marriage_date || family.marriage_date_approx || '-'
                         )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/families/${family.id}/edit`);
-                        }}
-                        className="p-2 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDelete(family.id, family.gedcom_id || `#${family.id}`);
-                        }}
-                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Spouses */}
-                  {spouses.length > 0 && (
-                    <div className="mt-3 space-y-1">
-                      {spouses.map((spouse, index) => (
-                        <p key={index} className="text-sm text-gray-600">
-                          <span className="text-gray-400">{spouse.role}:</span> {spouse.name}
-                        </p>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Children */}
-                  {childrenCount > 0 && (
-                    <div className="mt-3 flex items-center gap-2 text-sm text-gray-500">
-                      <User className="w-4 h-4" />
-                      <span>{childrenCount} {childrenCount === 1 ? 'child' : 'children'}</span>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+                      </td>
+                      <td className="py-2 px-2">
+                        {isEditing ? (
+                          <input
+                            type="text"
+                            value={editData.marriage_place || ''}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) =>
+                              setEditData({ ...editData, marriage_place: e.target.value })
+                            }
+                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                          />
+                        ) : (
+                          family.marriage_place || '-'
+                        )}
+                      </td>
+                      <td className="py-2 px-2">
+                        {isEditing ? (
+                          <input
+                            type="date"
+                            value={editData.divorce_date || ''}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) =>
+                              setEditData({ ...editData, divorce_date: e.target.value })
+                            }
+                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                          />
+                        ) : (
+                          family.divorce_date || family.divorce_date_approx || '-'
+                        )}
+                      </td>
+                      <td className="py-2 px-2">
+                        {isEditing ? (
+                          <input
+                            type="text"
+                            value={editData.family_type || ''}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) =>
+                              setEditData({ ...editData, family_type: e.target.value })
+                            }
+                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                            placeholder="e.g., married"
+                          />
+                        ) : (
+                          family.family_type || '-'
+                        )}
+                      </td>
+                      <td className="py-2 px-2 text-xs text-gray-400">
+                        {family.created_by_display_name || family.created_by || '—'}
+                      </td>
+                      <td className="py-2 px-2 text-right">
+                        {isEditing ? (
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleSave(); }}
+                              className="p-1.5 text-emerald-600 hover:bg-emerald-100 rounded transition-colors"
+                            >
+                              <Save className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleCancel(); }}
+                              className="p-1.5 text-gray-400 hover:bg-gray-100 rounded transition-colors"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleEdit(family); }}
+                              className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
+                              title="Click for quick edit"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (window.confirm(`Are you sure you want to delete family "${family.gedcom_id || `#${family.id}`}"?`)) {
+                                  deleteMutation.mutate(family.id);
+                                }
+                              }}
+                              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </Card>
+
+      <p className="text-sm text-gray-500">
+        Showing {filteredFamilies.length} of {families?.length || 0} families
+      </p>
     </div>
   );
 }
-
