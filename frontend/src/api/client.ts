@@ -7,18 +7,20 @@ const apiClient = axios.create({
   },
 });
 
-// If opened via a share link (?share=<token>), forward the token on read requests so the
-// backend can authenticate the viewer. Only GET requests need it — writes always come from
-// authenticated editors and must never carry the share param (backend blocks viewer writes).
-const shareToken = new URLSearchParams(window.location.search).get('share');
-if (shareToken) {
-  apiClient.interceptors.request.use((config) => {
-    if ((config.method ?? 'get').toLowerCase() === 'get') {
-      config.params = { ...config.params, share: shareToken };
+// Forward the share token on every GET request so the backend can authenticate the viewer.
+// Check URL first (share link just opened), then sessionStorage (persisted after in-app
+// navigation away from the original share URL). Only GET requests need it — writes always
+// come from authenticated editors and must never carry the share param.
+apiClient.interceptors.request.use((config) => {
+  if ((config.method ?? 'get').toLowerCase() === 'get') {
+    const share = new URLSearchParams(window.location.search).get('share')
+      ?? sessionStorage.getItem('share_token');
+    if (share) {
+      config.params = { ...config.params, share };
     }
-    return config;
-  });
-}
+  }
+  return config;
+});
 
 // On any 401, the session is gone (deleted, frozen, or token expired) — redirect to login
 // immediately so the user isn't left in a broken half-authenticated state.
