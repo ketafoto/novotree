@@ -70,14 +70,12 @@ export function TreePage() {
     }
   }, [navigate, id]);
 
-  // Single-click: re-center tree on that person, or open detail page if already focused
+  // Single-click: re-center tree on that person (double-click opens the detail page)
   const handlePersonClick = useCallback(
     (clickedId: number) => {
-      if (clickedId === individualId) {
-        navigate(`/individuals/${clickedId}`);
-        return;
+      if (clickedId !== individualId) {
+        navigate(`/individuals/${clickedId}/tree`, { replace: true });
       }
-      navigate(`/individuals/${clickedId}/tree`, { replace: true });
     },
     [navigate, individualId],
   );

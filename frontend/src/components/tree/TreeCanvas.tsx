@@ -102,6 +102,7 @@ function TreeCanvasInner({
         panOnDrag
         zoomOnScroll
         zoomOnPinch
+        zoomOnDoubleClick={false}
         panOnScroll={false}
         nodesDraggable={false}
         nodesConnectable={false}

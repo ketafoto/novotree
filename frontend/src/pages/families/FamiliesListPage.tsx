@@ -182,8 +182,8 @@ export function FamiliesListPage() {
                       key={family.id}
                       className={`hover:bg-gray-50 cursor-pointer ${isEditing ? 'bg-emerald-50' : ''}`}
                       onClick={() => !isEditing && navigate(`/families/${family.id}`)}
-                      onDoubleClick={() => !isEditing && navigate(`/families/${family.id}/edit`)}
-                      title={isEditing ? undefined : 'Double-click for full edit'}
+                      onDoubleClick={() => !isEditing && navigate(`/families/${family.id}`)}
+                      title={isEditing ? undefined : 'Double-click to open detail & edit'}
                     >
                       <td className="py-2 px-2 text-gray-500 font-mono text-xs">
                         {family.gedcom_id}

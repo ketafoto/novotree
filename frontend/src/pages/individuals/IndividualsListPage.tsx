@@ -232,8 +232,8 @@ export function IndividualsListPage() {
                     <tr
                       key={individual.id}
                       className={`hover:bg-gray-50 ${isEditing ? 'bg-emerald-50' : ''}`}
-                      onDoubleClick={() => !isEditing && navigate(`/individuals/${individual.id}/edit`)}
-                      title={isEditing ? undefined : 'Double-click for full edit'}
+                      onDoubleClick={() => !isEditing && navigate(`/individuals/${individual.id}`)}
+                      title={isEditing ? undefined : 'Double-click to open detail & edit'}
                     >
                       <td className="py-2 px-2">
                         <input

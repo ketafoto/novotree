@@ -73,6 +73,11 @@ export function PersonTooltip({ data, position }: PersonTooltipProps) {
         className="bg-white rounded-lg shadow-xl border border-gray-200 p-3 max-h-80 overflow-y-auto"
         style={{ width: tooltipWidth }}
       >
+        {/* Double-click hint */}
+        <div className="mb-2 pb-1.5 border-b border-emerald-100 text-center">
+          <p className="text-[10px] text-emerald-600 font-medium tracking-wide">Double-click photo to edit</p>
+        </div>
+
         {/* Header */}
         <div className={hasAnyContent ? "mb-2 pb-2 border-b border-gray-100" : ""}>
           <p className="font-semibold text-sm text-gray-900">
