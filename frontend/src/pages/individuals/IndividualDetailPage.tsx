@@ -10,6 +10,8 @@ import {
   Image,
   GitBranch,
   Star,
+  Music,
+  Film,
 } from 'lucide-react';
 import { individualsApi } from '../../api/individuals';
 import { familiesApi } from '../../api/families';
@@ -81,6 +83,8 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
   const [newPhotoSrc, setNewPhotoSrc] = useState<string | null>(null);
   const [photoCacheBust, setPhotoCacheBust] = useState(() => Date.now());
   const addPhotoInputRef = useRef<HTMLInputElement>(null);
+  const addAudioInputRef = useRef<HTMLInputElement>(null);
+  const addVideoInputRef = useRef<HTMLInputElement>(null);
 
   const [eventDialogOpen, setEventDialogOpen] = useState(false);
   const [eventToEdit, setEventToEdit] = useState<Event | null>(null);
@@ -97,6 +101,26 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
       addPhotoInputRef.current.value = '';
       addPhotoInputRef.current.click();
     }
+  };
+
+  const handleStartAddAudio = () => {
+    if (addAudioInputRef.current) {
+      addAudioInputRef.current.value = '';
+      addAudioInputRef.current.click();
+    }
+  };
+
+  const handleStartAddVideo = () => {
+    if (addVideoInputRef.current) {
+      addVideoInputRef.current.value = '';
+      addVideoInputRef.current.click();
+    }
+  };
+
+  const handleMediaFileSelected = (type: 'audio' | 'video') => (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    uploadMediaFileMutation.mutate({ file, type });
   };
 
   const handleAddPhotoFileSelected = (e: ChangeEvent<HTMLInputElement>) => {
@@ -129,9 +153,19 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
     mutationFn: mediaApi.delete,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['media', { individual_id: Number(id) }] });
-      toast.success('Photo deleted');
+      toast.success('Media deleted');
     },
-    onError: (err) => toast.error(apiErrorMessage(err, 'Failed to delete photo')),
+    onError: (err) => toast.error(apiErrorMessage(err, 'Failed to delete media')),
+  });
+
+  const uploadMediaFileMutation = useMutation({
+    mutationFn: ({ file, type }: { file: File; type: 'audio' | 'video' }) =>
+      mediaApi.uploadMediaFile(file, Number(id), type),
+    onSuccess: (_, { type }) => {
+      queryClient.invalidateQueries({ queryKey: ['media', { individual_id: Number(id) }] });
+      toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} uploaded`);
+    },
+    onError: (err) => toast.error(apiErrorMessage(err, 'Failed to upload media')),
   });
 
   const deleteEventMutation = useMutation({
@@ -236,14 +270,21 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
     family.members.some((m) => m.individual_id === Number(id)) ||
     family.children.some((c) => c.child_id === Number(id))
   );
-  const sortedPhotoMedia = [...(media || [])]
-    .filter((m) => m.media_type_code === 'photo')
-    .sort((a, b) => {
+  const TYPE_ORDER: Record<string, number> = { photo: 0, audio: 1, video: 2 };
+  const sortedAllMedia = [...(media || [])].sort((a, b) => {
+    const ta = TYPE_ORDER[a.media_type_code ?? ''] ?? 3;
+    const tb = TYPE_ORDER[b.media_type_code ?? ''] ?? 3;
+    if (ta !== tb) return ta - tb;
+    if (a.media_type_code === 'photo' && b.media_type_code === 'photo') {
       const ageA = a.age_on_photo ?? Number.POSITIVE_INFINITY;
       const ageB = b.age_on_photo ?? Number.POSITIVE_INFINITY;
       if (ageA !== ageB) return ageA - ageB;
-      return a.id - b.id;
-    });
+    }
+    return a.id - b.id;
+  });
+  const photoMedia = sortedAllMedia.filter((m) => m.media_type_code === 'photo');
+  const audioCount = sortedAllMedia.filter((m) => m.media_type_code === 'audio').length;
+  const videoCount = sortedAllMedia.filter((m) => m.media_type_code === 'video').length;
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -429,38 +470,56 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
             )}
           </Card>
 
-          {/* Photos */}
-          <Card title="Photos" {...cardDoubleClick('photos')}>
-            {sortedPhotoMedia.length === 0 ? (
+          {/* Media */}
+          <Card title="Media" {...cardDoubleClick('photos')}>
+            {sortedAllMedia.length === 0 ? (
               <div className="text-center py-4">
                 <Image className="w-12 h-12 mx-auto text-gray-300 mb-2" />
-                <p className="text-gray-500 text-sm">No photos yet</p>
+                <p className="text-gray-500 text-sm">No media yet</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-2">
-                {sortedPhotoMedia.map((item) => (
-                  <div key={item.id} className="relative">
-                    <div
-                      className={`w-full aspect-[4/5] bg-gray-100 rounded-lg overflow-hidden ring-2 ${
-                        item.is_default ? 'ring-amber-400' : 'ring-transparent'
-                      }`}
-                    >
-                      <img
-                        src={mediaApi.getFileUrl(item.id, { v: photoCacheBust })}
-                        alt={`Age ${item.age_on_photo ?? '?'}`}
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                      />
-                    </div>
-                    <span className="absolute bottom-1 left-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">
-                      age {item.age_on_photo ?? '?'}
-                    </span>
-                    {item.is_default && (
-                      <Star className="absolute top-1 right-1 w-4 h-4 text-amber-400 fill-amber-400" />
+              <>
+                {photoMedia.length > 0 && (
+                  <div className="grid grid-cols-2 gap-2">
+                    {photoMedia.map((item) => (
+                      <div key={item.id} className="relative">
+                        <div
+                          className={`w-full aspect-[4/5] bg-gray-100 rounded-lg overflow-hidden ring-2 ${
+                            item.is_default ? 'ring-amber-400' : 'ring-transparent'
+                          }`}
+                        >
+                          <img
+                            src={mediaApi.getFileUrl(item.id, { v: photoCacheBust })}
+                            alt={`Age ${item.age_on_photo ?? '?'}`}
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                          />
+                        </div>
+                        <span className="absolute bottom-1 left-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">
+                          age {item.age_on_photo ?? '?'}
+                        </span>
+                        {item.is_default && (
+                          <Star className="absolute top-1 right-1 w-4 h-4 text-amber-400 fill-amber-400" />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {(audioCount > 0 || videoCount > 0) && (
+                  <div className="mt-2 space-y-0.5 text-xs text-gray-500">
+                    {audioCount > 0 && (
+                      <p className="flex items-center gap-1">
+                        <Music className="w-3 h-3" />{audioCount} audio
+                      </p>
+                    )}
+                    {videoCount > 0 && (
+                      <p className="flex items-center gap-1">
+                        <Film className="w-3 h-3" />{videoCount} video
+                      </p>
                     )}
                   </div>
-                ))}
-              </div>
+                )}
+              </>
             )}
           </Card>
         </div>
@@ -548,9 +607,11 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
           <ModalPhotosSection
             open={sectionModal === 'photos'}
             onClose={() => setSectionModal(null)}
-            photos={sortedPhotoMedia}
+            media={sortedAllMedia}
             photoCacheBust={photoCacheBust}
             onAddPhoto={handleStartAddPhoto}
+            onAddAudio={handleStartAddAudio}
+            onAddVideo={handleStartAddVideo}
             onEditPhoto={(item) => {
               setEditingPhoto(item);
               setNewPhotoSrc((prev) => {
@@ -561,7 +622,7 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
               setShowPhotoDialog(true);
             }}
             onSetDefault={(mediaId) => setDefaultMutation.mutate(mediaId)}
-            onDeletePhoto={(mediaId) => deleteMediaMutation.mutate(mediaId)}
+            onDelete={(mediaId) => deleteMediaMutation.mutate(mediaId)}
           />
           <ModalFamiliesSection
             open={sectionModal === 'families'}
@@ -584,6 +645,20 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
         type="file"
         accept=".jpg,.jpeg,.png,.webp,.heic,.heif"
         onChange={handleAddPhotoFileSelected}
+        className="hidden"
+      />
+      <input
+        ref={addAudioInputRef}
+        type="file"
+        accept="audio/*"
+        onChange={handleMediaFileSelected('audio')}
+        className="hidden"
+      />
+      <input
+        ref={addVideoInputRef}
+        type="file"
+        accept="video/*"
+        onChange={handleMediaFileSelected('video')}
         className="hidden"
       />
     </div>

@@ -76,6 +76,23 @@ export const mediaApi = {
     return response.data;
   },
 
+  uploadMediaFile: async (
+    file: File,
+    individualId: number,
+    mediaTypeCode: 'audio' | 'video',
+    description?: string,
+  ): Promise<Media> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('individual_id', String(individualId));
+    formData.append('media_type_code', mediaTypeCode);
+    if (description) formData.append('description', description);
+    const response = await apiClient.post<Media>('/media/upload-file', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
   setDefault: async (id: number): Promise<Media> => {
     const response = await apiClient.put<Media>(`/media/${id}/set-default`);
     return response.data;

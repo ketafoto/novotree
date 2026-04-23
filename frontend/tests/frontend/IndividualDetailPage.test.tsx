@@ -105,11 +105,11 @@ describe('IndividualDetailPage – photo dialog layering', () => {
     // Use findByRole with level:1 because the name also appears in the Names card.
     await screen.findByRole('heading', { name: 'Test Person', level: 1 });
 
-    // Double-click the Photos card to open ModalPhotosSection.
+    // Double-click the Media card to open ModalPhotosSection.
     // Card renders role="button" on its root div when onDoubleClick is set.
-    // We find the Photos card by locating its h3 heading and walking up to
+    // We find the Media card by locating its h3 heading and walking up to
     // the nearest role="button" ancestor.
-    const photosHeading = screen.getByRole('heading', { name: 'Photos' });
+    const photosHeading = screen.getByRole('heading', { name: 'Media' });
     const photosCard = photosHeading.closest('[role="button"]')!;
     await userEvent.dblClick(photosCard);
 

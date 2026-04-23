@@ -287,8 +287,16 @@ function ContributorsTab() {
     );
   }
 
-  const renderDeleteButton = (editor_id: string) =>
-    confirmDelete === editor_id ? (
+  const renderDeleteButton = (editor_id: string, hasContributions: boolean) =>
+    hasContributions ? (
+      <button
+        disabled
+        title="Can't delete user with contributions"
+        className="p-1.5 rounded opacity-30 cursor-not-allowed"
+      >
+        <Trash2 className="w-4 h-4 text-red-400" />
+      </button>
+    ) : confirmDelete === editor_id ? (
       <span className="flex items-center gap-1">
         <button
           onClick={() => void deleteContributor(editor_id)}
@@ -358,7 +366,7 @@ function ContributorsTab() {
                       {isBusy(c.editor_id, 'approve') ? <Spinner size="sm" /> : <UserCheck className="w-4 h-4" />}
                       Approve
                     </button>
-                    {!c.has_contributions && renderDeleteButton(c.editor_id)}
+                    {renderDeleteButton(c.editor_id, c.has_contributions)}
                   </div>
                 </div>
               </div>
@@ -394,7 +402,7 @@ function ContributorsTab() {
                     {isBusy(c.editor_id, 'unfreeze') ? <Spinner size="sm" /> : <ShieldCheck className="w-3.5 h-3.5" />}
                     Unfreeze
                   </button>
-                  {!c.has_contributions && renderDeleteButton(c.editor_id)}
+                  {renderDeleteButton(c.editor_id, c.has_contributions)}
                 </div>
               </div>
             ))}
@@ -444,7 +452,7 @@ function ContributorsTab() {
                     >
                       {isBusy(c.editor_id, 'reset') ? <Spinner size="sm" /> : <RefreshCw className="w-4 h-4 text-gray-500" />}
                     </button>
-                    {!c.has_contributions && renderDeleteButton(c.editor_id)}
+                    {renderDeleteButton(c.editor_id, c.has_contributions)}
                   </div>
                 </div>
                 {resetLinks[c.editor_id] && (

@@ -1,4 +1,5 @@
 import logging
+import mimetypes
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -36,6 +37,15 @@ ALLOWED_MIME_TYPES = {
     "image/heif",
 }
 MAX_PHOTO_SIZE = 20 * 1024 * 1024  # 20 MB
+
+ALLOWED_AUDIO_MIME_TYPES = {
+    "audio/mpeg", "audio/wav", "audio/ogg", "audio/mp4",
+    "audio/aac", "audio/flac", "audio/x-m4a",
+}
+ALLOWED_VIDEO_MIME_TYPES = {
+    "video/mp4", "video/mpeg", "video/ogg", "video/webm", "video/quicktime",
+}
+MAX_MEDIA_FILE_SIZE = 200 * 1024 * 1024  # 200 MB
 
 
 @router.post("/upload", response_model=schemas.Media)
@@ -122,9 +132,10 @@ def serve_media_file(
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found on disk")
 
+    detected_type, _ = mimetypes.guess_type(str(file_path))
     return FileResponse(
         path=str(file_path),
-        media_type="image/jpeg",
+        media_type=detected_type or "application/octet-stream",
         filename=file_path.name,
     )
 
@@ -200,6 +211,65 @@ async def recrop_photo(
     db.commit()
     db.refresh(media)
     return media
+
+
+@router.post("/upload-file", response_model=schemas.Media)
+async def upload_media_file(
+    file: UploadFile = File(...),
+    individual_id: int = Form(...),
+    media_type_code: str = Form(...),
+    description: str = Form(""),
+    session: EditorSession = Depends(require_editor),
+    db: Session = Depends(get_tree_db),
+    owner: OwnerInfo = Depends(get_tree_owner_info),
+):
+    """Upload an audio or video file for an individual."""
+    if media_type_code not in ("audio", "video"):
+        raise HTTPException(status_code=400, detail="media_type_code must be 'audio' or 'video'")
+
+    content_type = (file.content_type or "").lower()
+    allowed = ALLOWED_AUDIO_MIME_TYPES if media_type_code == "audio" else ALLOWED_VIDEO_MIME_TYPES
+    if content_type not in allowed:
+        raise HTTPException(status_code=400, detail=f"Unsupported {media_type_code} type: {content_type}")
+
+    individual = db.query(database.models.Individual).filter(
+        database.models.Individual.id == individual_id
+    ).first()
+    if not individual:
+        raise HTTPException(status_code=404, detail="Individual not found")
+
+    data = await file.read()
+    if len(data) > MAX_MEDIA_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="File exceeds 200 MB limit")
+
+    media_dir = Path(owner.media_dir)
+    media_dir.mkdir(parents=True, exist_ok=True)
+
+    suffix = Path(file.filename or "").suffix or (".mp3" if media_type_code == "audio" else ".mp4")
+    gedcom_id = individual.gedcom_id or f"ID{individual.id}"
+    base_name = f"{gedcom_id}_{media_type_code}"
+    file_path = media_dir / f"{base_name}{suffix}"
+    counter = 2
+    while file_path.exists():
+        file_path = media_dir / f"{base_name}_{counter}{suffix}"
+        counter += 1
+
+    file_path.write_bytes(data)
+
+    db_media = database.models.Media(
+        individual_id=individual_id,
+        file_path=file_path.name,
+        media_type_code=media_type_code,
+        description=description or None,
+        is_default=0,
+        created_by=session.editor_id,
+        created_at=_now_iso(),
+    )
+    db.add(db_media)
+    db.commit()
+    db.refresh(db_media)
+    result = schemas.Media.model_validate(db_media)
+    return result.model_copy(update={"created_by_display_name": session.display_name})
 
 
 # ── Standard CRUD ────────────────────────────────────────────────────────────
