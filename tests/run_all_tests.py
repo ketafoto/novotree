@@ -17,7 +17,7 @@ def run(label: str, cmd: list, cwd: Path) -> None:
     print(f"\n{'='*60}")
     print(f"  {label}")
     print(f"{'='*60}\n")
-    result = subprocess.run(cmd, cwd=cwd)
+    result = subprocess.run(cmd, cwd=cwd, shell=(sys.platform == 'win32'))
     if result.returncode != 0:
         print(f"\n[FAIL] {label} exited with code {result.returncode}")
         sys.exit(result.returncode)
