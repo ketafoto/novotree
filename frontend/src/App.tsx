@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 
 import { AuthProvider } from './contexts/AuthContext';
+import { useAuth } from './contexts/AuthContext';
 import { Layout } from './components/layout/Layout';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
 import { typesApi } from './api/types';
@@ -61,7 +62,9 @@ queryClient.setQueryDefaults(['tree'], {
 });
 
 function PrefetchTypes() {
+  const { isAuthenticated, isLoading } = useAuth();
   useEffect(() => {
+    if (isLoading || !isAuthenticated) return;
     void queryClient.prefetchQuery({ queryKey: ['types', 'sex'], queryFn: typesApi.getSexTypes });
     void queryClient.prefetchQuery({ queryKey: ['types', 'events'], queryFn: typesApi.getEventTypes });
     void queryClient.prefetchQuery({ queryKey: ['types', 'media'], queryFn: typesApi.getMediaTypes });
@@ -69,16 +72,16 @@ function PrefetchTypes() {
     void queryClient.prefetchQuery({ queryKey: ['types', 'family-types'], queryFn: typesApi.getFamilyTypes });
     void queryClient.prefetchQuery({ queryKey: ['types', 'name-types'], queryFn: typesApi.getNameTypes });
     void queryClient.prefetchQuery({ queryKey: ['types', 'date-approx'], queryFn: typesApi.getDateApproxTypes });
-  }, []);
+  }, [isAuthenticated, isLoading]);
   return null;
 }
 
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <PrefetchTypes />
       <BrowserRouter basename={import.meta.env.BASE_URL}>
         <AuthProvider>
+          <PrefetchTypes />
           <Routes>
             {/* ── Public auth pages (no Layout wrapper) ── */}
             <Route path="/login" element={<LoginPage />} />

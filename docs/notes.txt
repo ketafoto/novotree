@@ -185,32 +185,18 @@ Frontend tests (Vitest + React Testing Library):
 Backend tests (pytest):
     source venv-linux/bin/activate
     .venv/bin/pytest tests/backend/
+    OR
+    cd test && python -m pytest
 
-2.
-Use separate databases for different datasets:
-change DEFAULT_OWNER_ID in backend/api/auth.py
-
-3.
-To have 
-
+Both - Front-back-end tests:
+    (after venv activation - .\venv-win\Scripts\Activate.ps1  / source venv-linux/bin/activate)
+    python ./tests/run_all_tests.py
 
 
 Next
 =======================
 novotreee
 ----------------------
--1. Check if Tree could be adjusted for viewing on mobile
--2. Make the private version - keep database on local host - enable to export/import to/from server on demand
-
-1. Ability to remove owner (kind of unregister) - delete it's data - this is by user and this is by admin.
-
-2. We probably need a separate "admin" page - to be accessable by admin (me) only.
-   On this page UI should:
-   1. Manage users - both contributors and owners (invite, add, delete)
-   2. Run manually backup script using the vm-backup.py script
-   (found either under ../novospace.git/scripts/deployment/vm-backup.py. or under deployment folder installed by 
-   ../novospace.git/scripts/deployment/vm-setup.py)
-
 
 Bugs
 -----------------------------
@@ -219,20 +205,26 @@ Missing functionality
 -----------------------------
 *. see no list of contributions, so can't remove their data and then remove the contributor.
 *. Rephrase "Owner? Create an account" -> "Wanna build your tree? Create account!"
+*. We probably need a separate "admin" page - to be accessible by admin (me) only - or better to use CLI ???
+   On this page UI should:
+   1. Manage users - both contributors and owners (invite, add, delete)
+   2. Run manually backup script using the vm-backup.py script
+   (found either under ../novospace.git/scripts/deployment/vm-backup.py. or under deployment folder installed by 
+   ../novospace.git/scripts/deployment/vm-setup.py)
 
 
-To publish to private
+Go private
 -----------------------------
+*. ability to remove owner (kind of unregister) - delete it's data - this is by user and this is by admin.
 *. send emails for error in logs
+*. Check if Tree could be adjusted for viewing on mobile
 
-To publish to service
+Go public
 -----------------------------
-1. Legals
-2. 
+*. Legals
+*. Make the private version - keep database on local host - enable to export/import to/from server on demand
 
 
 Next Phase
------------------------------
+=======================
 *. speech-to-text + AI for CRUD operation by voice
-
-

@@ -155,7 +155,7 @@ export function LoginPage() {
         </div>
 
         <p className="text-center text-sm text-gray-500 mt-6">
-          Owner?{' '}
+          Wanna build your own tree?{' '}
           <Link to="/owner-signup" className="text-emerald-600 hover:underline font-medium">
             Create an account
           </Link>
