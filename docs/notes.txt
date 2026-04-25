@@ -165,11 +165,15 @@ Backend (UviCorn + FastAPI + SqlAlchemy):
     2. uvicorn backend.main:app --host 0.0.0.0 --port 8000
        OR
        uvicorn backend.main:app --reload --reload-dir .
+       OR
+       python ./backend/dev_run_backend auth-on - supports full OCV signup/login flow, uses backend/.env.dev.auth-on to set environment
     3. http://localhost:8000 in Browser
 
 Frontend (Vite + React + TailWind):
     1. cd frontend
     2. npm run dev
+       OR
+       npm run dev:dev-auth-on  - supports full OCV signup/login flow, uses frontend\.env.dev-auth-on to set environment
     3. http://localhost:3000 in Browser
 
 Frontend tests (Vitest + React Testing Library):
@@ -185,6 +189,10 @@ Backend tests (pytest):
 2.
 Use separate databases for different datasets:
 change DEFAULT_OWNER_ID in backend/api/auth.py
+
+3.
+To have 
+
 
 
 Next
@@ -202,4 +210,29 @@ novotreee
    2. Run manually backup script using the vm-backup.py script
    (found either under ../novospace.git/scripts/deployment/vm-backup.py. or under deployment folder installed by 
    ../novospace.git/scripts/deployment/vm-setup.py)
- 
+
+
+Bugs
+-----------------------------
+
+Missing functionality
+-----------------------------
+*. see no list of contributions, so can't remove their data and then remove the contributor.
+*. Rephrase "Owner? Create an account" -> "Wanna build your tree? Create account!"
+
+
+To publish to private
+-----------------------------
+*. send emails for error in logs
+
+To publish to service
+-----------------------------
+1. Legals
+2. 
+
+
+Next Phase
+-----------------------------
+*. speech-to-text + AI for CRUD operation by voice
+
+

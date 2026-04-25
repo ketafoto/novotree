@@ -243,8 +243,8 @@ async def _send_email(to: str, subject: str, body: str) -> bool:
 # ---------------------------------------------------------------------------
 
 def _require_smtp_or_dev() -> None:
-    """Raise 503 when signup is attempted without SMTP configured outside dev mode."""
-    if not settings.is_dev and not settings.smtp_enabled:
+    """Raise 503 when signup is attempted and registration is not enabled."""
+    if not settings.allow_registration:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Account registration is currently unavailable — SMTP not configured.",
@@ -982,7 +982,7 @@ def get_public_config():
     """Return public configuration for the frontend (no auth required)."""
     return PublicConfig(
         admin_email=settings.admin_email,
-        signup_enabled=settings.is_dev or settings.smtp_enabled,
+        signup_enabled=settings.allow_registration,
     )
 
 

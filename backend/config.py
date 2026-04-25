@@ -47,6 +47,12 @@ class Settings:
     # Set COOKIE_SECURE=false to test public mode over plain HTTP on a dev VM.
     cookie_secure: bool
 
+    # Allow owner/contributor signup even without SMTP configured.
+    # Defaults to True in dev mode and whenever SMTP is configured.
+    # Set ALLOW_REGISTRATION=true to enable signup in public mode without SMTP
+    # (verification links are printed to the backend log instead of emailed).
+    allow_registration: bool
+
     @property
     def is_dev(self) -> bool:
         """Local development mode — auth bypassed."""
@@ -117,6 +123,7 @@ def load_settings() -> Settings:
         smtp_from=os.getenv("SMTP_FROM") or None,
         admin_email=os.getenv("ADMIN_EMAIL") or None,
         cookie_secure=_as_bool(os.getenv("COOKIE_SECURE"), default=not is_dev),
+        allow_registration=_as_bool(os.getenv("ALLOW_SIGNUP_WITHOUT_SMTP"), default=is_dev or bool(os.getenv("SMTP_HOST"))),
     )
 
 

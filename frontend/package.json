@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:dev-auth-on": "vite --mode dev-auth-on",
     "build": "tsc -b && vite build",
     "test": "vitest run",
     "lint": "eslint .",
