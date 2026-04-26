@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { TreeDeciduous } from 'lucide-react';
 import { authApi } from '../../api/auth';
@@ -19,8 +19,14 @@ export function VerifyOwnerEmailPage() {
   const { adminEmail } = usePublicConfig();
   const [state, setState] = useState<State>('verifying');
   const [errorMsg, setErrorMsg] = useState('Verification failed. The link may be invalid or expired.');
+  // The token is single-use; React Strict Mode mounts effects twice in dev, so without
+  // this guard the second call would 409 and overwrite the success state.
+  const hasVerified = useRef(false);
 
   useEffect(() => {
+    if (hasVerified.current) return;
+    hasVerified.current = true;
+
     const token = searchParams.get('token');
     if (!token) {
       setErrorMsg('No verification token found in the link.');

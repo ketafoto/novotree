@@ -49,9 +49,16 @@ class Settings:
 
     # Allow owner/contributor signup even without SMTP configured.
     # Defaults to True in dev mode and whenever SMTP is configured.
-    # Set ALLOW_REGISTRATION=true to enable signup in public mode without SMTP
+    # Set ALLOW_SIGNUP_WITHOUT_SMTP=true to enable signup in public mode without SMTP
     # (verification links are printed to the backend log instead of emailed).
     allow_registration: bool
+
+    # Absolute base URL of the frontend, used to build email verification links.
+    # When set, the link is `{frontend_base_url}{page_path}?token=...` with no '/novotree'
+    # prefix. Useful for local dev where the frontend (port 3000) and backend (port 8000)
+    # run on different origins. Leave unset in production — the link is then derived from
+    # the incoming request and the '/novotree' prefix is added automatically.
+    frontend_base_url: str | None
 
     @property
     def is_dev(self) -> bool:
@@ -124,6 +131,7 @@ def load_settings() -> Settings:
         admin_email=os.getenv("ADMIN_EMAIL") or None,
         cookie_secure=_as_bool(os.getenv("COOKIE_SECURE"), default=not is_dev),
         allow_registration=_as_bool(os.getenv("ALLOW_SIGNUP_WITHOUT_SMTP"), default=is_dev or bool(os.getenv("SMTP_HOST"))),
+        frontend_base_url=(os.getenv("FRONTEND_BASE_URL") or "").rstrip("/") or None,
     )
 
 

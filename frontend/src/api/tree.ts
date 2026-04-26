@@ -6,9 +6,15 @@ export interface TreeParams {
   descendant_depth?: number;
 }
 
-const shareToken = new URLSearchParams(window.location.search).get('share');
+function getShareToken(): string | null {
+  // Match the axios interceptor: URL first (initial share link), then sessionStorage
+  // (persisted after in-app navigation away from the original share URL).
+  return new URLSearchParams(window.location.search).get('share')
+    ?? sessionStorage.getItem('share_token');
+}
 
 function injectShareToken(data: TreeData): TreeData {
+  const shareToken = getShareToken();
   if (!shareToken) return data;
   return {
     ...data,

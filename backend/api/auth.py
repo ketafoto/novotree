@@ -272,7 +272,11 @@ def _build_verify_url(request: Request, token: str, page_path: str) -> str:
 
     page_path is the path *without* the /novotree prefix, e.g. '/verify-owner-email'.
     In production the prefix is added; in dev it is omitted.
+    When FRONTEND_BASE_URL is set (local dev with separate frontend port), use it
+    directly with no prefix.
     """
+    if settings.frontend_base_url:
+        return f"{settings.frontend_base_url}{page_path}?token={token}"
     base = f"{request.url.scheme}://{request.url.netloc}"
     path = f"/novotree{page_path}" if not settings.is_dev else page_path
     return f"{base}{path}?token={token}"

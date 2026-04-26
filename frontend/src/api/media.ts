@@ -109,7 +109,10 @@ export const mediaApi = {
 
   getFileUrl: (id: number, extraParams?: Record<string, string | number>): string => {
     const params = new URLSearchParams();
-    const share = new URLSearchParams(window.location.search).get('share');
+    // Match the axios interceptor: URL first (initial share link), then sessionStorage
+    // (persisted after in-app navigation away from the original share URL).
+    const share = new URLSearchParams(window.location.search).get('share')
+      ?? sessionStorage.getItem('share_token');
     if (share) params.set('share', share);
     if (extraParams) Object.entries(extraParams).forEach(([k, v]) => params.set(k, String(v)));
     const qs = params.toString();
