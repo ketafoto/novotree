@@ -57,6 +57,9 @@ export function ModalEventsSection({
                     {ev.event_place && ` • ${ev.event_place}`}
                   </p>
                   {ev.description && <p className="text-sm text-gray-500 mt-1">{ev.description}</p>}
+                  {ev.created_by && (
+                    <p className="text-xs text-gray-400 mt-0.5">Added by {ev.created_by_display_name || ev.created_by}</p>
+                  )}
                 </div>
                 {!readOnly && (
                   <div className="flex items-center gap-1 flex-shrink-0">

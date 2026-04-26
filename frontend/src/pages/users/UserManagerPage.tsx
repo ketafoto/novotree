@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { shareUrl } from '../../utils/shareUrl';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -14,6 +15,8 @@ import {
   ShieldOff,
   ShieldCheck,
   Clock,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { usersApi } from '../../api/auth';
 import { Button } from '../../components/common/Button';
@@ -189,6 +192,69 @@ function ShareTokensTab() {
 }
 
 // ──────────────────────────────────────────────────────────────
+// Contributions panel (lazy-loaded per contributor)
+// ──────────────────────────────────────────────────────────────
+type ContributionKind = 'individual' | 'family' | 'event' | 'media';
+
+function ContributionsPanel({ editor_id }: { editor_id: string }) {
+  const navigate = useNavigate();
+  const { data, isLoading } = useQuery({
+    queryKey: ['contributor-contributions', editor_id],
+    queryFn: () => usersApi.getContributorContributions(editor_id),
+  });
+
+  if (isLoading) return <div className="py-2 pl-2"><Spinner size="sm" /></div>;
+  if (!data) return null;
+
+  const sections: { label: string; kind: ContributionKind; items: typeof data.individuals }[] = [
+    { label: 'Individuals', kind: 'individual', items: data.individuals },
+    { label: 'Families', kind: 'family', items: data.families },
+    { label: 'Events', kind: 'event', items: data.events },
+    { label: 'Media', kind: 'media', items: data.media },
+  ];
+  const visibleSections = sections.filter((s) => s.items.length > 0);
+
+  if (visibleSections.length === 0) return <p className="text-xs text-gray-400 py-1 pl-2">No contributions found.</p>;
+
+  const targetFor = (kind: ContributionKind, item: typeof data.individuals[number]): string | null => {
+    if (kind === 'individual') return `/individuals/${item.id}`;
+    if (kind === 'family') return `/families/${item.id}`;
+    if (item.individual_id) return `/individuals/${item.individual_id}`;
+    if (item.family_id) return `/families/${item.family_id}`;
+    return null;
+  };
+
+  return (
+    <div className="mt-2 pl-2 border-l-2 border-gray-100 space-y-1.5">
+      <p className="text-xs text-gray-400 italic">Double-click an item to open it for editing.</p>
+      {visibleSections.map(({ label, kind, items }) => (
+        <div key={label}>
+          <p className="text-xs font-semibold text-gray-500">{label} ({items.length})</p>
+          <ul className="mt-0.5 space-y-0.5">
+            {items.slice(0, 10).map((item) => {
+              const target = targetFor(kind, item);
+              return (
+                <li
+                  key={item.id}
+                  onDoubleClick={() => target && navigate(target)}
+                  title={target ? 'Double-click to open' : undefined}
+                  className={`text-xs text-gray-600 truncate select-none ${target ? 'cursor-pointer hover:bg-gray-50 hover:text-gray-900 rounded px-1' : 'px-1'}`}
+                >
+                  · {item.label}
+                </li>
+              );
+            })}
+            {items.length > 10 && (
+              <li className="text-xs text-gray-400 px-1">… and {items.length - 10} more</li>
+            )}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────
 // Contributors tab
 // ──────────────────────────────────────────────────────────────
 function ContributorsTab() {
@@ -201,6 +267,7 @@ function ContributorsTab() {
 
   const [resetLinks, setResetLinks] = useState<Record<string, string>>({});
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [expandedContributions, setExpandedContributions] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null); // "<editor_id>:<action>"
 
   const isBusy = (editor_id: string, action: string) => busy === `${editor_id}:${action}`;
@@ -270,6 +337,19 @@ function ContributorsTab() {
     }
   });
 
+  const deleteContributorWithData = (editor_id: string) => withBusy(editor_id, 'delete', async () => {
+    try {
+      await usersApi.deleteContributorWithData(editor_id);
+      qc.invalidateQueries({ queryKey: ['contributors'] });
+      setConfirmDelete(null);
+      toast.success('Contributor and all their contributions deleted');
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail ?? 'Failed to delete';
+      toast.error(msg);
+      setConfirmDelete(null);
+    }
+  });
+
   if (isLoading) return <div className="py-8 flex justify-center"><Spinner /></div>;
 
   // pending approval: inactive and never logged in (signed up, email verified, awaiting owner)
@@ -287,43 +367,52 @@ function ContributorsTab() {
     );
   }
 
-  const renderDeleteButton = (editor_id: string, hasContributions: boolean) =>
-    hasContributions ? (
-      <button
-        disabled
-        title="Can't delete user with contributions"
-        className="p-1.5 rounded opacity-30 cursor-not-allowed"
-      >
-        <Trash2 className="w-4 h-4 text-red-400" />
-      </button>
-    ) : confirmDelete === editor_id ? (
-      <span className="flex items-center gap-1">
-        <button
-          onClick={() => void deleteContributor(editor_id)}
-          disabled={anyBusy(editor_id)}
-          className="flex items-center gap-1 px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isBusy(editor_id, 'delete') ? <Spinner size="sm" /> : null}
-          Confirm delete
-        </button>
-        <button
-          onClick={() => setConfirmDelete(null)}
-          disabled={anyBusy(editor_id)}
-          className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          Cancel
-        </button>
-      </span>
-    ) : (
+  const renderDeleteButton = (editor_id: string, hasContributions: boolean) => {
+    if (confirmDelete === editor_id) {
+      return (
+        <span className="flex items-center gap-1">
+          <button
+            onClick={() => void (hasContributions ? deleteContributorWithData(editor_id) : deleteContributor(editor_id))}
+            disabled={anyBusy(editor_id)}
+            className="flex items-center gap-1 px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isBusy(editor_id, 'delete') ? <Spinner size="sm" /> : null}
+            {hasContributions ? 'Delete everything' : 'Confirm delete'}
+          </button>
+          <button
+            onClick={() => setConfirmDelete(null)}
+            disabled={anyBusy(editor_id)}
+            className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Cancel
+          </button>
+        </span>
+      );
+    }
+    return (
       <button
         onClick={() => setConfirmDelete(editor_id)}
         disabled={anyBusy(editor_id)}
         className="p-1.5 hover:bg-red-50 rounded disabled:opacity-50 disabled:cursor-not-allowed"
-        title="Delete account"
+        title={hasContributions ? 'Delete contributor and all their contributions' : 'Delete account'}
       >
         <Trash2 className="w-4 h-4 text-red-400" />
       </button>
     );
+  };
+
+  const renderContributionsToggle = (editor_id: string) => {
+    const expanded = expandedContributions === editor_id;
+    return (
+      <button
+        onClick={() => setExpandedContributions(expanded ? null : editor_id)}
+        className="flex items-center gap-0.5 text-xs text-blue-500 hover:text-blue-700 mt-0.5"
+      >
+        {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+        {expanded ? 'Hide contributions' : 'View contributions'}
+      </button>
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -349,6 +438,7 @@ function ContributorsTab() {
                         Signed up {new Date(c.created_at).toLocaleDateString()}
                       </p>
                     )}
+                    {c.has_contributions && renderContributionsToggle(c.editor_id)}
                     {c.message && (
                       <div className="mt-1 bg-gray-50 rounded px-2 py-1">
                         <p className="text-xs text-gray-400 mb-0.5">Signup note from {c.display_name}:</p>
@@ -369,6 +459,10 @@ function ContributorsTab() {
                     {renderDeleteButton(c.editor_id, c.has_contributions)}
                   </div>
                 </div>
+                {confirmDelete === c.editor_id && c.has_contributions && (
+                  <p className="text-xs text-red-500">This will permanently delete the contributor account and all their contributions to the tree.</p>
+                )}
+                {expandedContributions === c.editor_id && <ContributionsPanel editor_id={c.editor_id} />}
               </div>
             ))}
           </div>
@@ -384,26 +478,33 @@ function ContributorsTab() {
           </h3>
           <div className="divide-y divide-gray-100">
             {frozen.map((c) => (
-              <div key={c.editor_id} className="py-4 flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-500">{c.display_name}</p>
-                  <p className="text-xs text-gray-400">
-                    @{c.editor_id}
-                    {c.email && <> · {c.email}</>}
-                  </p>
+              <div key={c.editor_id} className="py-4 space-y-1">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">{c.display_name}</p>
+                    <p className="text-xs text-gray-400">
+                      @{c.editor_id}
+                      {c.email && <> · {c.email}</>}
+                    </p>
+                    {c.has_contributions && renderContributionsToggle(c.editor_id)}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => void unfreeze(c.editor_id)}
+                      disabled={anyBusy(c.editor_id)}
+                      className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Unfreeze — re-enable login"
+                    >
+                      {isBusy(c.editor_id, 'unfreeze') ? <Spinner size="sm" /> : <ShieldCheck className="w-3.5 h-3.5" />}
+                      Unfreeze
+                    </button>
+                    {renderDeleteButton(c.editor_id, c.has_contributions)}
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => void unfreeze(c.editor_id)}
-                    disabled={anyBusy(c.editor_id)}
-                    className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Unfreeze — re-enable login"
-                  >
-                    {isBusy(c.editor_id, 'unfreeze') ? <Spinner size="sm" /> : <ShieldCheck className="w-3.5 h-3.5" />}
-                    Unfreeze
-                  </button>
-                  {renderDeleteButton(c.editor_id, c.has_contributions)}
-                </div>
+                {confirmDelete === c.editor_id && c.has_contributions && (
+                  <p className="text-xs text-red-500">This will permanently delete the contributor account and all their contributions to the tree.</p>
+                )}
+                {expandedContributions === c.editor_id && <ContributionsPanel editor_id={c.editor_id} />}
               </div>
             ))}
           </div>
@@ -433,6 +534,7 @@ function ContributorsTab() {
                         Last login {new Date(c.last_login_at).toLocaleDateString()}
                       </p>
                     )}
+                    {c.has_contributions && renderContributionsToggle(c.editor_id)}
                   </div>
                   <div className="flex items-center gap-2">
                     <button
@@ -455,6 +557,9 @@ function ContributorsTab() {
                     {renderDeleteButton(c.editor_id, c.has_contributions)}
                   </div>
                 </div>
+                {confirmDelete === c.editor_id && c.has_contributions && (
+                  <p className="text-xs text-red-500">This will permanently delete the contributor account and all their contributions to the tree.</p>
+                )}
                 {resetLinks[c.editor_id] && (
                   <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                     <LinkIcon className="w-4 h-4 text-amber-600 flex-shrink-0" />
@@ -469,6 +574,7 @@ function ContributorsTab() {
                     </button>
                   </div>
                 )}
+                {expandedContributions === c.editor_id && <ContributionsPanel editor_id={c.editor_id} />}
               </div>
             ))}
           </div>

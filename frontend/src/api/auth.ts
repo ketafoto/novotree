@@ -11,6 +11,7 @@ import type {
   ShareToken,
   ShareTokenCreate,
   Contributor,
+  ContributorContributions,
   ContributorSignupRequest,
   OwnerInfo,
 } from '../types/models';
@@ -136,5 +137,14 @@ export const usersApi = {
 
   deleteContributor: async (editor_id: string): Promise<void> => {
     await apiClient.delete(`/users/contributors/${editor_id}`);
+  },
+
+  deleteContributorWithData: async (editor_id: string): Promise<void> => {
+    await apiClient.delete(`/users/contributors/${editor_id}`, { params: { force: true } });
+  },
+
+  getContributorContributions: async (editor_id: string): Promise<ContributorContributions> => {
+    const res = await apiClient.get<ContributorContributions>(`/users/contributors/${editor_id}/contributions`);
+    return res.data;
   },
 };

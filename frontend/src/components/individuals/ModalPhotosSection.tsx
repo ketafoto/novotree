@@ -80,6 +80,11 @@ export function ModalPhotosSection({
                   <span className="absolute bottom-1 left-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">
                     age {item.age_on_photo ?? '?'}
                   </span>
+                  {item.created_by && (
+                    <span className="absolute top-1 left-1 max-w-[calc(100%-0.5rem)] truncate bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">
+                      Added by {item.created_by_display_name || item.created_by}
+                    </span>
+                  )}
                   {item.is_default && (
                     <Star className="absolute top-1 right-1 w-4 h-4 text-amber-400 fill-amber-400" />
                   )}
@@ -132,6 +137,9 @@ export function ModalPhotosSection({
                       <p className="text-sm text-gray-700 mb-1 truncate">{item.description}</p>
                     )}
                     <audio controls src={mediaApi.getFileUrl(item.id)} className="w-full" />
+                    {item.created_by && (
+                      <p className="text-xs text-gray-400 mt-1">Added by {item.created_by_display_name || item.created_by}</p>
+                    )}
                   </div>
                   {!readOnly && (
                     <button
@@ -158,9 +166,12 @@ export function ModalPhotosSection({
                 <div key={item.id} className="border border-gray-200 rounded-lg overflow-hidden">
                   <video controls src={mediaApi.getFileUrl(item.id)} className="w-full max-h-64" />
                   <div className="flex items-center justify-between px-3 py-2">
-                    <p className="text-sm text-gray-600 truncate">
-                      {item.description || 'Video'}
-                    </p>
+                    <div className="flex-1 min-w-0 mr-2">
+                      <p className="text-sm text-gray-600 truncate">{item.description || 'Video'}</p>
+                      {item.created_by && (
+                        <p className="text-xs text-gray-400">Added by {item.created_by_display_name || item.created_by}</p>
+                      )}
+                    </div>
                     {!readOnly && (
                       <button
                         type="button"

@@ -257,6 +257,20 @@ export interface Contributor {
   has_contributions: boolean;
 }
 
+export interface ContributorContributionItem {
+  id: number;
+  label: string;
+  individual_id?: number | null;
+  family_id?: number | null;
+}
+
+export interface ContributorContributions {
+  individuals: ContributorContributionItem[];
+  families: ContributorContributionItem[];
+  events: ContributorContributionItem[];
+  media: ContributorContributionItem[];
+}
+
 export interface ContributorSignupRequest {
   display_name?: string;
   email: string;

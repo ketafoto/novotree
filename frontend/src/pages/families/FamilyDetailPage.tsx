@@ -293,6 +293,9 @@ export function FamilyDetailPage() {
                       {ev.description && (
                         <p className="text-sm text-gray-500 mt-1">{ev.description}</p>
                       )}
+                      {ev.created_by && (
+                        <p className="text-xs text-gray-400 mt-0.5">Added by {ev.created_by_display_name || ev.created_by}</p>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -324,9 +327,14 @@ export function FamilyDetailPage() {
                 {media?.slice(0, 4).map((item) => (
                   <div
                     key={item.id}
-                    className="aspect-square bg-gray-100 rounded-lg flex items-center justify-center"
+                    className="relative aspect-square bg-gray-100 rounded-lg flex items-center justify-center"
                   >
                     <Image className="w-8 h-8 text-gray-400" />
+                    {item.created_by && (
+                      <span className="absolute bottom-1 left-1 right-1 truncate bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">
+                        Added by {item.created_by_display_name || item.created_by}
+                      </span>
+                    )}
                   </div>
                 ))}
               </div>

@@ -44,7 +44,10 @@ const TreeFallback = <div className="flex items-center justify-center h-screen t
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 5 * 60 * 1000,
+      // Always refetch on mount so edits made by other contributors are reflected
+      // immediately. Only what the mounted components read is refetched, not the
+      // whole cache. Static lookup tables override this below.
+      staleTime: 0,
       retry: (failureCount, error) => {
         // Never retry 401 — the session is gone, retrying just delays the redirect
         if ((error as { response?: { status?: number } })?.response?.status === 401) return false;
@@ -56,9 +59,6 @@ const queryClient = new QueryClient({
 queryClient.setQueryDefaults(['types'], {
   staleTime: Infinity,
   gcTime: 24 * 60 * 60 * 1000,
-});
-queryClient.setQueryDefaults(['tree'], {
-  staleTime: 0,  // always refetch tree on mount so edits elsewhere are reflected immediately
 });
 
 function PrefetchTypes() {
@@ -130,13 +130,11 @@ function App() {
               {/* Individuals */}
               <Route path="individuals" element={<IndividualsListPage />} />
               <Route path="individuals/new" element={<IndividualFormPage />} />
-              <Route path="individuals/:id/edit" element={<IndividualFormPage />} />
 
               {/* Families */}
               <Route path="families" element={<FamiliesListPage />} />
               <Route path="families/new" element={<FamilyFormPage />} />
               <Route path="families/:id" element={<FamilyDetailPage />} />
-              <Route path="families/:id/edit" element={<FamilyFormPage />} />
 
               {/* Data Exchange — export for all editors, import for owners only */}
               <Route path="export" element={<ExportPage />} />

@@ -72,6 +72,20 @@ class ContributorResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ContributorContributionItem(BaseModel):
+    id: int
+    label: str
+    individual_id: Optional[int] = None
+    family_id: Optional[int] = None
+
+
+class ContributorContributions(BaseModel):
+    individuals: list[ContributorContributionItem] = []
+    families: list[ContributorContributionItem] = []
+    events: list[ContributorContributionItem] = []
+    media: list[ContributorContributionItem] = []
+
+
 class OwnerInfoResponse(BaseModel):
     owner_id: str
     display_name: str
@@ -321,6 +335,131 @@ def _last_edit_time(editor_id: str, owner_id: str) -> Optional[datetime]:
         return None
 
 
+def _get_contributions(editor_id: str, owner_id: str) -> ContributorContributions:
+    """Return all records created by a contributor in the owner's tree."""
+    try:
+        from database.db import get_db as _get_db
+        from database.models import Event, Family, Individual, IndividualName, Media
+
+        db_gen = _get_db(owner_id)
+        tree_db = next(db_gen)
+        try:
+            individuals = tree_db.query(Individual).filter(Individual.created_by == editor_id).all()
+            ind_items = []
+            for ind in individuals:
+                name_row = (
+                    tree_db.query(IndividualName)
+                    .filter(IndividualName.individual_id == ind.id)
+                    .order_by(IndividualName.name_order)
+                    .first()
+                )
+                if name_row:
+                    parts = [name_row.given_name, name_row.family_name]
+                    label = " ".join(p for p in parts if p).strip()
+                else:
+                    label = ""
+                ind_items.append(ContributorContributionItem(id=ind.id, label=label or f"Individual #{ind.id}"))
+
+            families = tree_db.query(Family).filter(Family.created_by == editor_id).all()
+            fam_items = [ContributorContributionItem(id=f.id, label=f"Family #{f.id}") for f in families]
+
+            events = tree_db.query(Event).filter(Event.created_by == editor_id).all()
+            ev_items = [
+                ContributorContributionItem(
+                    id=e.id,
+                    label=e.event_type_code,
+                    individual_id=e.individual_id,
+                    family_id=e.family_id,
+                )
+                for e in events
+            ]
+
+            media = tree_db.query(Media).filter(Media.created_by == editor_id).all()
+            media_items = [
+                ContributorContributionItem(
+                    id=m.id,
+                    label=m.media_type_code or "file",
+                    individual_id=m.individual_id,
+                    family_id=m.family_id,
+                )
+                for m in media
+            ]
+        finally:
+            try:
+                next(db_gen)
+            except StopIteration:
+                pass
+        return ContributorContributions(
+            individuals=ind_items, families=fam_items, events=ev_items, media=media_items
+        )
+    except Exception:
+        return ContributorContributions()
+
+
+def _delete_contributions(editor_id: str, owner_id: str) -> None:
+    """Delete all records created by a contributor from the owner's tree, including media files on disk."""
+    from pathlib import Path
+    from sqlalchemy import or_
+    from database.db import get_db as _get_db
+    from database.models import Event, Family, FamilyChild, FamilyMember, Individual, IndividualName, Media
+    from database.owner_info import OwnerInfo
+
+    owner_info = OwnerInfo(owner_id=owner_id, create_dirs=False)
+    db_gen = _get_db(owner_id)
+    tree_db = next(db_gen)
+    try:
+        ind_ids = [row[0] for row in tree_db.query(Individual.id).filter(Individual.created_by == editor_id).all()]
+        fam_ids = [row[0] for row in tree_db.query(Family.id).filter(Family.created_by == editor_id).all()]
+
+        # Collect all media files to delete from disk (contributor's own + any attached to their individuals/families)
+        media_filter_clauses = [Media.created_by == editor_id]
+        if ind_ids:
+            media_filter_clauses.append(Media.individual_id.in_(ind_ids))
+        if fam_ids:
+            media_filter_clauses.append(Media.family_id.in_(fam_ids))
+        for m in tree_db.query(Media).filter(or_(*media_filter_clauses)).all():
+            if m.file_path:
+                fp = Path(owner_info.media_dir) / m.file_path
+                try:
+                    fp.unlink(missing_ok=True)
+                except OSError:
+                    pass
+
+        # Delete events: contributor's own + those on contributor's individuals/families
+        event_filter_clauses = [Event.created_by == editor_id]
+        if ind_ids:
+            event_filter_clauses.append(Event.individual_id.in_(ind_ids))
+        if fam_ids:
+            event_filter_clauses.append(Event.family_id.in_(fam_ids))
+        tree_db.query(Event).filter(or_(*event_filter_clauses)).delete(synchronize_session=False)
+
+        # Delete media records (same scope as files above)
+        tree_db.query(Media).filter(or_(*media_filter_clauses)).delete(synchronize_session=False)
+
+        # Clean up contributor's individuals and their dependents
+        if ind_ids:
+            tree_db.query(IndividualName).filter(IndividualName.individual_id.in_(ind_ids)).delete(synchronize_session=False)
+            tree_db.query(FamilyMember).filter(FamilyMember.individual_id.in_(ind_ids)).delete(synchronize_session=False)
+            tree_db.query(FamilyChild).filter(FamilyChild.child_id.in_(ind_ids)).delete(synchronize_session=False)
+            tree_db.query(Individual).filter(Individual.id.in_(ind_ids)).delete(synchronize_session=False)
+
+        # Clean up contributor's families and their dependents
+        if fam_ids:
+            tree_db.query(FamilyMember).filter(FamilyMember.family_id.in_(fam_ids)).delete(synchronize_session=False)
+            tree_db.query(FamilyChild).filter(FamilyChild.family_id.in_(fam_ids)).delete(synchronize_session=False)
+            tree_db.query(Family).filter(Family.id.in_(fam_ids)).delete(synchronize_session=False)
+
+        tree_db.commit()
+    except Exception:
+        tree_db.rollback()
+        raise
+    finally:
+        try:
+            next(db_gen)
+        except StopIteration:
+            pass
+
+
 async def cleanup_inactive_contributors(owner_id: str, db: Session, base_url: str) -> None:
     """
     Called on every owner login.  Enforces two inactivity rules:
@@ -439,6 +578,22 @@ def list_contributors(
     return result
 
 
+@router.get("/contributors/{editor_id}/contributions", response_model=ContributorContributions)
+def get_contributor_contributions(
+    editor_id: str,
+    session: EditorSession = Depends(require_owner),
+    db: Session = Depends(get_system_db),
+):
+    """Return all records created by a contributor in the owner's tree."""
+    link_row = db.query(AuthEditorTree).filter(
+        AuthEditorTree.editor_id == editor_id,
+        AuthEditorTree.owner_id == session.owner_id,
+    ).first()
+    if not link_row:
+        raise HTTPException(status_code=404, detail="Contributor not found in your tree")
+    return _get_contributions(editor_id, session.owner_id)
+
+
 @router.post("/contributors/set-active", status_code=status.HTTP_204_NO_CONTENT)
 async def set_contributor_active(
     body: SetActiveRequest,
@@ -546,12 +701,14 @@ async def activate_contributor(
 @router.delete("/contributors/{editor_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_contributor(
     editor_id: str,
+    force: bool = False,
     session: EditorSession = Depends(require_owner),
     db: Session = Depends(get_system_db),
 ):
     """
-    Delete a contributor account. Only allowed if the contributor has made no contributions
-    (no Individuals, Events, or Media created by them in the owner's tree).
+    Delete a contributor account.
+    Without force=true, blocked if the contributor has any contributions.
+    With force=true, all their contributions (individuals, families, events, media) are deleted first.
     """
     link_row = db.query(AuthEditorTree).filter(
         AuthEditorTree.editor_id == editor_id,
@@ -565,10 +722,12 @@ async def delete_contributor(
         raise HTTPException(status_code=404, detail="Editor not found")
 
     if _has_contributions(editor_id, session.owner_id):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Cannot delete a contributor who has added data to the tree",
-        )
+        if not force:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Cannot delete a contributor who has added data to the tree",
+            )
+        _delete_contributions(editor_id, session.owner_id)
 
     email = editor.email
     display_name = editor.display_name

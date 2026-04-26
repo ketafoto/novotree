@@ -402,6 +402,9 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
                       {ev.description && (
                         <p className="text-sm text-gray-500 mt-1">{ev.description}</p>
                       )}
+                      {ev.created_by && (
+                        <p className="text-xs text-gray-400 mt-0.5">Added by {ev.created_by_display_name || ev.created_by}</p>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -498,6 +501,11 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
                         <span className="absolute bottom-1 left-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">
                           age {item.age_on_photo ?? '?'}
                         </span>
+                        {item.created_by && (
+                          <span className="absolute top-1 left-1 max-w-[calc(100%-0.5rem)] truncate bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded">
+                            Added by {item.created_by_display_name || item.created_by}
+                          </span>
+                        )}
                         {item.is_default && (
                           <Star className="absolute top-1 right-1 w-4 h-4 text-amber-400 fill-amber-400" />
                         )}

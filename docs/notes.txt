@@ -200,11 +200,11 @@ novotreee
 
 Bugs
 -----------------------------
+*.
+
 
 Missing functionality
 -----------------------------
-*. see no list of contributions, so can't remove their data and then remove the contributor.
-*. Rephrase "Owner? Create an account" -> "Wanna build your tree? Create account!"
 *. We probably need a separate "admin" page - to be accessible by admin (me) only - or better to use CLI ???
    On this page UI should:
    1. Manage users - both contributors and owners (invite, add, delete)
@@ -215,13 +215,38 @@ Missing functionality
 
 Go private
 -----------------------------
-*. ability to remove owner (kind of unregister) - delete it's data - this is by user and this is by admin.
+*. Should I enforce UTF8 - no cyrillic etc?
+*. admin page / ability to remove owner (kind of unregister) - delete it's data - this is by user and this is by admin.
 *. send emails for error in logs
 *. Check if Tree could be adjusted for viewing on mobile
+
 
 Go public
 -----------------------------
 *. Legals
+    1. For private use solely, do I need explicit permission of every person to:
+    1.1. put his photos into tree?
+    1.2. show the tree and info (events) to other family members? To friends? To public?
+    2. Contributions - is it legal
+    2.1. To contribute events and photos of other people without their explicit permission
+    2.2. For owner to show the tree with contributions to other family members? To friends? To public?
+    3. For usage by friends only, when owner if friend:
+    3.1. Same questions as in 1-2
+    4. For public service - anyone can become owner, the service with no payment, but with donation button.
+    4.1 Same questions as in 1-2.
+    5. What other legal issues can arise in case of:
+    5.1 Private usage
+    5.2 Opening system for friends only
+    5.3 Opening system for public as free of charge service, with donation button
+
+    Most probable I do have problems with legals, please propose the way to overcome them.
+    Like, asking consent during signup, or on first opening "share link"?
+    Or even turning SPA to keep database locally on user machine, and not on my server.
+    I really would like to propose this service to public. It will be sad to invest so big effor and money
+    to make the system perfect and nobody will see it :)
+
+*. Donate button!!!
+
 *. Make the private version - keep database on local host - enable to export/import to/from server on demand
 
 
