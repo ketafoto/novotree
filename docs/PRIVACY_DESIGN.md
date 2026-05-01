@@ -50,14 +50,54 @@ Tier 1 + Tier 2 below get Mode A defensible. Tier 3 unlocks Mode B.
 | Takedown SLA | 30 days. |
 | Backup retention | 30 days. |
 
-### Required action before Tier 1 work begins
+### Glossary — acronyms used in this document
 
-- [ ] Pay for one hour of legal review with a lawyer in the operating
-      jurisdiction. Use the open questions in
-      [PRIVACY_HANDLING.md §10](PRIVACY_HANDLING.md#10-open-questions-for-legal-review)
-      as the agenda. Item-by-item resolution feeds the texts and SLAs below.
+| Acronym | Expansion | Plain meaning here |
+|---------|-----------|--------------------|
+| **CCPA** | California Consumer Privacy Act | US state privacy law (California). Lighter than GDPR; covered by a GDPR-style privacy policy. |
+| **CJEU** | Court of Justice of the European Union | EU's highest court. Cited for *Lindqvist* (C-101/01), which ruled that posting personal data on a webpage is processing, breaking the household exemption. |
+| **CNIL** | Commission Nationale de l'Informatique et des Libertés | France's data-protection regulator. |
+| **COPPA** | Children's Online Privacy Protection Act | US federal law on under-13 data. Our `child_age_threshold_years = 16` covers it. |
+| **CYA** | Cover Your Ass | Defensive practice — a logged record that you took due care, useful if someone later complains. |
+| **DPA** | Data Processing Agreement | Contract between controller and processor (e.g. NovoTree ↔ Hetzner) defining how the processor handles personal data. |
+| **DPF** | EU-US Data Privacy Framework (July 2023) | Lets certified US companies (e.g. Cloudflare) receive EU personal data legally. |
+| **DPO** | Data Protection Officer (GDPR Art. 37) | A formally-designated privacy contact. Mandatory only at large scale; we don't qualify. |
+| **EEA** | European Economic Area | EU + Iceland, Liechtenstein, Norway. Data flowing inside the EEA is unrestricted. |
+| **ePrivacy** | EU Directive 2002/58 (the "Cookie Law") | Governs cookies and client-side storage independently of GDPR. Art. 5(3) exempts strictly-necessary storage. |
+| **GA / GA4** | Google Analytics (4) | Google's web analytics product. Removed from this project. |
+| **GDPR** | General Data Protection Regulation (EU 2016/679) | EU privacy law. Applies to any EU/UK data subject regardless of where the service is hosted. |
+| **ICO** | Information Commissioner's Office | UK's data-protection regulator. |
+| **PII** | Personally Identifiable Information | Any data that can identify a living person (names, emails, photos, etc.). |
+| **SaaS** | Software as a Service | Hosted product accessed over the network. NovoTree's public mode is a SaaS. |
+| **SCC** | Standard Contractual Clauses | EU-approved contract template for transferring personal data outside the EEA. |
+| **SLA** | Service Level Agreement | A promised response time (e.g. takedown SLA = 30 days). |
+| **SMTP** | Simple Mail Transfer Protocol | Email-sending backend. Required for verification, takedown, contributor invites. |
+| **ToS** | Terms of Service | The contract the Owner accepts at signup. |
+
+The config block in §6 has its own inline glossary for the acronyms it uses; this section covers the body of the document.
 
 ---
+### When to involve a lawyer
+
+**Not blocking for Tier 1 or Tier 2.** Mode A is a hobby deployment with one
+controller (the operator), no monetization, no analytics, no public signups,
+and a documented takedown flow. The conservative defaults in §6 pick the
+strictest EU thresholds, so the configuration is compliant in every jurisdiction
+it might touch. A regulator complaint against a one-person hobby tree that
+responds to takedowns within 30 days is realistically near-zero risk.
+
+**Required before Tier 3 (Mode B / public launch).** Once any of the following
+becomes true, schedule a paid review:
+
+- Public owner or contributor signups are enabled (`allow_owner_signup` /
+  `allow_contributor_signup = True`).
+- A donate button or any payment integration is added.
+- Analytics with non-essential cookies are introduced (`analytics_enabled = True`).
+- Sensitive data is intentionally exposed via share tokens.
+
+The agenda for that review is fixed: the seven open questions in
+[PRIVACY_HANDLING.md §10](PRIVACY_HANDLING.md#10-open-questions-for-legal-review).
+See §4.1 — it is the first and gating item in Tier 3.
 
 ## 2. Tier 1 — Now (Mode A hardening)
 
@@ -98,34 +138,22 @@ Single highest risk-reduction action. Even in Mode A.
 - [ ] Public takedown form page at `/privacy/takedown`
       ([frontend/src/pages/legal/](../frontend/src/pages/legal/)).
 
-### 2.3 Owner self-unregister + cascade delete (notes.txt L220 + erasure log)
+### 2.3 Privacy policy page + footer link (Phase 0.2-0.3 partial)
 
-Aligns the right-of-erasure mechanism for the Owner themselves with the
-takedown infrastructure.
+In Mode A the Owner is the operator — accepting one's own ToS is moot, and the
+cookie notice banner is unnecessary (auth cookies are seen only by the operator;
+viewers carry a strictly-necessary share token in `sessionStorage` covered by
+ePrivacy 5(3) and addressed by the viewer notice in §2.5). What is needed in
+Tier 1 is a privacy policy page that the takedown form can link to, and a footer
+that exposes both.
 
-- [ ] New table `erasure_log` (timestamp, owner_id, scope = `owner` /
-      `individual` / `media`, target_id, requester_kind = `owner` / `subject`,
-      ticket_id nullable). Used by takedown and self-unregister.
-- [ ] `DELETE /users/me` in [backend/api/users.py](../backend/api/users.py) —
-      cascades: revoke all share tokens, delete contributors, drop owner's
-      `data.sqlite` and media folder, write erasure_log row, clear cookies.
-- [ ] Frontend "Delete my account and all my data" button on Settings →
-      Profile, with type-the-word-DELETE confirmation.
-- [ ] Admin equivalent endpoint for forced removal.
+- [ ] Backend serves markdown for `/legal/privacy` (read from
+      `docs/legal/privacy.md`, versioned via `privacy_policy_version`).
+- [ ] Frontend renders it under `frontend/src/pages/legal/PrivacyPage.tsx`.
+- [ ] Footer link on every page: Privacy · Privacy/remove me.
+- [ ] (Cookies and ToS pages are deferred to Tier 3 — see §4.3.)
 
-### 2.4 Privacy + ToS pages, footer link, cookie notice (Phase 0.2-0.4 + M-12)
-
-- [ ] Backend serves markdown legal pages from `/legal/privacy`, `/legal/tos`,
-      `/legal/cookies` (read from `docs/legal/*.md`, versioned via the config).
-- [ ] Frontend renders them under `frontend/src/pages/legal/`.
-- [ ] Footer link on every page: Privacy · Terms · Cookies · Privacy/remove me.
-- [ ] Cookie notice banner — dismissible, persisted in `localStorage`. Single
-      "Got it" button (no Accept/Reject — only strictly-necessary cookies are
-      set). Text from
-      [PRIVACY_HANDLING.md §9.6](PRIVACY_HANDLING.md#96-cookie-notice-banner-first-visit).
-      Component: [frontend/src/components/CookieNotice.tsx](../frontend/src/components/CookieNotice.tsx) (new).
-
-### 2.5 Viewer notice on first share-link load (M-16)
+### 2.4 Viewer notice on first share-link load (M-16)
 
 - [ ] First load of `?share=<token>` shows a small notice with text from
       [PRIVACY_HANDLING.md §9.3](PRIVACY_HANDLING.md#93-viewer-notice-shown-on-first-share-link-load).
@@ -134,9 +162,11 @@ takedown infrastructure.
 - [ ] Component: `ViewerNotice.tsx`. Hook into
       [frontend/src/contexts/AuthContext.tsx](../frontend/src/contexts/AuthContext.tsx).
 
-### 2.6 Per-share acknowledgement (M-03)
+### 2.5 Per-share acknowledgement (M-03)
 
-CYA when relatives forward the link.
+A defensive log of "I, the Owner, confirmed I had the right to share this tree"
+each time a share link is created or extended. Useful evidence if a relative
+forwards the link further than intended and someone later complains.
 
 - [ ] New table `auth_share_consents`: `id`, `editor_id`, `tree_owner_id`,
       `share_token_id`, `accepted_at`, `accepted_ip`, `tos_version`.
@@ -144,31 +174,22 @@ CYA when relatives forward the link.
       Text from [PRIVACY_HANDLING.md §9.4](PRIVACY_HANDLING.md#94-per-share-acknowledgement-shown-when-creating-or-extending-a-share-link).
 - [ ] Persist consent on submit. Do not let share tokens be created without it.
 
-### 2.7 Audit trail completeness (M-11, Phase 2)
-
-Required to answer "who added this about me?" queries — even with contributors
-disabled, the Owner adds data over time.
-
-- [ ] Add `updated_by`, `updated_at` columns to `Individual`,
-      `IndividualName`, `Family`, `FamilyMember`, `FamilyChild`, `Event`,
-      `Media` in [database/models.py](../database/models.py) and
-      [database/schema.sql](../database/schema.sql).
-- [ ] Lazy migration on `get_engine()` to add columns to existing
-      `data.sqlite` files ([database/db.py](../database/db.py)).
-- [ ] Stamp them in every UPDATE path:
-      [backend/api/individuals.py](../backend/api/individuals.py),
-      [backend/api/families.py](../backend/api/families.py),
-      [backend/api/events.py](../backend/api/events.py),
-      [backend/api/media.py](../backend/api/media.py).
-- [ ] **Verify GEDCOM importer stamps `created_by = owner_id` on every
-      imported row** (largest single PII inflow vector).
-- [ ] "History" tab on Individual page showing creator + last editor.
-
-### 2.8 Right-of-access export per Individual (M-09, Phase 7)
+### 2.6 Right-of-access export per Individual (M-09, Phase 7)
 
 - [ ] Endpoint `GET /individuals/{id}/data-export` returning JSON of every
-      field, event, media reference, contributor attribution. Owner-only.
+      field, event, media reference, and contributor attribution (`created_by` /
+      `created_at`). Owner-only.
 - [ ] "Export this person's data" button on Individual page.
+
+### Notes on what is NOT in Tier 1 (and why)
+
+| Item | Why deferred | Goes to |
+|---|---|---|
+| Owner self-unregister | In Mode A, owner = operator; deletion is a directory drop on the VM. | Tier 3 §4.2 |
+| ToS pages + acceptance | Operator accepts no terms from themselves; meaningful only with multiple owners. | Tier 3 §4.3 |
+| Cookie notice banner | Mode A has no non-essential cookies and no third-party owners to notify. | Tier 3 §4.3 |
+| `updated_by` / `updated_at` audit columns | With single Owner, `created_by` (already stamped on every row) answers "who added this?" — always the Owner. Multi-editor audit is Mode B. | Tier 3 §4.5 |
+| "History" tab on Individual page | Same reason — uniform attribution in Mode A. | Tier 3 §4.5 |
 
 ---
 
@@ -204,12 +225,30 @@ hygiene.
 - [ ] Email errors from logs + backup logs to admin. Operational, not strictly
       privacy work, but pairs with log scrubbing.
 
-### 3.5 Admin page or CLI (notes.txt L208–213)
+### 3.5 Admin CLI (notes.txt L208–213)
 
-- [ ] CLI is sufficient to start. User management + manual backup trigger +
-      takedown ticket triage.
+A "ticket" here means a row in the `takedown_requests` table created by §2.2.
+It is not a separate ticket-tracker product. "Triage" means the operator
+reviewing rows where `status='open'` and choosing the next action (forward to
+Owner / mark resolved / escalate / hide records).
 
-### 3.6 Special-category gating (M-05, Phase 6.1–6.2)
+- [ ] CLI is sufficient to start (no separate admin web page yet).
+      Commands: list owners, manual backup trigger, list and resolve open
+      `takedown_requests` rows, force-delete an Individual on Owner's behalf
+      after the SLA expires.
+
+### 3.6 Verify GEDCOM importer stamps `created_by`
+
+Light future-proofing for Mode B: if the importer leaves rows with
+`created_by IS NULL`, switching to Mode B later loses the historical
+attribution to the Owner.
+
+- [ ] One-time verification in [database/gedcom_import.py](../database/gedcom_import.py) —
+      every imported `Individual`, `Family`, `Event`, `Media`, `IndividualName`
+      row sets `created_by = owner_id` and `created_at = now`. Add a regression
+      test if missing.
+
+### 3.7 Special-category gating (M-05, Phase 6.1–6.2)
 
 Defer if the current tree has none; do before going public.
 
@@ -219,7 +258,7 @@ Defer if the current tree has none; do before going public.
 - [ ] Per-share-token flag `expose_sensitive` (default False) — sensitive
       fields excluded from viewer payload unless explicitly enabled.
 
-### 3.7 Children data handling (M-06, Phase 6.3)
+### 3.8 Children data handling (M-06, Phase 6.3)
 
 Defer if no minors in the tree; do before going public.
 
@@ -234,7 +273,49 @@ Defer if no minors in the tree; do before going public.
 
 ## 4. Tier 3 — Before going public (Mode B)
 
-### 4.1 Local-first / desktop app (Phase 9, M-08)
+> **Everything in Tier 3 is conditional on completing §4.1 first.** Do not
+> start any code in §4.2–§4.8 before the lawyer consultation. The whole point
+> of §4.1 is to decide whether Mode B is workable in your jurisdiction with
+> acceptable obligations — if the answer is "no, not at this scale," all of
+> the development effort below is wasted.
+
+### 4.1 **Lawyer review — GATING. Do this first.**
+
+This is a **go / no-go decision point**, not a wrap-up step. Schedule a paid
+consultation with a privacy/data-protection specialist before writing any
+Mode-B-specific code. The objective is to walk away with answers to all seven
+open questions in
+[PRIVACY_HANDLING.md §10](PRIVACY_HANDLING.md#10-open-questions-for-legal-review),
+and a clear sense of whether the obligations match what you can sustain.
+
+**Stop here if the answers make Mode B impractical** (e.g. DPO required at
+your scale, joint-controller framing forces you to vet every Owner manually,
+local jurisdiction adds requirements you cannot meet). It is far cheaper to
+pay one hour of legal time and decide *not* to build than to ship and
+discover the obligations afterwards.
+
+- [ ] Schedule paid consultation (1–2 hours, privacy/SaaS specialist).
+      See guidance on finding one in §1 → "When to involve a lawyer".
+- [ ] Bring the §10 list as the agenda. Document each answer here:
+
+  | # | Question | Answer (fill after consultation) |
+  |---|----------|----------------------------------|
+  | 1 | Household exemption defensibility for friends-only mode | |
+  | 2 | Owner-as-controller vs joint controllers | |
+  | 3 | Takedown SLA exact days | |
+  | 4 | Children's age threshold | |
+  | 5 | DPO required at our scale? | |
+  | 6 | International transfer mechanism | |
+  | 7 | Cookie notice + button design acceptable to regulators? | |
+
+- [ ] **Go / no-go decision recorded here:**
+      ☐ GO — proceed with §4.2–§4.8.
+      ☐ NO-GO — keep NovoTree in Mode A indefinitely; close out Tier 3.
+- [ ] After §4.2–§4.8 development is complete, schedule a short second
+      session (~30 min) to review the final ToS, privacy policy, and cookie
+      banner texts before launch.
+
+### 4.2 Local-first / desktop app (Phase 9, M-08)
 
 **Single biggest privacy posture upgrade for the SaaS path.** Already on the
 roadmap (notes.txt L251).
@@ -245,37 +326,81 @@ roadmap (notes.txt L251).
 - [ ] EULA text reflecting the household-exemption posture (no controller
       duties for NovoTree in this mode — software-vendor only).
 
-### 4.2 Full Owner ToS at signup (Phase 1, M-01)
+### 4.3 Owner self-unregister + cascade delete (notes.txt L220 + erasure log)
+
+Right-of-erasure for an Owner who is no longer the operator. Mode-B-only:
+in Mode A the operator deletes the directory by hand. Reuses the takedown
+infrastructure from §2.2 for the cascade machinery.
+
+- [ ] New table `erasure_log` (timestamp, owner_id, scope = `owner` /
+      `individual` / `media`, target_id, requester_kind = `owner` / `subject`,
+      takedown_request_id nullable). Used by takedown and self-unregister.
+- [ ] `DELETE /users/me` in [backend/api/users.py](../backend/api/users.py) —
+      cascades: revoke all share tokens, delete contributors, drop owner's
+      `data.sqlite` and media folder, write erasure_log row, clear cookies.
+- [ ] Frontend "Delete my account and all my data" button on Settings →
+      Profile, with type-the-word-DELETE confirmation.
+- [ ] Admin equivalent endpoint for forced removal (used by §2.2 escalation).
+
+### 4.4 Full Owner ToS at signup + cookie notice banner (Phase 1, M-01, M-12)
 
 - [ ] Add `tos_accepted_at`, `tos_version` columns to `auth_editors`.
 - [ ] Required signup checkbox + backend rejection if absent.
 - [ ] Re-acceptance prompt on login when `tos_version` increases.
+- [ ] Backend serves `/legal/tos` and `/legal/cookies` markdown pages
+      (Privacy already shipped in Tier 1 §2.3).
+- [ ] Footer link expanded: Privacy · Terms · Cookies · Privacy/remove me.
+- [ ] Cookie notice banner — dismissible, persisted in `localStorage`, single
+      "Got it" button. Text from
+      [PRIVACY_HANDLING.md §9.6](PRIVACY_HANDLING.md#96-cookie-notice-banner-first-visit).
+      Component: [frontend/src/components/CookieNotice.tsx](../frontend/src/components/CookieNotice.tsx) (new).
 - [ ] Flip `PrivacySettings.allow_owner_signup = True`.
 
-### 4.3 Contributor acknowledgement (Phase 5.1, M-15)
+> If `analytics_enabled` is later flipped to True (e.g. switching from
+> Cloudflare Web Analytics to GA4 or any other tool that sets non-essential
+> cookies), the banner here must be replaced with a real Accept/Reject consent
+> dialog, and the analytics script gated until Accept is clicked.
+
+### 4.5 Contributor acknowledgement (Phase 5.1, M-15)
 
 - [ ] First-edit modal with text from
       [PRIVACY_HANDLING.md §9.2](PRIVACY_HANDLING.md#92-contributor-acknowledgement-shown-before-first-edit).
 - [ ] Persist accepted (editor_id, tree_owner_id, accepted_at).
 - [ ] Flip `PrivacySettings.allow_contributor_signup = True`.
 
-### 4.4 Hosting and DPA (M-13)
+### 4.6 Audit trail completeness (M-11, Phase 2)
+
+Required only when multiple editors can touch the same tree. With a single
+Owner the existing `created_by` columns answer "who added this?" uniformly.
+This work makes "who edited this last?" answerable, which is meaningful only
+in Mode B.
+
+- [ ] Add `updated_by`, `updated_at` columns to `Individual`,
+      `IndividualName`, `Family`, `FamilyMember`, `FamilyChild`, `Event`,
+      `Media` in [database/models.py](../database/models.py) and
+      [database/schema.sql](../database/schema.sql).
+- [ ] Lazy migration on `get_engine()` to add columns to existing
+      `data.sqlite` files ([database/db.py](../database/db.py)).
+- [ ] Stamp them in every UPDATE path:
+      [backend/api/individuals.py](../backend/api/individuals.py),
+      [backend/api/families.py](../backend/api/families.py),
+      [backend/api/events.py](../backend/api/events.py),
+      [backend/api/media.py](../backend/api/media.py).
+- [ ] "History" tab on Individual page showing creator + last editor.
+- [ ] Right-of-access export from §2.6 includes both `created_by` /
+      `created_at` and `updated_by` / `updated_at` once these columns exist.
+
+### 4.7 Hosting and DPA (M-13)
 
 - [ ] Confirm Hetzner region is EEA (Falkenstein or Helsinki).
 - [ ] Sign Hetzner DPA (online, free).
 - [ ] Sign Cloudflare DPA via dashboard.
 - [ ] List both as sub-processors in the privacy policy.
 
-### 4.5 Donate button (notes.txt L249)
+### 4.8 Donate button (notes.txt L249)
 
 - [ ] Pick provider (Stripe / PayPal). Note: payment provider becomes another
       sub-processor; document in privacy policy.
-
-### 4.6 Lawyer review (close PRIVACY_HANDLING.md §10 open questions)
-
-- [ ] Schedule paid review session.
-- [ ] Update relevant texts (ToS, privacy policy, cookie banner) per advice.
-- [ ] Resolve all 7 open questions with documented answers in this file.
 
 ---
 
