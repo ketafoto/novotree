@@ -53,7 +53,7 @@ project_root/
 |--------|------|-------|
 | `editor_id` | TEXT PK | Chosen username (login name) |
 | `display_name` | TEXT | Human-readable name |
-| `email` | TEXT | Optional; used for SMTP invites |
+| `email` | TEXT | Optional at the column level. **Mandatory in practice** for any flow that uses email verification (owner self-signup, contributor self-signup, password reset). May be NULL only for accounts created via admin paths or the `NOVOTREE_APP_MODE=admin` dev bypass. |
 | `role` | TEXT | `'owner'` or `'contributor'` |
 | `owner_id` | TEXT | For owners: equals `editor_id`. For contributors: NULL (trees via `auth_editor_trees`). |
 | `password_hash` | TEXT | bcrypt hash; NULL until set-password flow completes |
@@ -67,8 +67,19 @@ project_root/
 |--------|------|-------|
 | `editor_id` | TEXT | FK → auth_editors.editor_id |
 | `owner_id` | TEXT | Which tree they can access |
+| `is_active` | BOOL | Per-tree freeze/unfreeze flag. Independent of `auth_editors.is_active` (which is the global account flag). |
 
 UNIQUE on (`editor_id`, `owner_id`). A contributor can have access to multiple trees.
+
+**Two-flag state model.** The pair (`auth_editors.is_active`, `auth_editor_trees.is_active`) encodes the contributor lifecycle:
+
+| State | `auth_editors.is_active` | `auth_editor_trees.is_active` | Meaning |
+|-------|--------------------------|-------------------------------|---------|
+| PENDING | False | False | Email verified; awaiting owner approval. Login → 403 "awaiting approval". |
+| ACTIVE | True | True | Approved and able to log in to the tree. |
+| FROZEN | True | False (for this tree) | Owner suspended access to this tree; account itself is alive (may have other trees). Login → 403 "suspended". |
+
+The full lifecycle, transitions, and per-transition email notifications are documented in [CONTRIBUTOR_FEATURE.md](CONTRIBUTOR_FEATURE.md).
 
 #### `auth_share_tokens` — viewer share links
 

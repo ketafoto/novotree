@@ -1,268 +1,83 @@
-# Novotree — Production Deployment Guide
+# NovoTree — Deployment
 
-Target: single Hetzner VPS (Ubuntu 22.04 / 24.04), systemd + Caddy.
+NovoTree is deployed as part of the **NovoSpace** stack on a single Hetzner VM
+behind Cloudflare. The end-to-end provisioning, Caddy configuration, systemd
+service, environment file, backup cron, Cloudflare networking, and analytics
+setup all live in one place:
 
----
+> **Production deployment guide:**
+> [`novospace.git/docs/deployment.md`](../../novospace.git/docs/deployment.md)
 
-## Table of Contents
-
-1. [Server user](#1-server-user)
-2. [Directory layout](#2-directory-layout)
-3. [Environment file](#3-environment-file)
-4. [Build the frontend](#4-build-the-frontend)
-5. [systemd service](#5-systemd-service)
-6. [TLS with Caddy + Let's Encrypt](#6-tls-with-caddy--lets-encrypt)
-7. [First-run owner signup](#7-first-run-owner-signup)
-8. [SSH hardening](#8-ssh-hardening)
-9. [Keeping the app up to date](#9-keeping-the-app-up-to-date)
-10. [SQLite backups](#10-sqlite-backups)
+This file covers only what is **NovoTree-specific** and worth keeping close to
+the application code: the post-deploy smoke test and pointers to the
+auth/contributor/privacy design docs.
 
 ---
 
-## 1. Server user
+## App mode variables (quick reference)
 
-Run the app as a dedicated low-privilege account with no login shell:
+NovoTree reads two app-mode variables. Both default to `admin` if unset.
+**Both must be a non-`admin` value in production** — if either is left as
+`admin`, that layer bypasses authentication.
 
-```bash
-sudo useradd \
-  --system \
-  --no-create-home \
-  --shell /sbin/nologin \
-  --comment "Novotree app" \
-  novotree
-```
-
-All application files are owned by `root` (read-only to the app) except the
-`datasets/` directory, which is owned by `novotree` so it can write SQLite files.
-
----
-
-## 2. Directory layout
-
-```
-/opt/novotree/
-  backend/          ← Python source (owned root:root, 755)
-  database/
-  datasets/         ← owned novotree:novotree, 700
-  frontend/dist/    ← built static files served by Caddy
-  venv/             ← Python virtualenv (owned root:root)
-  .env              ← secrets file (owned root:novotree, 640)
-```
-
-```bash
-# Clone / copy code
-sudo mkdir -p /opt/novotree
-sudo git clone https://github.com/yourorg/novotree.git /opt/novotree
-# OR rsync from workstation:
-# rsync -av --exclude node_modules --exclude venv-win --exclude venv-linux \
-#   . hetzner:/opt/novotree/
-
-# Fix ownership
-sudo chown -R root:root /opt/novotree
-sudo chown -R novotree:novotree /opt/novotree/datasets
-sudo chmod 700 /opt/novotree/datasets
-
-# Python virtualenv
-sudo python3 -m venv /opt/novotree/venv
-sudo /opt/novotree/venv/bin/pip install -r /opt/novotree/requirements.txt
-```
-
----
-
-## 3. Environment file
-
-Generate a strong JWT secret before creating the file:
-
-```bash
-python3 -c "import secrets; print(secrets.token_hex(32))"
-```
-
-Create `/opt/novotree/.env` (mode 640, owner root:novotree):
-
-```bash
-sudo install -m 640 -o root -g novotree /dev/null /opt/novotree/.env
-sudo nano /opt/novotree/.env
-```
-
-Minimum required content (full template in `backend/.env.public.example`):
-
-```ini
-NOVOTREE_APP_MODE=public
-CORS_ORIGINS=https://tree.example.com
-ENABLE_API_DOCS=false
-JWT_SECRET_KEY=<64-hex-char string from command above>
-JWT_EXPIRY_HOURS=8
-JWT_REFRESH_DAYS=14
-# SMTP — optional; omit to show set-password links in the UI instead
-# SMTP_HOST=smtp.example.com
-# SMTP_PORT=587
-# SMTP_USER=novotree@example.com
-# SMTP_PASSWORD=secret
-# SMTP_FROM=Novotree <novotree@example.com>
-```
-
-### App mode variables
-
-Novotree uses two independent app-mode variables — one for each process involved in serving the app:
-
-| Variable | Who reads it | When | Effect of `admin` (default) |
+| Variable | Read by | When | Effect of `admin` |
 |---|---|---|---|
-| `NOVOTREE_APP_MODE` | **Python backend** (FastAPI/uvicorn) | At runtime, from the systemd env file | All API endpoints skip JWT validation; every request is auto-authenticated as the default owner (`aktiniya`). No credentials needed. |
-| `VITE_NOVOTREE_APP_MODE` | **Vite** (frontend build tool) | At build time, during `npm run build` | The login screen is omitted from the compiled React app. The value is baked into the JS bundle as a string literal — it cannot be changed after the build without rebuilding. |
+| `NOVOTREE_APP_MODE` | Python backend (FastAPI) | At runtime | All API endpoints skip JWT validation; every request is auto-authenticated as the default owner. |
+| `VITE_NOVOTREE_APP_MODE` | Vite | At build time (`npm run build`) | The login screen is omitted from the compiled React app. The value is baked into the JS bundle. |
 
-Both default to `admin` if unset. **Both must be set to a non-`admin` value in production.** If either is left as `admin`, that layer bypasses authentication regardless of what the other is set to.
+Full env-var reference, generation of `JWT_SECRET_KEY`, and SMTP optionality
+are covered in [novospace.git/docs/deployment.md → Environment file](../../novospace.git/docs/deployment.md#environment-file-etcnovotreeenv).
 
-For JWT settings see [docs/AUTH_SCHEMA_PROPOSAL.md](docs/AUTH_SCHEMA_PROPOSAL.md).
-
----
-
-## 4. Build the frontend
-
-```bash
-cd /opt/novotree/frontend
-sudo npm ci
-VITE_NOVOTREE_APP_MODE=public npm run build   # output → frontend/dist/
-```
+For the JWT cookie strategy, password policy, and signup flows see
+[AUTH_SCHEMA_PROPOSAL.md](AUTH_SCHEMA_PROPOSAL.md).
 
 ---
 
-## 5. systemd service
+## Post-deploy smoke test
 
-Create `/etc/systemd/system/novotree.service`:
+Once `novospace` is provisioned and `novotree.service` is running, verify the
+app behaves correctly before sharing the URL.
 
-```ini
-[Unit]
-Description=Novotree genealogy backend
-After=network.target
+### Owner / contributor flow
 
-[Service]
-Type=simple
-User=novotree
-Group=novotree
-WorkingDirectory=/opt/novotree
-EnvironmentFile=/opt/novotree/.env
-ExecStart=/opt/novotree/venv/bin/uvicorn backend.main:app \
-    --host 127.0.0.1 \
-    --port 8000 \
-    --workers 1
-Restart=on-failure
-RestartSec=5
+1. Open `https://novospace.cz/novotree/signup` and create the first owner
+   account. Confirm the verification email arrives and the link resolves to a
+   logged-in dashboard.
+2. Add one Individual record. Confirm `created_by` is the owner's `editor_id`.
+3. Log out. Log back in. Confirm the JWT cookies are reset and `/auth/me`
+   returns the owner identity.
+4. Create a share token in Settings. Open it in a private window.
 
-# Hardening
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=strict
-ReadWritePaths=/opt/novotree/datasets
+### Viewer flow (share token)
 
-[Install]
-WantedBy=multi-user.target
-```
+1. With `?share=<token>` in the URL, open `/tree`. Confirm the graph renders.
+2. Click an Individual node. Confirm the focused tree view opens.
+3. Try `POST /api/individuals` with the share token in `sessionStorage`.
+   Confirm the API rejects with HTTP 403 (write methods are blocked for
+   share-token sessions).
+4. Open `/api/individuals` without any auth. Confirm HTTP 401.
+
+### Backend baseline
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now novotree
-sudo systemctl status novotree
+# VM, as igorn
+curl -s https://novospace.cz/api/health        # → 200, {"status": "ok"} or similar
+sudo systemctl status novotree                 # → active (running)
+sudo journalctl -u novotree -n 50              # no startup errors
 ```
+
+If any of the above fails, see
+[novospace.git/docs/deployment.md → Debugging](../../novospace.git/docs/deployment.md#debugging).
 
 ---
 
-## 6. TLS with Caddy + Let's Encrypt
+## Related design documents
 
-Caddy obtains and renews certificates automatically.
-
-```bash
-sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
-    | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
-    | sudo tee /etc/apt/sources.list.d/caddy-stable.list
-sudo apt update && sudo apt install caddy
-```
-
-Create `/etc/caddy/Caddyfile`:
-
-```caddy
-tree.example.com {
-    # Serve built frontend
-    root * /opt/novotree/frontend/dist
-    file_server
-
-    # Proxy API and auth to FastAPI
-    handle /api/* {
-        reverse_proxy 127.0.0.1:8000
-    }
-
-    # SPA fallback — let React Router handle client-side routes
-    handle {
-        try_files {path} /index.html
-        file_server
-    }
-
-    # Security headers
-    header {
-        Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
-        X-Content-Type-Options nosniff
-        X-Frame-Options DENY
-        Referrer-Policy strict-origin-when-cross-origin
-    }
-}
-```
-
-```bash
-sudo systemctl enable --now caddy
-sudo caddy reload --config /etc/caddy/Caddyfile
-```
-
----
-
-## 7. First-run owner signup
-
-Once the service is running, open `https://tree.example.com/signup` in a browser
-and create the first owner account. The username you choose becomes the `owner_id`
-and locates the dataset under `datasets/<owner_id>/`.
-
-If a dataset folder already exists (migrated from a previous deployment), signup
-reuses it safely — `CREATE TABLE IF NOT EXISTS` means no data is overwritten.
-
----
-
-## 8. SSH hardening
-
-```bash
-# Disable password auth — key-only login
-sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' \
-    /etc/ssh/sshd_config
-sudo systemctl reload ssh
-```
-
----
-
-## 9. Keeping the app up to date
-
-```bash
-cd /opt/novotree
-sudo git pull
-sudo /opt/novotree/venv/bin/pip install -r requirements.txt   # if changed
-cd frontend && sudo npm ci && sudo npm run build
-sudo systemctl restart novotree
-```
-
----
-
-## 10. SQLite backups
-
-The `datasets/` directory contains all genealogy and auth data. A simple nightly backup:
-
-```bash
-# /etc/cron.d/novotree-backup
-# Back up system auth database and all owner databases nightly at 03:00
-0 3 * * * novotree \
-  for db in /opt/novotree/datasets/system.sqlite \
-             /opt/novotree/datasets/*/data.sqlite; do \
-    sqlite3 "$db" ".backup ${db}.$(date +\%Y\%m\%d)"; \
-  done && \
-  find /opt/novotree/datasets -name '*.sqlite.*' -mtime +30 -delete
-```
-
-For off-server backups, include the entire `datasets/` in your preferred tool
-(restic, BorgBackup, etc.).
+| Topic | Document |
+|---|---|
+| Auth model (Owner / Contributor / Viewer), JWT, share tokens, signup flows | [AUTH_SCHEMA_PROPOSAL.md](AUTH_SCHEMA_PROPOSAL.md) |
+| Contributor permissions, lifecycle states, email notifications, auto-cleanup | [CONTRIBUTOR_FEATURE.md](CONTRIBUTOR_FEATURE.md) |
+| Privacy concerns and mitigations (GDPR/ePrivacy posture, takedown flow, etc.) | [PRIVACY_HANDLING.md](PRIVACY_HANDLING.md) |
+| Privacy implementation plan (tiered checklist, central config, status) | [PRIVACY_DESIGN.md](PRIVACY_DESIGN.md) |
+| Tree visualization design | [TREE_VISUALIZATION_DESIGN.md](TREE_VISUALIZATION_DESIGN.md) |
+| Frontend architecture | [FRONTEND_DESIGN.md](FRONTEND_DESIGN.md) |

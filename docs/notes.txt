@@ -216,9 +216,10 @@ Missing functionality
 Go private
 -----------------------------
 *. Should I enforce UTF8 - no cyrillic etc?
-*. admin page / ability to remove owner (kind of unregister) - delete it's data - this is by user and this is by admin.
-*. send emails for error in logs
 *. Check if Tree could be adjusted for viewing on mobile
+*. admin page / ability to remove owner (kind of unregister) - delete it's data - this is by user and this is by admin.
+*. send emails for error in logs + backup logs
+
 
 
 Go public
@@ -245,7 +246,7 @@ Go public
     I really would like to propose this service to public. It will be sad to invest so big effor and money
     to make the system perfect and nobody will see it :)
 
-*. Donate button!!!
+*. Donate button!
 
 *. Make the private version - keep database on local host - enable to export/import to/from server on demand
 

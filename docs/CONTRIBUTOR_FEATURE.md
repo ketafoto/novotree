@@ -3,6 +3,11 @@
 This document describes the contributor access model: who can do what to the tree data,
 how the contributor lifecycle is managed, and what emails are sent at each transition.
 
+The underlying auth schema (tables, columns, JWT cookie strategy, signup endpoints)
+is documented in [AUTH_SCHEMA_PROPOSAL.md](AUTH_SCHEMA_PROPOSAL.md). This document is
+the source of truth for the contributor *behavior* — the lifecycle states, the
+permission rules, and the email side-effects.
+
 ---
 
 ## 1. Roles
@@ -79,8 +84,11 @@ records first before deleting the contributor account.
 
 ## 4. Email Notifications
 
-All emails are sent only when `SMTP_ENABLED=true`. In dev mode (`APP_MODE=development`)
-emails are suppressed.
+All emails are sent only when SMTP is configured — i.e. when `SMTP_HOST` is set
+in the environment file (the backend exposes this as the derived
+`settings.smtp_enabled` property). In dev mode (`NOVOTREE_APP_MODE=admin`)
+SMTP is typically not configured and emails are suppressed; one-time set-password
+links are shown directly in the UI instead.
 
 ### 4.1 Manual transitions (triggered by owner action)
 
