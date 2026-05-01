@@ -23,15 +23,18 @@ export function ProtectedRoute({
 
   if (isLoading) return <LoadingPage />;
 
-  // Dev mode: always allow
-  if (isDevMode) return <>{children}</>;
-
-  // Viewer (share token) access
+  // Viewer (share token) access — checked BEFORE the dev-mode bypass so
+  // share-link viewers stay confined to viewer-allowed routes regardless of
+  // dev/auth-on/public mode. Without this ordering, a dev-mode viewer could
+  // navigate into editor-only routes via the bypass below.
   if (isViewer) {
     if (allowViewer || minRole === 'viewer') return <>{children}</>;
     // Viewers hitting protected routes go to tree (their allowed landing)
     return <Navigate to="/tree" replace />;
   }
+
+  // Dev mode: always allow (editors only — viewer case handled above)
+  if (isDevMode) return <>{children}</>;
 
   // Not authenticated at all
   if (!isAuthenticated) {

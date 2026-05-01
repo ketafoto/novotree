@@ -13,6 +13,11 @@ export default defineConfig({
   // deployment path. Defaults to '/' for local dev (npm run dev).
   base: process.env.VITE_BASE_PATH ?? '/',
   server: {
+    // Bind to 0.0.0.0 so the dev server is reachable from other devices on the
+    // LAN (e.g. a phone on the same Wi-Fi hitting http://<laptop-ip>:3000).
+    // Without this Vite listens on 127.0.0.1 only and the phone gets
+    // "connection refused". Used for mobile-layout testing on real devices.
+    host: true,
     port: 3000,
     proxy: {
       '/api': {

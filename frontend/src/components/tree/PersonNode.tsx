@@ -5,6 +5,7 @@ import { MaleSilhouette } from './MaleSilhouette';
 import { FemaleSilhouette } from './FemaleSilhouette';
 import { PersonTooltip } from './PersonTooltip';
 import { PhotoCarousel } from './PhotoCarousel';
+import { useIsMobileViewport } from '../../hooks/useIsMobileViewport';
 
 interface PersonNodeData extends TreeNode {
   isFocus: boolean;
@@ -24,21 +25,31 @@ export const PersonNode = memo(function PersonNode({
   const [showTooltip, setShowTooltip] = useState(false);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
   const [isHovering, setIsHovering] = useState(false);
+  const isMobileViewport = useIsMobileViewport();
 
-  const handleMouseEnter = useCallback((e: React.MouseEvent) => {
-    setTooltipPos({ x: e.clientX, y: e.clientY });
-    setShowTooltip(true);
-    setIsHovering(true);
-  }, []);
+  const handleMouseEnter = useCallback(
+    (e: React.MouseEvent) => {
+      if (isMobileViewport) return;
+      setTooltipPos({ x: e.clientX, y: e.clientY });
+      setShowTooltip(true);
+      setIsHovering(true);
+    },
+    [isMobileViewport],
+  );
 
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    setTooltipPos({ x: e.clientX, y: e.clientY });
-  }, []);
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      if (isMobileViewport) return;
+      setTooltipPos({ x: e.clientX, y: e.clientY });
+    },
+    [isMobileViewport],
+  );
 
   const handleMouseLeave = useCallback(() => {
+    if (isMobileViewport) return;
     setShowTooltip(false);
     setIsHovering(false);
-  }, []);
+  }, [isMobileViewport]);
 
   const formatYear = (
     exactDate?: string,

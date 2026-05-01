@@ -15,6 +15,7 @@ import '@xyflow/react/dist/style.css';
 import type { TreeData } from '../../types/models';
 import { computeTreeLayout } from '../../utils/treeLayout';
 import { PersonNode } from './PersonNode';
+import { useIsMobileViewport } from '../../hooks/useIsMobileViewport';
 
 interface TreeCanvasProps {
   data: TreeData;
@@ -43,6 +44,7 @@ function TreeCanvasInner({
   onPersonDoubleClick,
 }: TreeCanvasProps) {
   const { fitView } = useReactFlow();
+  const isMobileViewport = useIsMobileViewport();
   const layout = useMemo(() => computeTreeLayout(data), [data]);
   const nodesWithCarouselInterval = useMemo(
     () =>
@@ -110,11 +112,13 @@ function TreeCanvasInner({
         proOptions={{ hideAttribution: true }}
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1.1} color="#d6dcf5" />
-        <Controls
-          showInteractive={false}
-          position="bottom-left"
-          className="!shadow-sm !border-gray-200"
-        />
+        {!isMobileViewport && (
+          <Controls
+            showInteractive={false}
+            position="bottom-left"
+            className="!shadow-sm !border-gray-200"
+          />
+        )}
       </ReactFlow>
     </div>
   );

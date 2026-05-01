@@ -61,6 +61,17 @@ queryClient.setQueryDefaults(['types'], {
   gcTime: 24 * 60 * 60 * 1000,
 });
 
+/**
+ * Route adapter that renders IndividualDetailPage in read-only mode for
+ * share-link viewers and full-edit mode for authenticated editors. Hardcoding
+ * readOnly={false} on the route would let viewers see Delete / edit modals,
+ * even though the backend gates writes (in production).
+ */
+function IndividualDetailRoute() {
+  const { isViewer } = useAuth();
+  return <IndividualDetailPage readOnly={isViewer} />;
+}
+
 function PrefetchTypes() {
   const { isAuthenticated, isLoading } = useAuth();
   useEffect(() => {
@@ -111,7 +122,7 @@ function App() {
               path="/individuals/:id"
               element={
                 <ProtectedRoute allowViewer>
-                  <IndividualDetailPage readOnly={false} />
+                  <IndividualDetailRoute />
                 </ProtectedRoute>
               }
             />

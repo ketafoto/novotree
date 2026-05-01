@@ -192,35 +192,16 @@ Both - Front-back-end tests:
     (after venv activation - .\venv-win\Scripts\Activate.ps1  / source venv-linux/bin/activate)
     python ./tests/run_all_tests.py
 
-
 Next
 =======================
-novotreee
-----------------------
-
 Bugs
 -----------------------------
 *.
 
-
-Missing functionality
------------------------------
-*. We probably need a separate "admin" page - to be accessible by admin (me) only - or better to use CLI ???
-   On this page UI should:
-   1. Manage users - both contributors and owners (invite, add, delete)
-   2. Run manually backup script using the vm-backup.py script
-   (found either under ../novospace.git/scripts/deployment/vm-backup.py. or under deployment folder installed by 
-   ../novospace.git/scripts/deployment/vm-setup.py)
-
-
 Go private
 -----------------------------
-*. Should I enforce UTF8 - no cyrillic etc?
+*. legals for private usage
 *. Check if Tree could be adjusted for viewing on mobile
-*. admin page / ability to remove owner (kind of unregister) - delete it's data - this is by user and this is by admin.
-*. send emails for error in logs + backup logs
-
-
 
 Go public
 -----------------------------
@@ -246,9 +227,21 @@ Go public
     I really would like to propose this service to public. It will be sad to invest so big effor and money
     to make the system perfect and nobody will see it :)
 
-*. Donate button!
-
 *. Make the private version - keep database on local host - enable to export/import to/from server on demand
+
+*. Should I enforce UTF8 - no cyrillic etc?
+
+*. We probably need a separate "admin" page - to be accessible by admin (me) only - or better to use CLI ???
+   On this page UI should:
+   1. Manage users - both contributors and owners (invite, add, delete)
+   2. Run manually backup script using the vm-backup.py script
+   (found either under ../novospace.git/scripts/deployment/vm-backup.py. or under deployment folder installed by 
+   ../novospace.git/scripts/deployment/vm-setup.py)
+*. admin page / ability to remove owner (kind of unregister) - delete it's data - this is by user and this is by admin.
+
+*. send emails for error in logs + backup logs
+
+*. Donate button!
 
 
 Next Phase

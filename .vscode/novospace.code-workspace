@@ -1,0 +1,14 @@
+{
+  "folders": [
+    { "path": "../../novospace.git", "name": "novospace" },
+    { "path": "../../novotree.git", "name": "novotree" }
+  ],
+  "settings": {
+    "cSpell.words": [
+      "igorn",
+      "novospace",
+      "novotree",
+      "VITE"
+    ]
+  }
+}

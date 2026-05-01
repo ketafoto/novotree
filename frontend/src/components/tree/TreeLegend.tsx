@@ -1,10 +1,41 @@
+import { useState } from 'react';
+import { Info, X } from 'lucide-react';
+import { useIsMobileViewport } from '../../hooks/useIsMobileViewport';
+
 /**
  * Legend panel explaining the different connector styles in the family tree.
  * Displayed in the bottom-right corner of the tree canvas.
+ *
+ * On mobile viewports the legend collapses to a small info icon to save
+ * screen real estate; tap to expand, X to collapse again.
  */
 export function TreeLegend() {
+  const isMobileViewport = useIsMobileViewport();
+  const [mobileLegendExpanded, setMobileLegendExpanded] = useState(false);
+
+  if (isMobileViewport && !mobileLegendExpanded) {
+    return (
+      <button
+        onClick={() => setMobileLegendExpanded(true)}
+        className="p-2 bg-white/90 backdrop-blur-sm rounded-full shadow-sm border border-gray-200"
+        aria-label="Show legend"
+      >
+        <Info className="w-4 h-4 text-gray-600" />
+      </button>
+    );
+  }
+
   return (
-    <div className="bg-white/90 backdrop-blur-sm rounded-lg shadow-sm border border-gray-200 p-3">
+    <div className="bg-white/90 backdrop-blur-sm rounded-lg shadow-sm border border-gray-200 p-3 relative">
+      {isMobileViewport && (
+        <button
+          onClick={() => setMobileLegendExpanded(false)}
+          className="absolute top-1 right-1 p-1 hover:bg-gray-100 rounded"
+          aria-label="Hide legend"
+        >
+          <X className="w-3 h-3 text-gray-400" />
+        </button>
+      )}
       <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-wider mb-2">
         Legend
       </p>
