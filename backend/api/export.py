@@ -17,6 +17,17 @@ from backend.api.auth import EditorSession, get_tree_owner_info, require_editor
 
 router = APIRouter(prefix="/export", tags=["Export"])
 
+EXPORT_FILENAME_PREFIX = "novotree"
+TIMESTAMP_FORMAT = "%Y%m%d-%H%M%S"
+
+
+def _build_export_filename(owner_id: str, kind: str, ext: str, *, with_timestamp: bool = True) -> str:
+    """Build a download filename like novotree-<owner>-<kind>-<date>-<time>.<ext>."""
+    base = f"{EXPORT_FILENAME_PREFIX}-{owner_id}-{kind}"
+    if with_timestamp:
+        base = f"{base}-{datetime.now().strftime(TIMESTAMP_FORMAT)}"
+    return f"{base}.{ext}"
+
 
 @router.post("/gedcom")
 def export_gedcom_endpoint(
@@ -27,7 +38,7 @@ def export_gedcom_endpoint(
     Export the owner's database to GEDCOM format with media files.
 
     Returns a ZIP archive containing:
-    - <owner_id>_export.ged - GEDCOM 5.5.1 file
+    - novotree-<owner_id>-gedcom-<timestamp>.ged - GEDCOM 5.5.1 file
     - media/ - All associated media files
     """
 
@@ -36,36 +47,35 @@ def export_gedcom_endpoint(
         temp_path = Path(temp_dir)
 
         # Generate GEDCOM file
-        gedcom_filename = f"{session.owner_id}_export.ged"
+        gedcom_filename = _build_export_filename(session.owner_id, "gedcom", "ged", with_timestamp=True)
         gedcom_path = temp_path / gedcom_filename
-        
+
         try:
             success = export_gedcom(owner.db_file, gedcom_path)
             if not success:
                 raise HTTPException(status_code=500, detail="Failed to generate GEDCOM")
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to generate GEDCOM: {str(e)}")
-        
+
         # Create ZIP archive
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        zip_filename = f"{session.owner_id}_export_{timestamp}.zip"
+        zip_filename = _build_export_filename(session.owner_id, "gedcom", "zip")
         zip_path = temp_path / zip_filename
-        
+
         with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
             # Add GEDCOM file
             zipf.write(gedcom_path, gedcom_filename)
-            
+
             # Add media files if they exist (skip dotfiles like .gitkeep)
             if owner.media_dir.exists():
                 for media_file in owner.media_dir.rglob('*'):
                     if media_file.is_file() and not media_file.name.startswith('.'):
                         arcname = f"media/{media_file.relative_to(owner.media_dir)}"
                         zipf.write(media_file, arcname)
-        
+
         # Copy ZIP to a more permanent temp location (will be cleaned up by system)
         final_zip_path = Path(tempfile.gettempdir()) / zip_filename
         shutil.copy2(zip_path, final_zip_path)
-    
+
     return FileResponse(
         path=str(final_zip_path),
         filename=zip_filename,
@@ -86,8 +96,7 @@ def export_gedcom_raw_endpoint(
         temp_path = Path(temp_dir)
 
         # Generate GEDCOM file
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        gedcom_filename = f"{session.owner_id}_export_{timestamp}.ged"
+        gedcom_filename = _build_export_filename(session.owner_id, "gedcom", "ged")
         gedcom_path = temp_path / gedcom_filename
 
         try:

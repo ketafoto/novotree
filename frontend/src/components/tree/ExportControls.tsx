@@ -3,6 +3,8 @@ import { Download, X } from 'lucide-react';
 import { toPng, toJpeg } from 'html-to-image';
 import { Button } from '../common/Button';
 import toast from 'react-hot-toast';
+import { useAuth } from '../../contexts/AuthContext';
+import { buildExportFilename } from '../../utils/exportFilename';
 
 interface ExportControlsProps {
   /** The DOM element to capture (React Flow viewport) */
@@ -27,6 +29,7 @@ export function ExportControls({
   onExportEnd,
   onClose,
 }: ExportControlsProps) {
+  const { editor, viewerOwnerId } = useAuth();
   const [format, setFormat] = useState<ImageFormat>('png');
   const [quality, setQuality] = useState(0.92);
   const [dpi, setDpi] = useState<DpiOption>(300);
@@ -61,8 +64,10 @@ export function ExportControls({
       }
 
       // Trigger download
+      const ext = format === 'jpeg' ? 'jpg' : 'png';
+      const ownerId = editor?.owner_id ?? viewerOwnerId ?? 'tree';
       const link = document.createElement('a');
-      link.download = `family-tree.${format === 'jpeg' ? 'jpg' : 'png'}`;
+      link.download = buildExportFilename(ownerId, 'full-tree', ext);
       link.href = dataUrl;
       link.click();
 
@@ -75,7 +80,7 @@ export function ExportControls({
       setExporting(false);
       onExportEnd?.();
     }
-  }, [format, quality, dpi, getElement, onExportStart, onExportEnd]);
+  }, [format, quality, dpi, getElement, onExportStart, onExportEnd, editor, viewerOwnerId]);
 
   return (
     <div className="bg-white/95 backdrop-blur-sm rounded-lg shadow-lg border border-gray-200 p-4 w-64">
