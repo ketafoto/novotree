@@ -21,6 +21,7 @@ import { mediaApi } from '../../api/media';
 import { Button } from '../../components/common/Button';
 import { Card } from '../../components/common/Card';
 import { Spinner } from '../../components/common/Spinner';
+import { TranslateButton } from '../../components/common/TranslateButton';
 import { PhotoUploadDialog } from '../../components/photo/PhotoUploadDialog';
 import { EventFormDialog } from '../../components/events/EventFormDialog';
 import { ModalBasicInfo } from '../../components/individuals/ModalBasicInfo';
@@ -413,7 +414,11 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
           </Card>
 
           {/* Notes */}
-          <Card title="Notes" {...cardDoubleClick('notes')}>
+          <Card
+            title="Notes"
+            actions={individual.notes ? <TranslateButton getText={individual.notes} /> : undefined}
+            {...cardDoubleClick('notes')}
+          >
             {individual.notes ? (
               <p className="text-gray-700 whitespace-pre-wrap">{individual.notes}</p>
             ) : (

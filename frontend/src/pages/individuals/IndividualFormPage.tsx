@@ -11,16 +11,20 @@ import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
 import { Card } from '../../components/common/Card';
 import { Spinner } from '../../components/common/Spinner';
+import { TranslateButton } from '../../components/common/TranslateButton';
 import { ApproxDateInput } from '../../components/common/ApproxDateInput';
 import toast from 'react-hot-toast';
 import { apiErrorMessage } from '../../utils/apiError';
+import { latinOnlyRefine } from '../../utils/textValidation';
+
+const latinOnlyText = z.string().optional().refine(latinOnlyRefine.check, { message: latinOnlyRefine.message });
 
 const nameSchema = z.object({
   name_type: z.string().optional(),
-  given_name: z.string().optional(),
-  family_name: z.string().optional(),
-  prefix: z.string().optional(),
-  suffix: z.string().optional(),
+  given_name: latinOnlyText,
+  family_name: latinOnlyText,
+  prefix: latinOnlyText,
+  suffix: latinOnlyText,
 });
 
 const individualSchema = z.object({
@@ -28,10 +32,10 @@ const individualSchema = z.object({
   sex_code: z.string().optional(),
   birth_date: z.string().optional(),
   birth_date_approx: z.string().optional(),
-  birth_place: z.string().optional(),
+  birth_place: latinOnlyText,
   death_date: z.string().optional(),
   death_date_approx: z.string().optional(),
-  death_place: z.string().optional(),
+  death_place: latinOnlyText,
   notes: z.string().optional(),
   names: z.array(nameSchema).min(1, 'At least one name is required'),
 });
@@ -74,9 +78,11 @@ export function IndividualFormPage() {
     control,
     handleSubmit,
     reset,
+    getValues,
     formState: { errors, isSubmitting },
   } = useForm<IndividualFormData>({
     resolver: zodResolver(individualSchema),
+    mode: 'onChange',
     defaultValues: {
       names: [{ given_name: '', family_name: '' }],
     },
@@ -312,6 +318,7 @@ export function IndividualFormPage() {
               <Input
                 label="Birth Place"
                 {...register('birth_place')}
+                error={errors.birth_place?.message}
               />
             </div>
           </div>
@@ -341,13 +348,14 @@ export function IndividualFormPage() {
               <Input
                 label="Death Place"
                 {...register('death_place')}
+                error={errors.death_place?.message}
               />
             </div>
           </div>
         </Card>
 
         {/* Notes */}
-        <Card title="Notes">
+        <Card title="Notes" actions={<TranslateButton getText={() => getValues('notes')} />}>
           <textarea
             {...register('notes')}
             rows={4}

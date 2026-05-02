@@ -9,6 +9,7 @@ import { ApproxDateInput } from '../common/ApproxDateInput';
 import { Modal } from '../common/Modal';
 import toast from 'react-hot-toast';
 import { apiErrorMessage } from '../../utils/apiError';
+import { latinOnlyRule } from '../../utils/textValidation';
 import type { Individual } from '../../types/models';
 
 interface ModalDeathProps {
@@ -28,7 +29,8 @@ export function ModalDeath({ open, onClose, individual, onSaved }: ModalDeathPro
     queryKey: ['types', 'date-approx'],
     queryFn: typesApi.getDateApproxTypes,
   });
-  const { register, control, handleSubmit, reset, formState: { isSubmitting } } = useForm<FormData>({
+  const { register, control, handleSubmit, reset, formState: { isSubmitting, errors } } = useForm<FormData>({
+    mode: 'onChange',
     defaultValues: { death_date: '', death_date_approx: '', death_place: '' },
   });
 
@@ -69,7 +71,7 @@ export function ModalDeath({ open, onClose, individual, onSaved }: ModalDeathPro
             <ApproxDateInput label="Approximate Date" value={field.value} onChange={field.onChange} options={approxDateTypes} />
           )}
         />
-        <Input label="Death Place" {...register('death_place')} />
+        <Input label="Death Place" {...register('death_place', { ...latinOnlyRule })} error={errors.death_place?.message} />
         <div className="flex justify-end gap-2 pt-2">
           <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
           <Button type="submit" isLoading={isSubmitting}>Save</Button>

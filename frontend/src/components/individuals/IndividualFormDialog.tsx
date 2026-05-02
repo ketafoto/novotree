@@ -9,17 +9,21 @@ import { Button } from '../common/Button';
 import { Input } from '../common/Input';
 import { Card } from '../common/Card';
 import { Modal } from '../common/Modal';
+import { TranslateButton } from '../common/TranslateButton';
 import { ApproxDateInput } from '../common/ApproxDateInput';
 import toast from 'react-hot-toast';
 import { apiErrorMessage } from '../../utils/apiError';
+import { latinOnlyRefine } from '../../utils/textValidation';
 import type { Individual } from '../../types/models';
+
+const latinOnlyText = z.string().optional().refine(latinOnlyRefine.check, { message: latinOnlyRefine.message });
 
 const nameSchema = z.object({
   name_type: z.string().optional(),
-  given_name: z.string().optional(),
-  family_name: z.string().optional(),
-  prefix: z.string().optional(),
-  suffix: z.string().optional(),
+  given_name: latinOnlyText,
+  family_name: latinOnlyText,
+  prefix: latinOnlyText,
+  suffix: latinOnlyText,
 });
 
 const individualSchema = z.object({
@@ -27,10 +31,10 @@ const individualSchema = z.object({
   sex_code: z.string().optional(),
   birth_date: z.string().optional(),
   birth_date_approx: z.string().optional(),
-  birth_place: z.string().optional(),
+  birth_place: latinOnlyText,
   death_date: z.string().optional(),
   death_date_approx: z.string().optional(),
-  death_place: z.string().optional(),
+  death_place: latinOnlyText,
   notes: z.string().optional(),
   names: z.array(nameSchema).min(1, 'At least one name is required'),
 });
@@ -70,9 +74,11 @@ export function IndividualFormDialog({
     control,
     handleSubmit,
     reset,
+    getValues,
     formState: { errors, isSubmitting },
   } = useForm<IndividualFormData>({
     resolver: zodResolver(individualSchema),
+    mode: 'onChange',
     defaultValues: {
       names: [{ given_name: '', family_name: '' }],
     },
@@ -243,7 +249,7 @@ export function IndividualFormDialog({
               )}
             />
             <div className="md:col-span-2">
-              <Input label="Birth Place" {...register('birth_place')} />
+              <Input label="Birth Place" {...register('birth_place')} error={errors.birth_place?.message} />
             </div>
           </div>
         </Card>
@@ -269,13 +275,13 @@ export function IndividualFormDialog({
               )}
             />
             <div className="md:col-span-2">
-              <Input label="Death Place" {...register('death_place')} />
+              <Input label="Death Place" {...register('death_place')} error={errors.death_place?.message} />
             </div>
           </div>
         </Card>
 
         {/* Notes */}
-        <Card title="Notes">
+        <Card title="Notes" actions={<TranslateButton getText={() => getValues('notes')} />}>
           <textarea
             {...register('notes')}
             rows={3}

@@ -9,6 +9,7 @@ import { ApproxDateInput } from '../common/ApproxDateInput';
 import { Modal } from '../common/Modal';
 import toast from 'react-hot-toast';
 import { apiErrorMessage } from '../../utils/apiError';
+import { latinOnlyRule } from '../../utils/textValidation';
 import type { Individual } from '../../types/models';
 
 interface ModalBirthProps {
@@ -28,7 +29,8 @@ export function ModalBirth({ open, onClose, individual, onSaved }: ModalBirthPro
     queryKey: ['types', 'date-approx'],
     queryFn: typesApi.getDateApproxTypes,
   });
-  const { register, control, handleSubmit, reset, formState: { isSubmitting } } = useForm<FormData>({
+  const { register, control, handleSubmit, reset, formState: { isSubmitting, errors } } = useForm<FormData>({
+    mode: 'onChange',
     defaultValues: { birth_date: '', birth_date_approx: '', birth_place: '' },
   });
 
@@ -69,7 +71,7 @@ export function ModalBirth({ open, onClose, individual, onSaved }: ModalBirthPro
             <ApproxDateInput label="Approximate Date" value={field.value} onChange={field.onChange} options={approxDateTypes} />
           )}
         />
-        <Input label="Birth Place" {...register('birth_place')} />
+        <Input label="Birth Place" {...register('birth_place', { ...latinOnlyRule })} error={errors.birth_place?.message} />
         <div className="flex justify-end gap-2 pt-2">
           <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
           <Button type="submit" isLoading={isSubmitting}>Save</Button>

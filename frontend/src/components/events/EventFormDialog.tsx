@@ -6,9 +6,11 @@ import { typesApi } from '../../api/types';
 import { Button } from '../common/Button';
 import { Input } from '../common/Input';
 import { Modal } from '../common/Modal';
+import { TranslateButton } from '../common/TranslateButton';
 import { ApproxDateInput } from '../common/ApproxDateInput';
 import toast from 'react-hot-toast';
 import { apiErrorMessage } from '../../utils/apiError';
+import { latinOnlyRule } from '../../utils/textValidation';
 import type { Event, EventCreate } from '../../types/models';
 
 interface EventFormDialogProps {
@@ -56,8 +58,10 @@ export function EventFormDialog({
     control,
     handleSubmit,
     reset,
+    getValues,
     formState: { isSubmitting, errors },
   } = useForm<FormData>({
+    mode: 'onChange',
     defaultValues: {
       event_type_code: '',
       event_date: '',
@@ -184,12 +188,16 @@ export function EventFormDialog({
 
         <Input
           label="Place"
-          {...register('event_place')}
+          {...register('event_place', { ...latinOnlyRule })}
+          error={errors.event_place?.message}
           placeholder="Event location"
         />
 
         <div className="space-y-1">
-          <label className="block text-sm font-medium text-gray-700">Description</label>
+          <div className="flex items-center justify-between">
+            <label className="block text-sm font-medium text-gray-700">Description</label>
+            <TranslateButton getText={() => getValues('description')} />
+          </div>
           <textarea
             {...register('description')}
             rows={3}

@@ -9,6 +9,7 @@ import { ApproxDateInput } from '../common/ApproxDateInput';
 import { Modal } from '../common/Modal';
 import toast from 'react-hot-toast';
 import { apiErrorMessage } from '../../utils/apiError';
+import { latinOnlyRule } from '../../utils/textValidation';
 import type { Family } from '../../types/models';
 
 interface ModalMarriageProps {
@@ -28,7 +29,8 @@ export function ModalMarriage({ open, onClose, family, onSaved }: ModalMarriageP
     queryKey: ['types', 'date-approx'],
     queryFn: typesApi.getDateApproxTypes,
   });
-  const { register, control, handleSubmit, reset, formState: { isSubmitting } } = useForm<FormData>({
+  const { register, control, handleSubmit, reset, formState: { isSubmitting, errors } } = useForm<FormData>({
+    mode: 'onChange',
     defaultValues: { marriage_date: '', marriage_date_approx: '', marriage_place: '' },
   });
 
@@ -69,7 +71,7 @@ export function ModalMarriage({ open, onClose, family, onSaved }: ModalMarriageP
             <ApproxDateInput label="Approximate Date" value={field.value} onChange={field.onChange} options={approxDateTypes} />
           )}
         />
-        <Input label="Marriage Place" {...register('marriage_place')} />
+        <Input label="Marriage Place" {...register('marriage_place', { ...latinOnlyRule })} error={errors.marriage_place?.message} />
         <div className="flex justify-end gap-2 pt-2">
           <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
           <Button type="submit" isLoading={isSubmitting}>Save</Button>

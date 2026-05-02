@@ -11,14 +11,17 @@ import { Input } from '../common/Input';
 import { Modal } from '../common/Modal';
 import toast from 'react-hot-toast';
 import { apiErrorMessage } from '../../utils/apiError';
+import { latinOnlyRefine } from '../../utils/textValidation';
 import type { Individual } from '../../types/models';
+
+const latinOnlyText = z.string().optional().refine(latinOnlyRefine.check, { message: latinOnlyRefine.message });
 
 const nameSchema = z.object({
   name_type: z.string().optional(),
-  given_name: z.string().optional(),
-  family_name: z.string().optional(),
-  prefix: z.string().optional(),
-  suffix: z.string().optional(),
+  given_name: latinOnlyText,
+  family_name: latinOnlyText,
+  prefix: latinOnlyText,
+  suffix: latinOnlyText,
 });
 const formSchema = z.object({
   names: z.array(nameSchema).min(1, 'At least one name is required'),
@@ -40,6 +43,7 @@ export function ModalNames({ open, onClose, individual, onSaved }: ModalNamesPro
   });
   const { register, control, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(formSchema),
+    mode: 'onChange',
     defaultValues: { names: [{ given_name: '', family_name: '' }] },
   });
   const { fields, append, remove } = useFieldArray({ control, name: 'names' });

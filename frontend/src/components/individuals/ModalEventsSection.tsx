@@ -4,6 +4,7 @@ import { typesApi } from '../../api/types';
 import { sortEventsChronologically } from '../../utils/eventSort';
 import { Button } from '../common/Button';
 import { Modal } from '../common/Modal';
+import { TranslateButton } from '../common/TranslateButton';
 import type { Event } from '../../types/models';
 
 interface ModalEventsSectionProps {
@@ -56,7 +57,12 @@ export function ModalEventsSection({
                     {ev.event_date || ev.event_date_approx}
                     {ev.event_place && ` • ${ev.event_place}`}
                   </p>
-                  {ev.description && <p className="text-sm text-gray-500 mt-1">{ev.description}</p>}
+                  {ev.description && (
+                    <div className="mt-1 flex items-start justify-between gap-2">
+                      <p className="text-sm text-gray-500">{ev.description}</p>
+                      <TranslateButton getText={ev.description} className="flex-shrink-0" />
+                    </div>
+                  )}
                   {ev.created_by && (
                     <p className="text-xs text-gray-400 mt-0.5">Added by {ev.created_by_display_name || ev.created_by}</p>
                   )}

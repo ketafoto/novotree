@@ -896,6 +896,36 @@ We need a special component for this:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+### 8.4 Language & Script Policy
+
+The user base is mixed: some relatives read English, others read Russian, and the two groups don't overlap. The UI itself is English-only (full i18n is postponed — see §18.6), but **data** entered by users needs to be readable by both audiences. The policy below splits fields into two buckets accordingly.
+
+**Structured data — Latin script enforced.** Fields with short, structured values are restricted to Latin letters (incl. accented like `ü`, `é`, `ñ`), digits, whitespace, punctuation, and symbols. Cyrillic and other non-Latin scripts are rejected. Russian-speaking users are expected to transliterate (e.g. `Иван` → `Ivan`).
+
+Applies to: `given_name`, `family_name`, `prefix`, `suffix`, `birth_place`, `death_place`, `marriage_place`, `event_place`.
+
+**Free-text — bilingual allowed, with a Translate button.** Long-form fields where users may need to express nuance are unrestricted. Each such field is paired with a small `<TranslateButton>` link that opens Google Translate in a new tab, with the source/target language pair picked automatically from the script of the text.
+
+Applies to: individual `notes`, family `notes`, event `description`.
+
+#### Implementation
+
+| Concern | Where | Notes |
+|---------|-------|-------|
+| Validation rule | [`frontend/src/utils/textValidation.ts`](../frontend/src/utils/textValidation.ts) | Two exports: `latinOnlyRule` (spread into react-hook-form `register()`), `latinOnlyRefine` (use as zod `.refine()` predicate). Both share one regex: `/[^\p{Script=Latin}\P{L}]/u`. |
+| Validation timing | All 8 affected forms | `useForm({ mode: 'onChange', ... })` — error appears on the keystroke that introduces a non-Latin letter and clears as soon as it's corrected. Per-keystroke regex cost is microseconds; the re-render is scoped to the single Input. |
+| Error display | `<Input>` common component | Existing `error` prop renders a red message below the field. |
+| Translate URL builder | [`frontend/src/utils/translate.ts`](../frontend/src/utils/translate.ts) | Counts Cyrillic vs Latin letters in the input; Cyrillic-dominant → `?sl=ru&tl=en`, Latin-dominant → `?sl=en&tl=ru`, mixed/empty-of-letters → `?sl=auto&tl=en`. |
+| Translate UI | [`frontend/src/components/common/TranslateButton.tsx`](../frontend/src/components/common/TranslateButton.tsx) | Small `🌐 Translate` link, accepts a static string or a getter callback (used with `getValues('field')` for live form values, never `watch()` — avoids a React Compiler memoization caveat). |
+
+#### Why "transliterate" instead of a "Transliterate" button
+
+We considered offering a one-click `Иван → Ivan` converter. Rejected: transliteration tables are language-specific and lossy (`Я` could be `Ya`/`Ja`/`Ia`), and entries should be canonical so families agree on spelling. Forcing the user to type the Latin form keeps the data consistent.
+
+#### Why `mode: 'onChange'` over `'onTouched'`
+
+`'onTouched'` (validate on blur, then live) was the default recommendation, but the user's review found waiting until blur to discover a long entry was rejected to be unpleasant. Per-keystroke validation has no measurable performance cost at this data scale.
+
 ---
 
 ## 9. State Management
@@ -1716,7 +1746,8 @@ All open questions have been resolved. Here's the summary of decisions:
 | **User Management** | User Manager page (`/users`) | Owner-only; three tabs: Share Links, Contributors, Requests |
 | **Password Reset** | Owner generates reset link in User Manager | Optional SMTP email; fallback to UI-shown link |
 | **Theme** | Light theme only | No dark mode toggle |
-| **Language** | English only | No i18n infrastructure |
+| **UI Language** | English only | No i18n infrastructure for the UI itself |
+| **Data Language** | Latin script enforced for structured fields; bilingual for free-text | See §8.4. Names/places must be Latin (transliterate). Notes & event descriptions accept any script and get a Translate button. |
 | **Mobile Support** | Desktop-first | Mobile deferred to future release |
 | **Family Tree Visualization** | Skip for now | Use 3rd party tools with exported GEDCOM |
 | **GEDCOM Import UI** | No | CLI import is sufficient |

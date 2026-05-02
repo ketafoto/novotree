@@ -20,6 +20,7 @@ import { mediaApi } from '../../api/media';
 import { Button } from '../../components/common/Button';
 import { Card } from '../../components/common/Card';
 import { Spinner } from '../../components/common/Spinner';
+import { TranslateButton } from '../../components/common/TranslateButton';
 import { EventFormDialog } from '../../components/events/EventFormDialog';
 import { ModalEventsSection } from '../../components/individuals/ModalEventsSection';
 import { ModalMarriage } from '../../components/families/ModalMarriage';
@@ -304,7 +305,11 @@ export function FamilyDetailPage() {
           </Card>
 
           {/* Notes */}
-          <Card title="Notes" {...cardDoubleClick('notes')}>
+          <Card
+            title="Notes"
+            actions={family.notes ? <TranslateButton getText={family.notes} /> : undefined}
+            {...cardDoubleClick('notes')}
+          >
             {family.notes ? (
               <p className="text-gray-700 whitespace-pre-wrap">{family.notes}</p>
             ) : (

@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { familiesApi } from '../../api/families';
 import { Button } from '../common/Button';
 import { Modal } from '../common/Modal';
+import { TranslateButton } from '../common/TranslateButton';
 import toast from 'react-hot-toast';
 import { apiErrorMessage } from '../../utils/apiError';
 import type { Family } from '../../types/models';
@@ -19,7 +20,7 @@ type FormData = { notes?: string };
 
 export function ModalFamilyNotes({ open, onClose, family, onSaved }: ModalFamilyNotesProps) {
   const queryClient = useQueryClient();
-  const { register, handleSubmit, reset, formState: { isSubmitting } } = useForm<FormData>({
+  const { register, handleSubmit, reset, getValues, formState: { isSubmitting } } = useForm<FormData>({
     defaultValues: { notes: '' },
   });
 
@@ -45,7 +46,10 @@ export function ModalFamilyNotes({ open, onClose, family, onSaved }: ModalFamily
     <Modal open={open} onClose={onClose} title="Notes">
       <form onSubmit={handleSubmit((data) => updateMutation.mutate(data))} className="space-y-4">
         <div className="space-y-1">
-          <label className="block text-sm font-medium text-gray-700">Notes</label>
+          <div className="flex items-center justify-between">
+            <label className="block text-sm font-medium text-gray-700">Notes</label>
+            <TranslateButton getText={() => getValues('notes')} />
+          </div>
           <textarea
             {...register('notes')}
             rows={6}

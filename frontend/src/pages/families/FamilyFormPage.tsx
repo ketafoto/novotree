@@ -10,11 +10,13 @@ import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
 import { Card } from '../../components/common/Card';
 import { Spinner } from '../../components/common/Spinner';
+import { TranslateButton } from '../../components/common/TranslateButton';
 import { ApproxDateInput } from '../../components/common/ApproxDateInput';
 import { ComboSelect } from '../../components/common/ComboSelect';
 import { IndividualFormDialog } from '../../components/individuals/IndividualFormDialog';
 import toast from 'react-hot-toast';
 import { apiErrorMessage } from '../../utils/apiError';
+import { latinOnlyRule } from '../../utils/textValidation';
 import { formatIndividualName, getLatestName } from '../../utils/nameUtils';
 import type { Individual } from '../../types/models';
 
@@ -89,8 +91,10 @@ export function FamilyFormPage() {
     control,
     handleSubmit,
     reset,
-    formState: { isSubmitting },
+    getValues,
+    formState: { isSubmitting, errors },
   } = useForm<FamilyFormData>({
+    mode: 'onChange',
     defaultValues: {
       members: preSelectedMembers.map((memberId) => ({
         individual_id: memberId,
@@ -195,46 +199,42 @@ export function FamilyFormPage() {
     return formatIndividualName(getLatestName(individual.names));
   };
 
-  const sortedIndividuals = useMemo(
-    () =>
-      individuals
-        ?.slice()
-        .sort((a, b) => getIndividualName(a.id).localeCompare(getIndividualName(b.id))) ?? [],
-    [individuals]
-  );
+  const sortedIndividuals = useMemo(() => {
+    if (!individuals) return [];
+    const nameOf = (ind: Individual) => formatIndividualName(getLatestName(ind.names));
+    return individuals.slice().sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
+  }, [individuals]);
 
   // --- auto-focus newly added selects ---
   useEffect(() => {
-    if (focusMemberIndex !== null) {
-      requestAnimationFrame(() => {
-        const sel = document.querySelector<HTMLSelectElement>(
-          `select[name="members.${focusMemberIndex}.individual_id"]`
-        );
-        sel?.focus();
-        sel?.showPicker?.();
-      });
+    if (focusMemberIndex === null) return;
+    requestAnimationFrame(() => {
+      const sel = document.querySelector<HTMLSelectElement>(
+        `select[name="members.${focusMemberIndex}.individual_id"]`
+      );
+      sel?.focus();
+      sel?.showPicker?.();
       setFocusMemberIndex(null);
-    }
+    });
   }, [focusMemberIndex]);
 
   useEffect(() => {
-    if (focusChildIndex !== null) {
-      requestAnimationFrame(() => {
-        const sel = document.querySelector<HTMLSelectElement>(
-          `select[name="children.${focusChildIndex}.child_id"]`
-        );
-        sel?.focus();
-        sel?.showPicker?.();
-      });
+    if (focusChildIndex === null) return;
+    requestAnimationFrame(() => {
+      const sel = document.querySelector<HTMLSelectElement>(
+        `select[name="children.${focusChildIndex}.child_id"]`
+      );
+      sel?.focus();
+      sel?.showPicker?.();
       setFocusChildIndex(null);
-    }
+    });
   }, [focusChildIndex]);
 
   // --- "create individual" dialog handlers ---
   const openCreateDialog = useCallback((target: CreateTarget) => {
     createTargetRef.current = target;
     setDialogOpen(true);
-  }, []);
+  }, [setDialogOpen]);
 
   const handleIndividualCreated = useCallback(
     (individual: Individual) => {
@@ -251,7 +251,7 @@ export function FamilyFormPage() {
         appendChild({ child_id: individual.id });
       }
     },
-    [appendMember, appendChild, queryClient]
+    [appendMember, appendChild, queryClient, setCreatedIndividualIds, setDialogOpen]
   );
 
   // --- cancel with cleanup ---
@@ -484,7 +484,8 @@ export function FamilyFormPage() {
             <div className="md:col-span-2">
               <Input
                 label="Marriage Place"
-                {...register('marriage_place')}
+                {...register('marriage_place', { ...latinOnlyRule })}
+                error={errors.marriage_place?.message}
               />
             </div>
           </div>
@@ -514,7 +515,7 @@ export function FamilyFormPage() {
         </Card>
 
         {/* Notes */}
-        <Card title="Notes">
+        <Card title="Notes" actions={<TranslateButton getText={() => getValues('notes')} />}>
           <textarea
             {...register('notes')}
             rows={4}
