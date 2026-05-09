@@ -24,6 +24,7 @@ from database.system_db import get_system_session, init_system_db
 from database.system_models import AuthShareToken
 from backend.api import individuals, families, events, media, header, auth, types, export, import_api, tree
 from backend.api import users as users_api
+from backend.api import local as local_api
 from backend.api.auth import DEFAULT_OWNER_ID, _ALGORITHM
 from backend.config import settings
 from backend.logging import setup_logging, request_user
@@ -267,6 +268,7 @@ app.include_router(export.router)
 app.include_router(import_api.router)
 app.include_router(tree.router)
 app.include_router(tree.full_tree_router)
+app.include_router(local_api.router)
 
 
 # ---------------------------------------------------------------------------

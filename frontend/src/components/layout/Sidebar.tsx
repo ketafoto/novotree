@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { isLocalApp } from '../../config/appMode';
 
 interface NavItemProps {
   to: string;
@@ -119,7 +120,9 @@ export function Sidebar() {
           )}
         </NavGroup>
 
-        {isOwner && (
+        {/* User Manager: hidden in local mode — the local app is single-user
+            with no contributors / share tokens / signups to manage. */}
+        {isOwner && !isLocalApp && (
           <NavItem
             to="/users"
             icon={<Users className="w-5 h-5" />}
@@ -134,8 +137,11 @@ export function Sidebar() {
         />
       </nav>
 
-      {/* User info + logout at bottom */}
-      {editor && (
+      {/* User info + sign out at bottom — hidden in local mode for the same
+          reason as in Header.tsx: the synthetic "local" editor isn't a real
+          session, the name is noise, and Sign out lands on a non-existent
+          /login route ("Not Found" black screen). */}
+      {!isLocalApp && editor && (
         <div className="border-t border-gray-200 pt-4 mt-4">
           <div className="px-4 mb-2">
             <p className="text-sm font-medium text-gray-800 truncate">{editor.display_name}</p>

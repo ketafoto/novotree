@@ -196,11 +196,54 @@ Next
 =======================
 Bugs
 -----------------------------
-*.
+*. support@contact.novotree.cz - can't copy - make it selectable by mouse + add button to copy
+*. On Location card -no need for "Copy" button - "open file in default viewer" instead
+
+!!!Family common_law - "Family Type" cant' be editted!!!
+!!!Family common_law - "Family Type" - let's put "marraige" as a default value?!!!
+!!!Family common_law - on tree it is shown like "Partnership" - is it OK?  What does it mean? !!!
+- add Goto/Open after export like in Chrome to LOCAL-APP / WEB UI? List - CLick on Toast opens it would be great!!!
+- Use "full-tree" in exported Tree VIew for full tree and <name of person in focus> tree if tree is not full! 
+- "Delete all"
+
+Meanwhile will check export, restart
+Now, regarding latest modifications,
+V - 1. Hide "Profile" and "Security" cards on the "Settings" page in LOCAL mode - they are not applicable here. Please clean all other UI elements that are related to authentication - they should not be visible in LOCAL mode.
+- 2. I asked to implement Application restart, but it fails with black screen (attached). DO we really need restart? COuld we just update configuratoin out of config.json in run-time?
+V - 3. Can you add "open folder" button near log and near config.json lines on UI, so user could just press the button and the FIle Explorer could be opened at the correspondent location?
+V - 4. SOme of recent changes break the Individual edit page (no need to find what commit exactly did it, just analyze and fix the current code) - the upper bar with "Donate" button disappeared from it. All the rest pages, indluding "Familiy" edit page are OK.
+V - 5. "Export" does not work - for both gedcom data and Tree view image. The toast "Export ready for downlaod" appears, but the system folder picker dialog is not opened, so the destination file is not copied. "Import" works properly.
+V - 6. I don't see "About", like in NovoFace! It should appear in left upper corener like in NovoFace! 
+V - 7. Replace email for conatacts in About with proper one!
+- 8. Check the UX of uninstallation was improved!
+--->
+Settings page in local mode — only the "Local app" card; Profile + Security cards gone
+Header — Donate ♥ + About ⓘ buttons, no editor name, no Logout
+Click About → see version + email + Donate button → click Donate → see Donate modal
+Open File Explorer button on each path row → Explorer pops up at the right place
+Change data folder → folder picker → confirm → spinner → page reloads to new location, no black screen, no restart, data still there
+Export GEDCOM (zip + raw) → SaveAs dialog appears → save → toast "Saved to X" → file is at X
+Tree → Export image → SaveAs dialog → save → toast → file is at chosen path
+Open an individual → Header (with Donate) is visible
+
+
+
 
 Go private
 -----------------------------
-*. legals for private usage (mode A tiers 1 & 2 from docs\PRIVACY_DESIGN.md)
+*. Legals for private usage (mode A tiers 1 & 2 from docs\PRIVACY_DESIGN.md)
+*. I want to publish SaaS for relative and friends only, not for public server.
+   So I was thinking of adding "approval" flow for owners by admin during signup process.
+   Same like we have today for approval contributors by owner.
+   1. Does that kind of service falls under mode A (Tiers 1 & 2)?
+      Or that is absolute mode B - Tier 3?
+   2. What is about "contributors for my tree" only, I mean disable "owner signup"
+      and enable "contributor signup"?
+
+   If we go with "relatives and friends" options I need:
+   - implement "approval" flow for owners by admin, same as approval of contributors by owner.
+   - implement UI 'admin' panel - where owners can be approved
+   - ability to see the owner genealogy data (like log-in with owner credentials) ?
 
 Go public
 -----------------------------
@@ -212,7 +255,6 @@ Go public
    2. Run manually backup script using the vm-backup.py script
    (found either under ../novospace.git/scripts/deployment/vm-backup.py. or under deployment folder installed by 
    ../novospace.git/scripts/deployment/vm-setup.py)
-*. admin page / ability to remove owner (kind of unregister) - delete it's data - this is by user and this is by admin.
 
 *. send emails for error in logs + backup logs
 

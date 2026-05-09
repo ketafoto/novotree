@@ -17,17 +17,17 @@ Outside FastAPI (e.g. middleware, lifespan):
         session.close()
 """
 
-from pathlib import Path
 from typing import Generator
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
+# Import the module (NOT the DATASETS_DIR name directly) so init_system_db()
+# always reads the CURRENT value. The local-app's "Change data folder" feature
+# rebinds owner_info.DATASETS_DIR at runtime; with `from … import DATASETS_DIR`
+# we'd hold a stale reference and re-init at the OLD path.
+from . import owner_info
 from .system_models import SystemBase
-
-# datasets/ directory sits next to the database/ package
-_DATASETS_DIR = Path(__file__).parent.parent / "datasets"
-_SYSTEM_DB_FILE = _DATASETS_DIR / "system.sqlite"
 
 _engine = None
 _SystemSession: sessionmaker | None = None
@@ -35,15 +35,16 @@ _SystemSession: sessionmaker | None = None
 
 def init_system_db() -> None:
     """
-    Create datasets/system.sqlite and all auth tables if they don't exist.
+    Create <DATASETS_DIR>/system.sqlite and all auth tables if they don't exist.
     Safe to call multiple times (idempotent).
     """
     global _engine, _SystemSession
 
-    _DATASETS_DIR.mkdir(parents=True, exist_ok=True)
+    datasets_dir = owner_info.DATASETS_DIR  # fresh read every time
+    datasets_dir.mkdir(parents=True, exist_ok=True)
 
     _engine = create_engine(
-        f"sqlite:///{_SYSTEM_DB_FILE}",
+        f"sqlite:///{datasets_dir / 'system.sqlite'}",
         connect_args={"check_same_thread": False},
     )
     SystemBase.metadata.create_all(bind=_engine)

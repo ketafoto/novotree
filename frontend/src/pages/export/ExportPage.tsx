@@ -5,6 +5,7 @@ import { Button } from '../../components/common/Button';
 import { Card } from '../../components/common/Card';
 import toast from 'react-hot-toast';
 import { apiErrorMessage } from '../../utils/apiError';
+import { saveBlob } from '../../utils/saveBlob';
 
 type ExportStatus = 'idle' | 'generating' | 'ready' | 'error';
 
@@ -32,20 +33,11 @@ export function ExportPage() {
         }
       }
 
-      // Create download URL
       const blob = new Blob([response.data], { type: 'application/zip' });
-      const url = URL.createObjectURL(blob);
-      
       setFileName(extractedFileName);
       setStatus('ready');
-      toast.success('Export ready for download');
-
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = extractedFileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      // saveBlob handles both web (browser download) and local (native SaveAs).
+      await saveBlob(blob, extractedFileName);
     } catch (error) {
       setStatus('error');
       toast.error(apiErrorMessage(error, 'Failed to generate export'));
@@ -70,20 +62,10 @@ export function ExportPage() {
         }
       }
 
-      // Create download URL
       const blob = new Blob([response.data], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-
       setRawFileName(extractedFileName);
       setRawStatus('ready');
-      toast.success('Raw export ready for download');
-
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = extractedFileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      await saveBlob(blob, extractedFileName);
     } catch (error) {
       setRawStatus('error');
       toast.error(apiErrorMessage(error, 'Failed to generate raw export'));

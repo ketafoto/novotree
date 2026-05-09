@@ -20,9 +20,16 @@ def _parse_csv(value: str | None, default: List[str]) -> List[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
+# Modes that disable auth and run as a single-user instance.
+# - "admin": local development bypass (laptop running the source tree)
+# - "local": packaged desktop installer (one user, one tree, offline)
+# Anything else (or unset) = full multi-user auth (web/VM deployment).
+_AUTH_BYPASS_MODES = frozenset({"admin", "local"})
+
+
 @dataclass(frozen=True)
 class Settings:
-    app_mode: str               # 'admin' = dev bypass; anything else = full auth
+    app_mode: str               # 'admin'/'local' = single-user; anything else = full auth
     cors_origins: List[str]
     enable_api_docs: bool
     rate_limit_per_minute: int
@@ -62,8 +69,16 @@ class Settings:
 
     @property
     def is_dev(self) -> bool:
-        """Local development mode — auth bypassed."""
-        return self.app_mode == "admin"
+        """Auth-bypass single-user mode (admin dev OR packaged local installer).
+        Used everywhere we want to skip JWT/share-token resolution and treat
+        the request as the default owner."""
+        return self.app_mode in _AUTH_BYPASS_MODES
+
+    @property
+    def is_local(self) -> bool:
+        """Packaged desktop installer specifically (frontend served from same
+        origin, datasets dir overridden via env var, no rate limiting)."""
+        return self.app_mode == "local"
 
     @property
     def smtp_enabled(self) -> bool:
@@ -73,7 +88,7 @@ class Settings:
 def load_settings() -> Settings:
     app_mode = os.getenv("NOVOTREE_APP_MODE", "admin").strip().lower()
 
-    is_dev = app_mode == "admin"
+    is_dev = app_mode in _AUTH_BYPASS_MODES
     default_origins = (
         ["http://localhost:3000", "http://localhost:5173"]
         if is_dev

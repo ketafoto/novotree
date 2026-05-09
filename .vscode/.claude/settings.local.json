@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c ':*)",
+      "Bash(venv-win/Scripts/pip show:*)",
+      "Bash(venv-win/Scripts/pip install:*)",
+      "Bash(venv-win/Scripts/python -c ':*)",
+      "Bash(./venv-win/Scripts/pip.exe install:*)",
+      "Bash(c:/temp/novotree.git/venv-win/Scripts/pip.exe install:*)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(c:/temp/novotree.git/venv-win/Scripts/python.exe -m pip install \"python-jose[cryptography]\" bcrypt aiosmtplib)",
+      "Bash(venv-win/Scripts/python.exe -c ':*)",
+      "Bash(ls c:/temp/novotree.git/*.md)",
+      "Bash(npx tsc:*)",
+      "Bash(node_modules/.bin/tsc --noEmit)",
+      "Bash(cmd /c \"cd c:\\\\temp\\\\novotree.git\\\\frontend && node_modules\\\\.bin\\\\tsc --noEmit 2>&1\")"
+    ]
+  }
+}

@@ -11,6 +11,8 @@ import { Card } from '../../components/common/Card';
 import { passwordSchema, PASSWORD_HINT } from '../../utils/passwordValidation';
 import toast from 'react-hot-toast';
 import { apiErrorMessage } from '../../utils/apiError';
+import { isLocalApp } from '../../config/appMode';
+import { LocalAppInfoCard } from './LocalAppInfoCard';
 
 const profileSchema = z.object({
   display_name: z.string().min(1, 'Display name is required'),
@@ -83,6 +85,14 @@ export function SettingsPage() {
         <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
         <p className="text-gray-600 mt-1">Manage your account settings</p>
       </div>
+
+      {/* Local-app paths (data folder, config, log) — desktop installer only */}
+      {isLocalApp && <LocalAppInfoCard />}
+
+      {/* Profile + Change Password — hidden in local mode (no real auth there:
+          there is one synthetic "local" user, no email, no password). */}
+      {!isLocalApp && (
+      <>
 
       {/* Profile */}
       <Card title="Profile">
@@ -173,6 +183,9 @@ export function SettingsPage() {
           </Button>
         </form>
       </Card>
+
+      </>
+      )}
     </div>
   );
 }

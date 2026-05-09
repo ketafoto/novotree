@@ -23,13 +23,12 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from backend.config import settings
+from database.owner_info import DEFAULT_OWNER_ID
 from database.system_db import get_system_db
 from database.system_models import AuthEditor, AuthEditorTree, AuthPendingContributor, AuthPendingOwner, AuthSetPasswordToken
 
 logger = logging.getLogger("novotree.auth")
 
-# Default owner used in dev bypass mode
-DEFAULT_OWNER_ID = "aktiniya"
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 

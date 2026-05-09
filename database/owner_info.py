@@ -9,6 +9,7 @@
 # - "owner" is the application-side data holder.
 # - A "viewer" is the web/browser caller and may gain edit permissions later.
 
+import os
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional, Union
@@ -16,10 +17,24 @@ from typing import Optional, Union
 # Project root directory (parent of database/ folder)
 PROJECT_ROOT = Path(__file__).parent.parent
 
-DATASETS_DIR = PROJECT_ROOT / "datasets"
 
-# Default owner id (used when OwnerInfo is created without owner_id)
-_DEFAULT_OWNER_ID = "aktiniya"
+def _resolve_datasets_dir() -> Path:
+    """Datasets root: NOVOTREE_DATA_DIR env var if set (used by the local
+    desktop installer to point at the user's chosen data folder), otherwise
+    the in-tree datasets/ dir used by web deployment and dev."""
+    env = os.environ.get("NOVOTREE_DATA_DIR")
+    if env:
+        return Path(env).expanduser().resolve()
+    return PROJECT_ROOT / "datasets"
+
+
+DATASETS_DIR = _resolve_datasets_dir()
+
+# Default owner id (used when OwnerInfo is created without owner_id, and as
+# the bypass-mode owner in NOVOTREE_APP_MODE=admin/local). Honors the
+# NOVOTREE_DEFAULT_OWNER_ID env var so the desktop installer can pin it to
+# "local" without touching the multi-user web deployment.
+DEFAULT_OWNER_ID = os.environ.get("NOVOTREE_DEFAULT_OWNER_ID", "aktiniya")
 
 
 @dataclass
@@ -36,7 +51,7 @@ class OwnerInfo:
 
     def __post_init__(self):
         if self.owner_id is None:
-            self.owner_id = _DEFAULT_OWNER_ID
+            self.owner_id = DEFAULT_OWNER_ID
 
         if self.base_dir is None:
             self.base_dir = DATASETS_DIR

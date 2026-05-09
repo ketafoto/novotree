@@ -8,6 +8,7 @@ import { useAuth } from './contexts/AuthContext';
 import { Layout } from './components/layout/Layout';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
 import { typesApi } from './api/types';
+import { isLocalApp } from './config/appMode';
 
 // Auth pages (no layout wrapper)
 import { LoginPage } from './pages/auth/LoginPage';
@@ -118,14 +119,22 @@ function App() {
                 </ProtectedRoute>
               }
             />
-            <Route
-              path="/individuals/:id"
-              element={
-                <ProtectedRoute allowViewer>
-                  <IndividualDetailRoute />
-                </ProtectedRoute>
-              }
-            />
+            {/* /individuals/:id is special: in the web/VM deployment it sits
+                OUTSIDE Layout so share-link viewers can see an individual's
+                page without the editor chrome (sidebar, etc.). In the local
+                desktop app there are no viewers at all (single user, no auth),
+                so we move it INSIDE Layout further down so the Header — and
+                its Donate ♥ button — are visible. */}
+            {!isLocalApp && (
+              <Route
+                path="/individuals/:id"
+                element={
+                  <ProtectedRoute allowViewer>
+                    <IndividualDetailRoute />
+                  </ProtectedRoute>
+                }
+              />
+            )}
 
             {/* ── Main app (authenticated editors only) ── */}
             <Route
@@ -141,6 +150,10 @@ function App() {
               {/* Individuals */}
               <Route path="individuals" element={<IndividualsListPage />} />
               <Route path="individuals/new" element={<IndividualFormPage />} />
+              {/* Detail page lives here too in local mode (see comment above). */}
+              {isLocalApp && (
+                <Route path="individuals/:id" element={<IndividualDetailRoute />} />
+              )}
 
               {/* Families */}
               <Route path="families" element={<FamiliesListPage />} />

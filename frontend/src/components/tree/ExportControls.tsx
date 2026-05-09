@@ -5,6 +5,7 @@ import { Button } from '../common/Button';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../contexts/AuthContext';
 import { buildExportFilename } from '../../utils/exportFilename';
+import { saveDataUrl } from '../../utils/saveBlob';
 
 interface ExportControlsProps {
   /** The DOM element to capture (React Flow viewport) */
@@ -63,16 +64,13 @@ export function ExportControls({
         dataUrl = await toPng(element, options);
       }
 
-      // Trigger download
+      // saveDataUrl picks browser-download in web mode, native SaveAs in local.
       const ext = format === 'jpeg' ? 'jpg' : 'png';
       const ownerId = editor?.owner_id ?? viewerOwnerId ?? 'tree';
-      const link = document.createElement('a');
-      link.download = buildExportFilename(ownerId, 'full-tree', ext);
-      link.href = dataUrl;
-      link.click();
+      const filename = buildExportFilename(ownerId, 'full-tree', ext);
+      await saveDataUrl(dataUrl, filename);
 
       onClose();
-      toast.success('Tree exported successfully');
     } catch (err) {
       console.error('Export failed:', err);
       toast.error('Failed to export tree image');
