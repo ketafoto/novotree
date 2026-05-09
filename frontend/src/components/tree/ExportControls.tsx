@@ -14,8 +14,12 @@ interface ExportControlsProps {
   onExportStart?: () => void;
   /** Called after export completes */
   onExportEnd?: () => void;
+  /** Filename "kind" segment — defaults to "full-tree". */
+  kind?: string;
   onClose: () => void;
 }
+
+const DEFAULT_EXPORT_KIND = 'full-tree';
 
 type ImageFormat = 'png' | 'jpeg';
 type DpiOption = 150 | 300;
@@ -28,6 +32,7 @@ export function ExportControls({
   getElement,
   onExportStart,
   onExportEnd,
+  kind = DEFAULT_EXPORT_KIND,
   onClose,
 }: ExportControlsProps) {
   const { editor, viewerOwnerId } = useAuth();
@@ -67,7 +72,7 @@ export function ExportControls({
       // saveDataUrl picks browser-download in web mode, native SaveAs in local.
       const ext = format === 'jpeg' ? 'jpg' : 'png';
       const ownerId = editor?.owner_id ?? viewerOwnerId ?? 'tree';
-      const filename = buildExportFilename(ownerId, 'full-tree', ext);
+      const filename = buildExportFilename(ownerId, kind, ext);
       await saveDataUrl(dataUrl, filename);
 
       onClose();
@@ -78,7 +83,7 @@ export function ExportControls({
       setExporting(false);
       onExportEnd?.();
     }
-  }, [format, quality, dpi, getElement, onExportStart, onExportEnd, editor, viewerOwnerId]);
+  }, [format, quality, dpi, kind, getElement, onExportStart, onExportEnd, editor, viewerOwnerId]);
 
   return (
     <div className="bg-white/95 backdrop-blur-sm rounded-lg shadow-lg border border-gray-200 p-4 w-64">

@@ -197,7 +197,6 @@ Next
 Bugs
 -----------------------------
 - add Goto/Open after export like in Chrome to LOCAL-APP / WEB UI? List - CLick on Toast opens it would be great!!!
-- Use "full-tree" in exported Tree VIew for full tree and <name of person in focus> tree if tree is not full! 
 - "Delete all"
 
 

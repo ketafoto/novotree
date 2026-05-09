@@ -16,6 +16,21 @@ function exportTimestamp(d: Date = new Date()): string {
   );
 }
 
+/**
+ * Make a string safe to use as a filename segment: strip diacritics, replace
+ * any non-alphanumeric run with a single dash, trim leading/trailing dashes.
+ * Returns `fallback` if the result is empty.
+ */
+export function slugifyForFilename(input: string, fallback = 'unnamed'): string {
+  const normalized = input
+    .normalize('NFKD')
+    .replace(/\p{Diacritic}/gu, '')
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase();
+  return normalized || fallback;
+}
+
 export function buildExportFilename(
   ownerId: string,
   kind: string,

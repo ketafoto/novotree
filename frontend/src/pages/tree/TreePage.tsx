@@ -16,6 +16,7 @@ import { MobilePersonSheet } from '../../components/tree/MobilePersonSheet';
 import { useAuth } from '../../contexts/AuthContext';
 import { isPublicApp } from '../../config/appMode';
 import { formatIndividualName, getLatestName } from '../../utils/nameUtils';
+import { slugifyForFilename } from '../../utils/exportFilename';
 import { useIsMobileViewport } from '../../hooks/useIsMobileViewport';
 
 /**
@@ -335,6 +336,7 @@ export function TreePage() {
           <div className="absolute top-4 right-4 z-10">
             <ExportControls
               getElement={getExportElement}
+              kind={individual ? slugifyForFilename(displayName) : undefined}
               onClose={() => setShowExport(false)}
             />
           </div>
