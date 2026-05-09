@@ -26,6 +26,7 @@ import { ModalEventsSection } from '../../components/individuals/ModalEventsSect
 import { ModalMarriage } from '../../components/families/ModalMarriage';
 import { ModalDivorce } from '../../components/families/ModalDivorce';
 import { ModalFamilyNotes } from '../../components/families/ModalFamilyNotes';
+import { ModalFamilyType } from '../../components/families/ModalFamilyType';
 import { ModalSpouses } from '../../components/families/ModalSpouses';
 import { ModalChildren } from '../../components/families/ModalChildren';
 import { ModalFamilyMedia } from '../../components/families/ModalFamilyMedia';
@@ -33,7 +34,7 @@ import toast from 'react-hot-toast';
 import { apiErrorMessage } from '../../utils/apiError';
 import type { Event } from '../../types/models';
 
-type FamilySectionModal = 'spouses' | 'children' | 'marriage' | 'divorce' | 'events' | 'notes' | 'media' | null;
+type FamilySectionModal = 'spouses' | 'children' | 'marriage' | 'divorce' | 'events' | 'notes' | 'media' | 'family_type' | null;
 
 export function FamilyDetailPage() {
   const { id } = useParams();
@@ -153,7 +154,11 @@ export function FamilyDetailPage() {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-gray-900">{family.gedcom_id}</h1>
-              <p className="text-gray-600 mt-1">
+              <p
+                className="text-gray-600 mt-1 cursor-pointer hover:text-gray-900 transition-colors select-none"
+                title="Double-click to edit family type"
+                onDoubleClick={() => setSectionModal('family_type')}
+              >
                 {family.family_type || 'Family'}
               </p>
             </div>
@@ -351,6 +356,7 @@ export function FamilyDetailPage() {
       {/* Section modals */}
       {family && (
         <>
+          <ModalFamilyType open={sectionModal === 'family_type'} onClose={() => setSectionModal(null)} family={family} />
           <ModalSpouses open={sectionModal === 'spouses'} onClose={() => setSectionModal(null)} family={family} />
           <ModalChildren open={sectionModal === 'children'} onClose={() => setSectionModal(null)} family={family} />
           <ModalMarriage open={sectionModal === 'marriage'} onClose={() => setSectionModal(null)} family={family} />

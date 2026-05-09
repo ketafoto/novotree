@@ -3,6 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { ArrowLeft, Plus, Trash2, UserPlus } from 'lucide-react';
+import { FamilyTypeInfoButton } from '../../components/families/familyTypeInfo';
 import { familiesApi } from '../../api/families';
 import { individualsApi } from '../../api/individuals';
 import { typesApi } from '../../api/types';
@@ -96,6 +97,7 @@ export function FamilyFormPage() {
   } = useForm<FamilyFormData>({
     mode: 'onChange',
     defaultValues: {
+      family_type: 'marriage',
       members: preSelectedMembers.map((memberId) => ({
         individual_id: memberId,
         role: '',
@@ -315,13 +317,28 @@ export function FamilyFormPage() {
               {...register('gedcom_id')}
               helperText="Leave blank to auto-generate"
             />
-            <ComboSelect
-              label="Family Type"
-              {...register('family_type')}
-              options={familyTypes}
-              placeholder="Select or type..."
-              helperText="e.g., marriage, civil_union, or custom value"
-            />
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <label
+                  htmlFor="family_type"
+                  className="block text-sm font-medium text-gray-700"
+                >
+                  Family Type
+                </label>
+                <FamilyTypeInfoButton />
+              </div>
+              <select
+                id="family_type"
+                {...register('family_type')}
+                className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+              >
+                {familyTypes?.map((opt) => (
+                  <option key={opt.code} value={opt.code}>
+                    {opt.description}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </Card>
 
