@@ -197,7 +197,6 @@ Next
 Bugs
 -----------------------------
 - add Goto/Open after export like in Chrome to LOCAL-APP / WEB UI? List - CLick on Toast opens it would be great!!!
-- "Delete all"
 
 
 Go private

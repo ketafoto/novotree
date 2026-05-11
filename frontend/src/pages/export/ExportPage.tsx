@@ -1,19 +1,67 @@
 import { useState } from 'react';
-import { Download, FileText, FolderArchive, Loader2, CheckCircle, FileCode2 } from 'lucide-react';
+import { Download, FileText, FolderArchive, Loader2, CheckCircle, FileCode2, FolderOpen, ExternalLink } from 'lucide-react';
 import apiClient from '../../api/client';
 import { Button } from '../../components/common/Button';
 import { Card } from '../../components/common/Card';
 import toast from 'react-hot-toast';
 import { apiErrorMessage } from '../../utils/apiError';
 import { saveBlob } from '../../utils/saveBlob';
+import { isLocalApp } from '../../config/appMode';
 
 type ExportStatus = 'idle' | 'generating' | 'ready' | 'error';
+
+// Post-save actions wired to the local-app backend. No-ops / unmounted in web mode.
+async function openSavedFile(path: string): Promise<void> {
+  try {
+    await apiClient.post('/local/open-with-default', { path });
+  } catch (err) {
+    toast.error(apiErrorMessage(err, 'Failed to open file'));
+  }
+}
+
+async function showSavedInFolder(path: string): Promise<void> {
+  try {
+    await apiClient.post('/local/open-in-explorer', { path });
+  } catch (err) {
+    toast.error(apiErrorMessage(err, 'Failed to open folder'));
+  }
+}
+
+interface ReadyActionsProps {
+  savedPath: string | null;
+  onExportAgain: () => void;
+}
+
+function ReadyActions({ savedPath, onExportAgain }: ReadyActionsProps) {
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-3">
+      {isLocalApp && savedPath && (
+        <>
+          <Button onClick={() => openSavedFile(savedPath)} size="lg" variant="secondary">
+            <ExternalLink className="w-5 h-5 mr-2" />
+            Open File
+          </Button>
+          <Button onClick={() => showSavedInFolder(savedPath)} size="lg" variant="secondary">
+            <FolderOpen className="w-5 h-5 mr-2" />
+            Show in Folder
+          </Button>
+        </>
+      )}
+      <Button onClick={onExportAgain} size="lg">
+        <Download className="w-5 h-5 mr-2" />
+        Export Again
+      </Button>
+    </div>
+  );
+}
 
 export function ExportPage() {
   const [status, setStatus] = useState<ExportStatus>('idle');
   const [fileName, setFileName] = useState<string>('');
+  const [savedPath, setSavedPath] = useState<string | null>(null);
   const [rawStatus, setRawStatus] = useState<ExportStatus>('idle');
   const [rawFileName, setRawFileName] = useState<string>('');
+  const [rawSavedPath, setRawSavedPath] = useState<string | null>(null);
 
   const handleExport = async () => {
     setStatus('generating');
@@ -37,7 +85,8 @@ export function ExportPage() {
       setFileName(extractedFileName);
       setStatus('ready');
       // saveBlob handles both web (browser download) and local (native SaveAs).
-      await saveBlob(blob, extractedFileName);
+      const result = await saveBlob(blob, extractedFileName);
+      setSavedPath(result.saved ? result.path : null);
     } catch (error) {
       setStatus('error');
       toast.error(apiErrorMessage(error, 'Failed to generate export'));
@@ -65,7 +114,8 @@ export function ExportPage() {
       const blob = new Blob([response.data], { type: 'text/plain' });
       setRawFileName(extractedFileName);
       setRawStatus('ready');
-      await saveBlob(blob, extractedFileName);
+      const result = await saveBlob(blob, extractedFileName);
+      setRawSavedPath(result.saved ? result.path : null);
     } catch (error) {
       setRawStatus('error');
       toast.error(apiErrorMessage(error, 'Failed to generate raw export'));
@@ -135,12 +185,7 @@ export function ExportPage() {
                       <span className="font-mono text-sm">{fileName}</span>
                     </div>
 
-                    <div className="flex items-center justify-center gap-3">
-                      <Button onClick={handleExport} size="lg">
-                        <Download className="w-5 h-5 mr-2" />
-                        Export Again
-                      </Button>
-                    </div>
+                    <ReadyActions savedPath={savedPath} onExportAgain={handleExport} />
                   </div>
                 </div>
               )}
@@ -227,12 +272,7 @@ export function ExportPage() {
                       <span className="font-mono text-sm">{rawFileName}</span>
                     </div>
 
-                    <div className="flex items-center justify-center gap-3">
-                      <Button onClick={handleRawExport} size="lg">
-                        <Download className="w-5 h-5 mr-2" />
-                        Export Again
-                      </Button>
-                    </div>
+                    <ReadyActions savedPath={rawSavedPath} onExportAgain={handleRawExport} />
                   </div>
                 </div>
               )}

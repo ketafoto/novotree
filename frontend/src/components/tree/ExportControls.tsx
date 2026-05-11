@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { useAuth } from '../../contexts/AuthContext';
 import { buildExportFilename } from '../../utils/exportFilename';
 import { saveDataUrl } from '../../utils/saveBlob';
+import { showSaveToast } from '../../utils/saveToast';
 
 interface ExportControlsProps {
   /** The DOM element to capture (React Flow viewport) */
@@ -70,10 +71,12 @@ export function ExportControls({
       }
 
       // saveDataUrl picks browser-download in web mode, native SaveAs in local.
+      // silent: true — we render our own clickable toast via showSaveToast below.
       const ext = format === 'jpeg' ? 'jpg' : 'png';
       const ownerId = editor?.owner_id ?? viewerOwnerId ?? 'tree';
       const filename = buildExportFilename(ownerId, kind, ext);
-      await saveDataUrl(dataUrl, filename);
+      const result = await saveDataUrl(dataUrl, filename, { silent: true });
+      showSaveToast(result);
 
       onClose();
     } catch (err) {
