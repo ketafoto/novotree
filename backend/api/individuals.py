@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
@@ -7,7 +8,8 @@ from typing import List
 from .. import schemas
 from . import api_utils
 from .api_utils import fetch_display_names, enrich_created_by
-from .auth import EditorSession, get_tree_db, require_editor, require_owner
+from .auth import EditorSession, get_tree_db, get_tree_owner_info, require_editor, require_owner
+from database.owner_info import OwnerInfo
 from database.system_db import get_system_db
 import database.models
 
@@ -96,6 +98,51 @@ def read_individuals(
     )
     name_map = fetch_display_names({i.created_by for i in db_rows if i.created_by}, db_sys)
     return [enrich_created_by(schemas.Individual.model_validate(i), name_map) for i in db_rows]
+
+
+@router.delete("/all")
+def delete_all_individuals(
+    session: EditorSession = Depends(require_owner),
+    db: Session = Depends(get_tree_db),
+    owner: OwnerInfo = Depends(get_tree_owner_info),
+):
+    """Delete all individuals and related families, events, media for the current tree.
+
+    Owner-only. Helper/lookup tables are preserved. Media files on disk are removed.
+    """
+    media_dir = Path(owner.media_dir)
+    media_files = [
+        m.file_path for m in db.query(database.models.Media).all() if m.file_path
+    ]
+
+    individual_count = db.query(database.models.Individual).count()
+    family_count = db.query(database.models.Family).count()
+    event_count = db.query(database.models.Event).count()
+    media_count = db.query(database.models.Media).count()
+
+    # Cascade rules drop names, family-memberships, events, media tied to individuals.
+    # Families themselves and family-only events/media are not cascaded — delete explicitly.
+    db.query(database.models.Individual).delete(synchronize_session=False)
+    db.query(database.models.Family).delete(synchronize_session=False)
+    db.commit()
+
+    for rel_path in media_files:
+        try:
+            file_path = media_dir / rel_path
+            if file_path.exists():
+                file_path.unlink()
+        except OSError:
+            pass
+
+    return {
+        "detail": "Tree reset",
+        "deleted": {
+            "individuals": individual_count,
+            "families": family_count,
+            "events": event_count,
+            "media": media_count,
+        },
+    }
 
 
 @router.get("/{individual_id}", response_model=schemas.Individual)

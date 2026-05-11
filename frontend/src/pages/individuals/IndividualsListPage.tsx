@@ -1,24 +1,32 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, Search, Edit2, Trash2, Save, X, User, GitBranch } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Save, X, User, GitBranch, Users, AlertTriangle } from 'lucide-react';
 import { individualsApi } from '../../api/individuals';
 import { typesApi } from '../../api/types';
+import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../../components/common/Button';
 import { Card } from '../../components/common/Card';
+import { Modal } from '../../components/common/Modal';
+import { Input } from '../../components/common/Input';
 import { Spinner } from '../../components/common/Spinner';
 import toast from 'react-hot-toast';
 import { apiErrorMessage } from '../../utils/apiError';
 import type { Individual } from '../../types/models';
 import { getLatestName, formatIndividualName } from '../../utils/nameUtils';
 
+const RESET_CONFIRM_PHRASE = 'RESET';
+
 export function IndividualsListPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { isOwner } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editData, setEditData] = useState<Partial<Individual>>({});
+  const [resetModalOpen, setResetModalOpen] = useState(false);
+  const [resetConfirmText, setResetConfirmText] = useState('');
 
   const { data: individuals, isLoading } = useQuery({
     queryKey: ['individuals'],
@@ -51,6 +59,42 @@ export function IndividualsListPage() {
     },
     onError: (err) => {
       toast.error(apiErrorMessage(err, 'Failed to delete individual'));
+    },
+  });
+
+  const deleteSelectedMutation = useMutation({
+    mutationFn: async (ids: number[]) => {
+      await Promise.all(ids.map((id) => individualsApi.delete(id)));
+      return ids.length;
+    },
+    onSuccess: (count) => {
+      queryClient.invalidateQueries({ queryKey: ['individuals'] });
+      queryClient.invalidateQueries({ queryKey: ['families'] });
+      setSelectedIds(new Set());
+      toast.success(`Deleted ${count} individual${count === 1 ? '' : 's'}`);
+    },
+    onError: (err) => {
+      toast.error(apiErrorMessage(err, 'Failed to delete selected individuals'));
+    },
+  });
+
+  const deleteAllMutation = useMutation({
+    mutationFn: individualsApi.deleteAll,
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['individuals'] });
+      queryClient.invalidateQueries({ queryKey: ['families'] });
+      queryClient.invalidateQueries({ queryKey: ['events'] });
+      queryClient.invalidateQueries({ queryKey: ['media'] });
+      setSelectedIds(new Set());
+      setResetModalOpen(false);
+      setResetConfirmText('');
+      const d = result.deleted;
+      toast.success(
+        `Tree reset: ${d.individuals} individuals, ${d.families} families, ${d.events} events, ${d.media} media removed`
+      );
+    },
+    onError: (err) => {
+      toast.error(apiErrorMessage(err, 'Failed to reset tree'));
     },
   });
 
@@ -126,6 +170,17 @@ export function IndividualsListPage() {
     navigate(`/families/new?members=${Array.from(selectedIds).join(',')}`);
   };
 
+  const handleDeleteSelected = () => {
+    const count = selectedIds.size;
+    if (count === 0) return;
+    if (window.confirm(`Delete ${count} selected individual${count === 1 ? '' : 's'}? Related family memberships, events, and media will also be removed.`)) {
+      deleteSelectedMutation.mutate(Array.from(selectedIds));
+    }
+  };
+
+  const resetConfirmed = resetConfirmText.trim() === RESET_CONFIRM_PHRASE;
+  const totalIndividuals = individuals?.length || 0;
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -154,8 +209,8 @@ export function IndividualsListPage() {
 
       {/* Toolbar */}
       <Card>
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="relative flex-1 min-w-64">
+        <div className="space-y-3">
+          <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
               type="text"
@@ -165,12 +220,45 @@ export function IndividualsListPage() {
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
             />
           </div>
-          {selectedIds.size > 0 && (
-            <Button onClick={handleCreateFamily}>
-              <User className="w-4 h-4 mr-2" />
-              Create Family ({selectedIds.size} selected)
+          <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-gray-100">
+            <span className="text-sm text-gray-600">
+              {selectedIds.size > 0
+                ? `${selectedIds.size} selected`
+                : 'Select individuals to enable bulk actions'}
+            </span>
+            <div className="flex-1" />
+            <Button
+              variant={selectedIds.size === 0 ? 'secondary' : 'primary'}
+              onClick={handleCreateFamily}
+              disabled={selectedIds.size === 0}
+              title={selectedIds.size === 0 ? 'Select individuals first' : 'Create a family from the selected individuals'}
+            >
+              <Users className="w-4 h-4 mr-2" />
+              Create Family
             </Button>
-          )}
+            <Button
+              variant={selectedIds.size === 0 ? 'secondary' : 'danger'}
+              onClick={handleDeleteSelected}
+              disabled={selectedIds.size === 0 || deleteSelectedMutation.isPending}
+              isLoading={deleteSelectedMutation.isPending}
+              title={selectedIds.size === 0 ? 'Select individuals first' : 'Delete selected individuals'}
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete Selected
+            </Button>
+            {isOwner && (
+              <Button
+                variant="secondary"
+                onClick={() => setResetModalOpen(true)}
+                disabled={totalIndividuals === 0}
+                className="text-red-600 border-red-300 hover:bg-red-50"
+                title={totalIndividuals === 0 ? 'Tree is already empty' : 'Delete all individuals and related data'}
+              >
+                <AlertTriangle className="w-4 h-4 mr-2" />
+                Delete All…
+              </Button>
+            )}
+          </div>
         </div>
       </Card>
 
@@ -386,6 +474,62 @@ export function IndividualsListPage() {
       <p className="text-sm text-gray-500">
         Showing {filteredIndividuals.length} of {individuals?.length || 0} individuals
       </p>
+
+      <Modal
+        open={resetModalOpen}
+        onClose={() => {
+          if (deleteAllMutation.isPending) return;
+          setResetModalOpen(false);
+          setResetConfirmText('');
+        }}
+        title="Delete all individuals and reset tree"
+      >
+        <div className="space-y-4">
+          <div className="flex gap-3 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+            <div className="text-sm text-red-800">
+              <p className="font-semibold mb-1">This action cannot be undone.</p>
+              <p>
+                All <strong>{totalIndividuals}</strong> individuals in your tree will be permanently
+                deleted, along with all related families, events, and media files. Helper and lookup
+                tables (e.g. event types, name types) will be preserved.
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <Input
+              label={`Type ${RESET_CONFIRM_PHRASE} to confirm`}
+              value={resetConfirmText}
+              onChange={(e) => setResetConfirmText(e.target.value)}
+              placeholder={RESET_CONFIRM_PHRASE}
+              autoFocus
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setResetModalOpen(false);
+                setResetConfirmText('');
+              }}
+              disabled={deleteAllMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => deleteAllMutation.mutate()}
+              disabled={!resetConfirmed || deleteAllMutation.isPending}
+              isLoading={deleteAllMutation.isPending}
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Permanently delete all data
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

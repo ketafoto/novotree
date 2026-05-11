@@ -45,5 +45,13 @@ export const individualsApi = {
   delete: async (id: number): Promise<void> => {
     await apiClient.delete(`/individuals/${id}`);
   },
+
+  /**
+   * Delete all individuals and related families, events, media (owner-only).
+   */
+  deleteAll: async (): Promise<{ deleted: { individuals: number; families: number; events: number; media: number } }> => {
+    const response = await apiClient.delete('/individuals/all');
+    return response.data;
+  },
 };
 
