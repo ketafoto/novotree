@@ -25,6 +25,7 @@ from database.system_models import AuthShareToken
 from backend.api import individuals, families, events, media, header, auth, types, export, import_api, tree
 from backend.api import users as users_api
 from backend.api import local as local_api
+from backend.api import privacy as privacy_api
 from backend.api.auth import DEFAULT_OWNER_ID, _ALGORITHM
 from backend.config import settings
 from backend.logging import setup_logging, request_user
@@ -110,6 +111,7 @@ AUTH_ONLY_PATHS = {
     "/auth/me", "/auth/set-password", "/auth/public-config", "/auth/share-info",
     "/auth/owner-signup", "/auth/verify-owner-email", "/auth/resend-owner-verification",
     "/auth/contributor-signup", "/auth/verify-contributor-email", "/auth/resend-contributor-verification",
+    "/privacy/config",
     "/health",
 }
 _request_windows: dict[str, deque[float]] = defaultdict(deque)
@@ -269,6 +271,7 @@ app.include_router(import_api.router)
 app.include_router(tree.router)
 app.include_router(tree.full_tree_router)
 app.include_router(local_api.router)
+app.include_router(privacy_api.router)
 
 
 # ---------------------------------------------------------------------------

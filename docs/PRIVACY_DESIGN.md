@@ -1,14 +1,22 @@
 # Privacy Implementation Plan
 
-> **Companion to [PRIVACY_HANDLING.md](PRIVACY_HANDLING.md).**
-> That document is the *what and why* (concerns, mitigations, legal text).
+> **Companion to [PRIVACY_ANALYSIS.md](PRIVACY_ANALYSIS.md).**
 > This document is the *when and how* — a tiered implementation checklist
-> that tracks progress and provides enough context to resume work in a
-> fresh conversation.
+> (Tier 1 / 2 / 3) that tracks coding progress, the central `PrivacySettings`
+> draft, and the deployment-mode taxonomy (Mode A / B / C).
+> [PRIVACY_ANALYSIS.md](PRIVACY_ANALYSIS.md) is the *what and why* — the
+> concerns inventory (C-NN), mitigation catalogue (M-NN), per-mode posture
+> table, and draft legal texts. Items here reference the M-NN IDs defined
+> there.
+>
+> If you are picking work up from scratch: read
+> [PRIVACY_ANALYSIS.md](PRIVACY_ANALYSIS.md) first to understand the problem
+> space, then this file to see what is built, in progress, or queued.
 
-**Status overall: NOT STARTED.** Privacy implementation has not begun.
-Foundation documents are in place; code work is queued behind other roadmap
-items in [notes.txt](notes.txt).
+**Status overall: TIER 1 STARTED.** §2.1 (central privacy config) is shipped:
+`PrivacySettings` dataclass, `GET /privacy/config` endpoint, and frontend
+`usePrivacyConfig()` hook are in. Remaining Tier 1 items (§2.2–§2.6) are
+queued — see the per-section checkboxes below.
 
 ---
 
@@ -16,7 +24,7 @@ items in [notes.txt](notes.txt).
 
 If you are picking this up from scratch, read in this order:
 
-1. [PRIVACY_HANDLING.md](PRIVACY_HANDLING.md) — concerns inventory, mitigations,
+1. [PRIVACY_ANALYSIS.md](PRIVACY_ANALYSIS.md) — concerns inventory, mitigations,
    concern↔mitigation matrix, and draft legal texts.
 2. This file — tiered checklist + central config draft + decisions made so far.
 3. [AUTH_SCHEMA_PROPOSAL.md](AUTH_SCHEMA_PROPOSAL.md) — auth tables/endpoints
@@ -109,7 +117,7 @@ becomes true, schedule a paid review:
 - Sensitive data is intentionally exposed via share tokens.
 
 The agenda for that review is fixed: the seven open questions in
-[PRIVACY_HANDLING.md §10](PRIVACY_HANDLING.md#10-open-questions-for-legal-review).
+[PRIVACY_ANALYSIS.md §10](PRIVACY_ANALYSIS.md#10-open-questions-for-legal-review).
 See §4.1 — it is the first and gating item in Tier 3.
 
 ## 2. Tier 1 — Now (Mode A hardening)
@@ -120,14 +128,16 @@ risk-reduction to effort.
 
 ### 2.1 Central privacy config (foundational; everything else reads from it)
 
-- [ ] Add `PrivacySettings` dataclass to [backend/config.py](../backend/config.py).
+- [x] Add `PrivacySettings` dataclass to [backend/config.py](../backend/config.py).
       Use the draft in §6 below verbatim.
-- [ ] Add a `GET /privacy/config` endpoint that returns the public subset
+- [x] Add a `GET /privacy/config` endpoint that returns the public subset
       (age threshold, retention windows, controller name, contact email,
       `analytics_enabled`) so the frontend can render text without
-      hard-coding values.
-- [ ] Frontend hook `usePrivacyConfig()` in
-      [frontend/src/api/](../frontend/src/api/) that fetches once and caches.
+      hard-coding values. Lives in [backend/api/privacy.py](../backend/api/privacy.py).
+- [x] Frontend hook `usePrivacyConfig()` in
+      [frontend/src/hooks/usePrivacyConfig.ts](../frontend/src/hooks/usePrivacyConfig.ts)
+      that fetches once and caches (module-scoped promise). API typings in
+      [frontend/src/api/privacy.ts](../frontend/src/api/privacy.ts).
 
 ### 2.2 Public takedown / "remove me" flow (M-04)
 
@@ -169,7 +179,7 @@ that exposes both.
 ### 2.4 Viewer notice on first share-link load (M-16)
 
 - [ ] First load of `?share=<token>` shows a small notice with text from
-      [PRIVACY_HANDLING.md §9.3](PRIVACY_HANDLING.md#93-viewer-notice-shown-on-first-share-link-load).
+      [PRIVACY_ANALYSIS.md §9.3](PRIVACY_ANALYSIS.md#93-viewer-notice-shown-on-first-share-link-load).
       Dismissed once per token (key = `viewer_notice_dismissed:<token_hash>` in
       `sessionStorage`).
 - [ ] Component: `ViewerNotice.tsx`. Hook into
@@ -184,7 +194,7 @@ forwards the link further than intended and someone later complains.
 - [ ] New table `auth_share_consents`: `id`, `editor_id`, `tree_owner_id`,
       `share_token_id`, `accepted_at`, `accepted_ip`, `tos_version`.
 - [ ] Modal shown when Owner clicks "Create share link" or extends visibility.
-      Text from [PRIVACY_HANDLING.md §9.4](PRIVACY_HANDLING.md#94-per-share-acknowledgement-shown-when-creating-or-extending-a-share-link).
+      Text from [PRIVACY_ANALYSIS.md §9.4](PRIVACY_ANALYSIS.md#94-per-share-acknowledgement-shown-when-creating-or-extending-a-share-link).
 - [ ] Persist consent on submit. Do not let share tokens be created without it.
 
 ### 2.6 Right-of-access export per Individual (M-09, Phase 7)
@@ -311,7 +321,7 @@ This is a **go / no-go decision point**, not a wrap-up step. Schedule a paid
 consultation with a privacy/data-protection specialist before writing any
 Tier-3 code. The objective is to walk away with answers to all seven open
 questions in
-[PRIVACY_HANDLING.md §10](PRIVACY_HANDLING.md#10-open-questions-for-legal-review),
+[PRIVACY_ANALYSIS.md §10](PRIVACY_ANALYSIS.md#10-open-questions-for-legal-review),
 and a clear sense of whether the obligations match what you can sustain.
 
 **Stop here if the answers make Mode B or Mode C impractical** (e.g. DPO
@@ -380,7 +390,7 @@ cascade machinery.
 - [ ] Footer link expanded: Privacy · Terms · Cookies · Privacy/remove me.
 - [ ] Cookie notice banner — dismissible, persisted in `localStorage`, single
       "Got it" button. Text from
-      [PRIVACY_HANDLING.md §9.6](PRIVACY_HANDLING.md#96-cookie-notice-banner-first-visit).
+      [PRIVACY_ANALYSIS.md §9.6](PRIVACY_ANALYSIS.md#96-cookie-notice-banner-first-visit).
       Component: [frontend/src/components/CookieNotice.tsx](../frontend/src/components/CookieNotice.tsx) (new).
 - [ ] Flip `PrivacySettings.allow_owner_signup = True`. If gated, also set
       `PrivacySettings.owner_signup_requires_approval = True` and wire the
@@ -394,7 +404,7 @@ cascade machinery.
 ### 4.5 Contributor acknowledgement (Phase 5.1, M-15) — Mode B and Mode C
 
 - [ ] First-edit modal with text from
-      [PRIVACY_HANDLING.md §9.2](PRIVACY_HANDLING.md#92-contributor-acknowledgement-shown-before-first-edit).
+      [PRIVACY_ANALYSIS.md §9.2](PRIVACY_ANALYSIS.md#92-contributor-acknowledgement-shown-before-first-edit).
 - [ ] Persist accepted (editor_id, tree_owner_id, accepted_at).
 - [ ] Flip `PrivacySettings.allow_contributor_signup = True`.
 
@@ -448,7 +458,7 @@ makes "who edited this last?" answerable, which becomes meaningful in Mode B.
 
 When Tier 1 starts, copy this block into [backend/config.py](../backend/config.py).
 Loaded from environment variables; defaults are the conservative choices
-documented in [PRIVACY_HANDLING.md §10](PRIVACY_HANDLING.md#10-open-questions-for-legal-review).
+documented in [PRIVACY_ANALYSIS.md §10](PRIVACY_ANALYSIS.md#10-open-questions-for-legal-review).
 
 ```python
 # Privacy & legal posture configuration.
@@ -643,7 +653,7 @@ shrink.
 
 ## 7. Open questions awaiting legal review
 
-From [PRIVACY_HANDLING.md §10](PRIVACY_HANDLING.md#10-open-questions-for-legal-review).
+From [PRIVACY_ANALYSIS.md §10](PRIVACY_ANALYSIS.md#10-open-questions-for-legal-review).
 For each, we apply a conservative default in code and revisit after the lawyer
 session.
 

@@ -1,4 +1,15 @@
-# Privacy Handling — Concerns, Mitigations, and Plan
+# Privacy Analysis — Concerns, Mitigations, and Legal Text
+
+> **Companion to [PRIVACY_DESIGN.md](PRIVACY_DESIGN.md).**
+> This document is the *what and why* — concerns inventory (C-NN),
+> mitigation catalogue (M-NN), per-mode posture, and draft legal texts.
+> [PRIVACY_DESIGN.md](PRIVACY_DESIGN.md) is the *when and how* — the
+> tiered implementation checklist that tracks coding progress and
+> references the M-NN items defined here.
+>
+> If you are picking work up from scratch: read this file first to
+> understand the problem space, then [PRIVACY_DESIGN.md](PRIVACY_DESIGN.md)
+> to see what is built, in progress, or queued.
 
 > **Disclaimer.** This document is engineering and product guidance, not legal advice.
 > Before promoting NovoTree publicly to non-friends, the author should obtain a paid
@@ -354,7 +365,7 @@ likely to change so it can be picked up and coded directly.
 
 | # | Task | Files |
 |---|------|-------|
-| 0.1 | Land this document. | [docs/PRIVACY_HANDLING.md](docs/PRIVACY_HANDLING.md) |
+| 0.1 | Land this document. | [docs/PRIVACY_ANALYSIS.md](docs/PRIVACY_ANALYSIS.md) |
 | 0.2 | Draft Privacy Policy + Terms of Service pages (text in section 9). | [frontend/src/pages/legal/](frontend/src/pages/legal/) (new), [backend/api/legal.py](backend/api/legal.py) (new, serves markdown) |
 | 0.3 | Add ToS / privacy links to the footer of every page. | [frontend/src/components/Layout.tsx](frontend/src/components/Layout.tsx) |
 | 0.4 | Cookie notice banner (dismissible, persisted in `localStorage`). | [frontend/src/components/CookieNotice.tsx](frontend/src/components/CookieNotice.tsx) (new) |
@@ -424,7 +435,7 @@ likely to change so it can be picked up and coded directly.
 |---|------|-------|
 | 8.1 | `vm-backup.py` rotates: keep 30 daily; delete older. | external `vm-backup.py` (in [novospace.git/scripts/deployment/](../../novospace.git/scripts/deployment/)) |
 | 8.2 | New `erasure_log` table. Every delete via takedown writes a row. | [database/models.py](database/models.py) |
-| 8.3 | Document the 30-day backup window in the privacy policy. | [docs/PRIVACY_HANDLING.md](docs/PRIVACY_HANDLING.md), the rendered policy |
+| 8.3 | Document the 30-day backup window in the privacy policy. | [docs/PRIVACY_ANALYSIS.md](docs/PRIVACY_ANALYSIS.md), the rendered policy |
 
 ### Phase 9 — Local-first / desktop mode (M-08; large; corresponds to notes.txt line 248)
 

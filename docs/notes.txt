@@ -196,17 +196,18 @@ Next
 =======================
 Bugs
 -----------------------------
-- add Goto/Open after export like in Chrome to LOCAL-APP / WEB UI? List - CLick on Toast opens it would be great!!!
-
+-
 
 Go private
 -----------------------------
 *. Legals for private usage (mode A tiers 1 & 2 from docs\PRIVACY_DESIGN.md)
-*. I want to publish SaaS for relative and friends only, not for public server.
+*. Add link to downloadable application, so friends could build their tree privately
+
+X. I want to publish SaaS for relative and friends only, not for public server.
    So I was thinking of adding "approval" flow for owners by admin during signup process.
    Same like we have today for approval contributors by owner.
    1. Does that kind of service falls under mode A (Tiers 1 & 2)?
-      Or that is absolute mode B - Tier 3?
+      Or that is absolute mode C - Tier 3?
    2. What is about "contributors for my tree" only, I mean disable "owner signup"
       and enable "contributor signup"?
 
@@ -215,9 +216,10 @@ Go private
    - implement UI 'admin' panel - where owners can be approved
    - ability to see the owner genealogy data (like log-in with owner credentials) ?
 
+
 Go public
 -----------------------------
-*. Legals (mode B - payed consultation with lawyer & tier 3)
+*. Legals (mode C - payed consultation with lawyer & tier 3)
 
 *. We probably need a separate "admin" page - to be accessible by admin (me) only - or better to use CLI ???
    On this page UI should:
