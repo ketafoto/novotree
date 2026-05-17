@@ -299,12 +299,19 @@ Dismissed once per share token (persisted in `sessionStorage`).
 
 ## 6. Per-Deployment-Mode Posture
 
-| Mode | Household exemption applies? | NovoTree role | Required mitigations |
-|------|------------------------------|---------------|----------------------|
-| **Private (Owner only, no shares)** | Yes for the Owner | Processor (low duty) | M-01, M-12, M-14 |
-| **Friends-only (limited share tokens)** | Probably no (CJEU *Lindqvist*) | Processor | M-01 → M-07, M-11, M-12, M-14, M-15, M-16 |
-| **Public service (open signups)** | No | Joint controller / Processor depending on data | All of M-01 → M-16 |
-| **Local-first / desktop install** | Yes | Software vendor only | M-01 (in EULA), M-12 |
+NovoTree has three on-server deployment modes (Mode A / B / C) plus the
+local-first desktop variant. See
+[PRIVACY_DESIGN.md §1 "Key product framing"](PRIVACY_DESIGN.md#key-product-framing--three-deployment-modes)
+and [§6.5](PRIVACY_DESIGN.md#65-mode-b-contributors-only-vs-mode-c-gated-or-open-owner-signup)
+for the full taxonomy and the obligation-comparison table between Mode B and
+Mode C (including why admin-approved gated owner signup is still Mode C).
+
+| Mode | What it is | Household exemption applies? | NovoTree role | Required mitigations |
+|------|-----------|------------------------------|---------------|----------------------|
+| **Mode A — Private / single Owner** | Single Owner (the operator). No signups. Share links to relatives still work. | Yes for the Owner, but lost the moment a share link is created (CJEU *Lindqvist*) | Processor (low duty) | M-01, M-02, M-03, M-04, M-12, M-14, M-16 (Tier 1 + Tier 2 of PRIVACY_DESIGN.md) |
+| **Mode B — Contributors-only** | Single Owner (the operator). Contributor signup enabled so relatives can edit the operator's tree. Owner signup disabled. | No (multiple editors, shared tree) | Processor | All of Mode A plus M-11, M-15 |
+| **Mode C — Public / gated owner signup** | Owner signup enabled (open OR admin-gated). Each new Owner is a separate data controller hosted on your VM. | No | Joint controller / Processor depending on data | All of M-01 → M-16 |
+| **Local-first / desktop install** | Backend runs on `127.0.0.1` on the user's machine; data never reaches the server. | Yes | Software vendor only | M-01 (in EULA), M-12 |
 
 ---
 

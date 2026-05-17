@@ -24,18 +24,29 @@ If you are picking this up from scratch, read in this order:
 4. [CONTRIBUTOR_FEATURE.md](CONTRIBUTOR_FEATURE.md) — contributor lifecycle
    that some privacy items add acknowledgements to.
 
-### Key product framing — two real deployment modes
+### Key product framing — three deployment modes
 
-NovoTree has only two practical deployment modes:
+NovoTree has three practical deployment modes:
 
 - **Mode A — Private / read-only.** Single owner (the operator). Owner and
   contributor signups disabled. Share links to relatives still work; assume
   any link can be forwarded → effectively public. Therefore Mode A still
   needs takedown, viewer notice, audit trail, right-of-access export.
-- **Mode B — Public service.** Open owner and contributor signups. Local-first
-  desktop app is the headline privacy upgrade.
+- **Mode B — Contributors-only.** Owner signup disabled; contributor signup
+  enabled. The operator remains the only Owner / data controller for the
+  tree's contents, but invites relatives to *edit* the same tree as
+  Contributors. Reduces the legal surface vs. Mode C because no second
+  data controller is created on the server, but still requires audit-trail
+  completeness (multiple editors touch the same tree) and a contributor
+  acknowledgement. A gated owner-signup variant (admin-approved relatives
+  with their own trees) is NOT Mode B — it falls under Mode C below; see
+  §6.5 for why.
+- **Mode C — Public service.** Open owner and contributor signups (or any
+  variant where multiple Owners exist on the server, including
+  admin-approved gated signup). Local-first desktop app is the headline
+  privacy upgrade.
 
-Tier 1 + Tier 2 below get Mode A defensible. Tier 3 unlocks Mode B.
+Tier 1 + Tier 2 below get Mode A defensible. Tier 3 unlocks Mode B and Mode C.
 
 ### Decisions already made
 
@@ -86,11 +97,13 @@ strictest EU thresholds, so the configuration is compliant in every jurisdiction
 it might touch. A regulator complaint against a one-person hobby tree that
 responds to takedowns within 30 days is realistically near-zero risk.
 
-**Required before Tier 3 (Mode B / public launch).** Once any of the following
+**Required before Tier 3 (Mode B or Mode C launch).** Once any of the following
 becomes true, schedule a paid review:
 
-- Public owner or contributor signups are enabled (`allow_owner_signup` /
-  `allow_contributor_signup = True`).
+- Contributor signup is enabled (`allow_contributor_signup = True`) — minimum
+  trigger for Mode B.
+- Owner signup is enabled in any form, gated or open (`allow_owner_signup = True`
+  with or without `owner_signup_requires_approval`) — triggers full Mode C.
 - A donate button or any payment integration is added.
 - Analytics with non-essential cookies are introduced (`analytics_enabled = True`).
 - Sensitive data is intentionally exposed via share tokens.
@@ -188,8 +201,8 @@ forwards the link further than intended and someone later complains.
 | Owner self-unregister | In Mode A, owner = operator; deletion is a directory drop on the VM. | Tier 3 §4.2 |
 | ToS pages + acceptance | Operator accepts no terms from themselves; meaningful only with multiple owners. | Tier 3 §4.3 |
 | Cookie notice banner | Mode A has no non-essential cookies and no third-party owners to notify. | Tier 3 §4.3 |
-| `updated_by` / `updated_at` audit columns | With single Owner, `created_by` (already stamped on every row) answers "who added this?" — always the Owner. Multi-editor audit is Mode B. | Tier 3 §4.5 |
-| "History" tab on Individual page | Same reason — uniform attribution in Mode A. | Tier 3 §4.5 |
+| `updated_by` / `updated_at` audit columns | With single Owner, `created_by` (already stamped on every row) answers "who added this?" — always the Owner. Multi-editor audit becomes needed in Mode B (contributors) and Mode C. | Tier 3 §4.6 |
+| "History" tab on Individual page | Same reason — uniform attribution in Mode A. | Tier 3 §4.6 |
 
 ---
 
@@ -239,8 +252,8 @@ Owner / mark resolved / escalate / hide records).
 
 ### 3.6 Verify GEDCOM importer stamps `created_by`
 
-Light future-proofing for Mode B: if the importer leaves rows with
-`created_by IS NULL`, switching to Mode B later loses the historical
+Light future-proofing for Mode B / Mode C: if the importer leaves rows with
+`created_by IS NULL`, switching out of Mode A later loses the historical
 attribution to the Owner.
 
 - [ ] One-time verification in [database/gedcom_import.py](../database/gedcom_import.py) —
@@ -271,28 +284,41 @@ Defer if no minors in the tree; do before going public.
 
 ---
 
-## 4. Tier 3 — Before going public (Mode B)
+## 4. Tier 3 — Before enabling Mode B or Mode C
 
 > **Everything in Tier 3 is conditional on completing §4.1 first.** Do not
 > start any code in §4.2–§4.8 before the lawyer consultation. The whole point
-> of §4.1 is to decide whether Mode B is workable in your jurisdiction with
-> acceptable obligations — if the answer is "no, not at this scale," all of
-> the development effort below is wasted.
+> of §4.1 is to decide whether Mode B or Mode C is workable in your
+> jurisdiction with acceptable obligations — if the answer is "no, not at this
+> scale," all of the development effort below is wasted.
+
+### What Mode B needs vs what Mode C needs
+
+Tier 3 covers two destinations:
+
+- **Mode B (contributors-only)** needs: §4.1 (lawyer), §4.5 (contributor ack),
+  §4.6 (audit trail), §4.7 (hosting + DPA). It does NOT need §4.3 (owner
+  self-unregister), §4.4 (owner ToS at signup), or §4.8 (donate button).
+- **Mode C (public service, including gated/admin-approved owner signup)**
+  needs all of §4.1–§4.8.
+
+§6.5 explains why gated owner signup is Mode C, not Mode B, and contains the
+side-by-side obligation table.
 
 ### 4.1 **Lawyer review — GATING. Do this first.**
 
 This is a **go / no-go decision point**, not a wrap-up step. Schedule a paid
 consultation with a privacy/data-protection specialist before writing any
-Mode-B-specific code. The objective is to walk away with answers to all seven
-open questions in
+Tier-3 code. The objective is to walk away with answers to all seven open
+questions in
 [PRIVACY_HANDLING.md §10](PRIVACY_HANDLING.md#10-open-questions-for-legal-review),
 and a clear sense of whether the obligations match what you can sustain.
 
-**Stop here if the answers make Mode B impractical** (e.g. DPO required at
-your scale, joint-controller framing forces you to vet every Owner manually,
-local jurisdiction adds requirements you cannot meet). It is far cheaper to
-pay one hour of legal time and decide *not* to build than to ship and
-discover the obligations afterwards.
+**Stop here if the answers make Mode B or Mode C impractical** (e.g. DPO
+required at your scale, joint-controller framing forces you to vet every Owner
+manually, local jurisdiction adds requirements you cannot meet). It is far
+cheaper to pay one hour of legal time and decide *not* to build than to ship
+and discover the obligations afterwards.
 
 - [ ] Schedule paid consultation (1–2 hours, privacy/SaaS specialist).
       See guidance on finding one in §1 → "When to involve a lawyer".
@@ -309,13 +335,14 @@ discover the obligations afterwards.
   | 7 | Cookie notice + button design acceptable to regulators? | |
 
 - [ ] **Go / no-go decision recorded here:**
-      ☐ GO — proceed with §4.2–§4.8.
+      ☐ GO Mode B (contributors-only) — proceed with §4.5, §4.6, §4.7.
+      ☐ GO Mode C (public / gated owner signup) — proceed with §4.2–§4.8.
       ☐ NO-GO — keep NovoTree in Mode A indefinitely; close out Tier 3.
 - [ ] After §4.2–§4.8 development is complete, schedule a short second
       session (~30 min) to review the final ToS, privacy policy, and cookie
       banner texts before launch.
 
-### 4.2 Local-first / desktop app (Phase 9, M-08)
+### 4.2 Local-first / desktop app (Phase 9, M-08) — Mode C only
 
 **Single biggest privacy posture upgrade for the SaaS path.** Already on the
 roadmap (notes.txt L251).
@@ -326,11 +353,12 @@ roadmap (notes.txt L251).
 - [ ] EULA text reflecting the household-exemption posture (no controller
       duties for NovoTree in this mode — software-vendor only).
 
-### 4.3 Owner self-unregister + cascade delete (notes.txt L220 + erasure log)
+### 4.3 Owner self-unregister + cascade delete (notes.txt L220 + erasure log) — Mode C only
 
-Right-of-erasure for an Owner who is no longer the operator. Mode-B-only:
-in Mode A the operator deletes the directory by hand. Reuses the takedown
-infrastructure from §2.2 for the cascade machinery.
+Right-of-erasure for an Owner who is no longer the operator. Mode-C-only:
+in Mode A and Mode B the operator is still the only Owner and deletes the
+directory by hand. Reuses the takedown infrastructure from §2.2 for the
+cascade machinery.
 
 - [ ] New table `erasure_log` (timestamp, owner_id, scope = `owner` /
       `individual` / `media`, target_id, requester_kind = `owner` / `subject`,
@@ -342,7 +370,7 @@ infrastructure from §2.2 for the cascade machinery.
       Profile, with type-the-word-DELETE confirmation.
 - [ ] Admin equivalent endpoint for forced removal (used by §2.2 escalation).
 
-### 4.4 Full Owner ToS at signup + cookie notice banner (Phase 1, M-01, M-12)
+### 4.4 Full Owner ToS at signup + cookie notice banner (Phase 1, M-01, M-12) — Mode C only
 
 - [ ] Add `tos_accepted_at`, `tos_version` columns to `auth_editors`.
 - [ ] Required signup checkbox + backend rejection if absent.
@@ -354,26 +382,28 @@ infrastructure from §2.2 for the cascade machinery.
       "Got it" button. Text from
       [PRIVACY_HANDLING.md §9.6](PRIVACY_HANDLING.md#96-cookie-notice-banner-first-visit).
       Component: [frontend/src/components/CookieNotice.tsx](../frontend/src/components/CookieNotice.tsx) (new).
-- [ ] Flip `PrivacySettings.allow_owner_signup = True`.
+- [ ] Flip `PrivacySettings.allow_owner_signup = True`. If gated, also set
+      `PrivacySettings.owner_signup_requires_approval = True` and wire the
+      admin-approval flow (per §6.5).
 
 > If `analytics_enabled` is later flipped to True (e.g. switching from
 > Cloudflare Web Analytics to GA4 or any other tool that sets non-essential
 > cookies), the banner here must be replaced with a real Accept/Reject consent
 > dialog, and the analytics script gated until Accept is clicked.
 
-### 4.5 Contributor acknowledgement (Phase 5.1, M-15)
+### 4.5 Contributor acknowledgement (Phase 5.1, M-15) — Mode B and Mode C
 
 - [ ] First-edit modal with text from
       [PRIVACY_HANDLING.md §9.2](PRIVACY_HANDLING.md#92-contributor-acknowledgement-shown-before-first-edit).
 - [ ] Persist accepted (editor_id, tree_owner_id, accepted_at).
 - [ ] Flip `PrivacySettings.allow_contributor_signup = True`.
 
-### 4.6 Audit trail completeness (M-11, Phase 2)
+### 4.6 Audit trail completeness (M-11, Phase 2) — Mode B and Mode C
 
-Required only when multiple editors can touch the same tree. With a single
-Owner the existing `created_by` columns answer "who added this?" uniformly.
-This work makes "who edited this last?" answerable, which is meaningful only
-in Mode B.
+Required as soon as multiple editors can touch the same tree (which happens
+the moment Contributors are introduced in Mode B). With a single Owner the
+existing `created_by` columns answer "who added this?" uniformly. This work
+makes "who edited this last?" answerable, which becomes meaningful in Mode B.
 
 - [ ] Add `updated_by`, `updated_at` columns to `Individual`,
       `IndividualName`, `Family`, `FamilyMember`, `FamilyChild`, `Event`,
@@ -390,14 +420,14 @@ in Mode B.
 - [ ] Right-of-access export from §2.6 includes both `created_by` /
       `created_at` and `updated_by` / `updated_at` once these columns exist.
 
-### 4.7 Hosting and DPA (M-13)
+### 4.7 Hosting and DPA (M-13) — Mode B and Mode C
 
 - [ ] Confirm Hetzner region is EEA (Falkenstein or Helsinki).
 - [ ] Sign Hetzner DPA (online, free).
 - [ ] Sign Cloudflare DPA via dashboard.
 - [ ] List both as sub-processors in the privacy policy.
 
-### 4.8 Donate button (notes.txt L249)
+### 4.8 Donate button (notes.txt L249) — Mode C only
 
 - [ ] Pick provider (Stripe / PayPal). Note: payment provider becomes another
       sub-processor; document in privacy policy.
@@ -443,15 +473,24 @@ documented in [PRIVACY_HANDLING.md §10](PRIVACY_HANDLING.md#10-open-questions-f
 class PrivacySettings:
 
     # --- deployment mode ---
-    # "private" = single owner (you), no signups; "public" = open SaaS.
-    deployment_mode: str = "private"
+    # "A"  = single owner (you), no signups.
+    # "B"  = contributors-only (you remain the only Owner; relatives
+    #        can sign up as Contributors who edit your tree).
+    # "C"  = public SaaS (open or admin-gated owner signup).
+    deployment_mode: str = "A"
 
     # Whether NEW owners can self-register via the signup form.
-    # Off in private mode; flipped on for public launch.
+    # Off in Mode A and Mode B; on in Mode C (with or without approval gating).
     allow_owner_signup: bool = False
 
+    # If allow_owner_signup is True, this controls whether new owner
+    # signups land in a pending state until an admin approves them.
+    # See §6.5 — this is the "friends-and-family SaaS" gating switch.
+    # Reduces abuse surface; does NOT downgrade the legal mode below Mode C.
+    owner_signup_requires_approval: bool = True
+
     # Whether owners can invite Contributors who can edit the tree.
-    # Off in private mode; on for public launch.
+    # Off in Mode A; on in Mode B and Mode C.
     allow_contributor_signup: bool = False
 
     # --- SLA = Service Level Agreement; thresholds ---
@@ -538,10 +577,67 @@ class PrivacySettings:
 
 | Reader | Purpose |
 |---|---|
-| `backend/api/auth.py` | Signup gate (allow_*_signup), ToS version comparison |
+| `backend/api/auth.py` | Signup gate (allow_*_signup, owner_signup_requires_approval), ToS version comparison |
 | `backend/api/privacy.py` (new in Tier 1) | Takedown SLA timer, retention windows |
 | `backend/api/users.py` | Self-unregister flow |
 | Frontend via `GET /privacy/config` | Banner copy, age threshold display, retention text |
+
+---
+
+## 6.5 Mode B (contributors-only) vs Mode C (gated or open owner signup)
+
+A common product instinct is: "I only want to share this with relatives and
+friends, so I will add an admin approval step in front of owner signup — that
+keeps it small and trusted, so surely it stays in Mode A or Mode B."
+
+**It does not.** The legal mode is determined by *who is a data controller on
+the server*, not by *how they got there*. The moment a second person can
+create their own tree on your VM, you are hosting personal data on behalf of
+another controller — and every Tier 3 obligation in §4 follows, regardless of
+whether the second Owner was admin-approved or self-served.
+
+Admin approval is an excellent **abuse mitigation** (small known user count,
+manual sanity check, easy to revoke). It is not a legal classification.
+
+### When approval helps vs. when it does not change the mode
+
+| Scenario | Legal mode |
+|---|---|
+| Single Owner = operator. Share links only. | **Mode A** |
+| Single Owner = operator. Relatives sign up as **Contributors** who edit the operator's tree. | **Mode B** |
+| Relatives sign up to host **their own trees** on your VM, with admin approval. | **Mode C** (gated) |
+| Relatives sign up to host **their own trees**, open self-service. | **Mode C** (open) |
+
+### Obligation comparison: Mode B vs Mode C
+
+Use this when deciding which Tier 3 destination to aim for. "Required" means
+the obligation gates the launch of that mode.
+
+| Obligation | Mode B (contributors-only) | Mode C (any owner signup) |
+|---|---|---|
+| §4.1 Lawyer review | Required | Required |
+| Multiple data controllers on the server | No — operator is sole controller | Yes — each Owner is a separate controller |
+| §4.2 Local-first / desktop app | Not required | Recommended (strongest mitigation) |
+| §4.3 Owner self-unregister + cascade delete | Not required | Required |
+| §4.4 Full Owner ToS at signup + cookie notice banner | Not required (no new Owners) | Required |
+| §4.5 Contributor acknowledgement modal (M-15) | **Required** | Required |
+| §4.6 Audit trail `updated_by` / `updated_at` (M-11) | **Required** (multiple editors share one tree) | Required |
+| §4.7 Hetzner DPA + Cloudflare DPA | Required | Required |
+| §4.8 Donate button infrastructure | Not required | Optional |
+| `allow_owner_signup` flag | `False` | `True` |
+| `owner_signup_requires_approval` flag | (n/a) | `True` (gated) or `False` (open) |
+| `allow_contributor_signup` flag | `True` | `True` |
+
+### Recommendation for "friends and family only"
+
+If relatives only need to **add and edit information in your tree**, Mode B is
+the cheapest path out of Mode A — skip §4.3, §4.4, §4.8, but still pay for
+§4.1 (lawyer) and build §4.5, §4.6, §4.7.
+
+If relatives genuinely need **their own separate trees** on your server, the
+honest classification is Mode C (gated). The approval gate is worth doing for
+abuse reasons, but do not let it create the illusion that the obligations
+shrink.
 
 ---
 
