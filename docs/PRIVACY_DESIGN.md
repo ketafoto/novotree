@@ -13,9 +13,10 @@
 > [PRIVACY_ANALYSIS.md](PRIVACY_ANALYSIS.md) first to understand the problem
 > space, then this file to see what is built, in progress, or queued.
 
-**Status overall: TIER 1 IN PROGRESS.** §2.1 (central privacy config) and §2.2
-(public takedown flow) are shipped. Remaining Tier 1 items (§2.3–§2.6) are
-queued — see the per-section checkboxes below.
+**Status overall: TIER 1 IN PROGRESS.** §2.1 (central privacy config), §2.2
+(public takedown flow), and §2.3 (privacy policy page + footer link) are
+shipped. Remaining Tier 1 items (§2.4–§2.6) are queued — see the per-section
+checkboxes below.
 
 ---
 
@@ -219,10 +220,27 @@ ePrivacy 5(3) and addressed by the viewer notice in §2.5). What is needed in
 Tier 1 is a privacy policy page that the takedown form can link to, and a footer
 that exposes both.
 
-- [ ] Backend serves markdown for `/legal/privacy` (read from
-      `docs/legal/privacy.md`, versioned via `privacy_policy_version`).
-- [ ] Frontend renders it under `frontend/src/pages/legal/PrivacyPage.tsx`.
-- [ ] Footer link on every page: Privacy · Privacy/remove me.
+- [x] Backend serves the policy markdown via
+      `GET /privacy/policy` (read from
+      [docs/legal/privacy.md](legal/privacy.md), versioned via
+      `privacy_policy_version`). Endpoint lives in
+      [backend/api/privacy.py](../backend/api/privacy.py).
+- [x] Frontend renders it under
+      [frontend/src/pages/legal/PrivacyPage.tsx](../frontend/src/pages/legal/PrivacyPage.tsx)
+      at route `/legal/privacy`. Minimal in-tree markdown renderer in
+      [renderPolicyMarkdown.tsx](../frontend/src/pages/legal/renderPolicyMarkdown.tsx)
+      avoids adding a third-party markdown dependency on a public route.
+- [x] Link pair on every page: **Remove me · Our Privacy** — extracted into
+      [PrivacyLinks.tsx](../frontend/src/components/layout/PrivacyLinks.tsx)
+      and used by both [PrivacyFooter.tsx](../frontend/src/components/layout/PrivacyFooter.tsx)
+      (document-flow pages) and the Tree pages' top bar
+      ([TreePage.tsx](../frontend/src/pages/tree/TreePage.tsx),
+      [TreeOverviewPage.tsx](../frontend/src/pages/tree/TreeOverviewPage.tsx)).
+      The Tree pages render as `fixed inset-0 z-50` fullscreen overlays that
+      cover the global footer, so embedding the same links in their chrome
+      is the only path that keeps the takedown affordance visible to
+      share-link viewers — the population the link primarily exists for.
+      Hidden in `isLocalApp` everywhere.
 - [ ] (Cookies and ToS pages are deferred to Tier 3 — see §4.3.)
 
 ### 2.4 Viewer notice on first share-link load (M-16)

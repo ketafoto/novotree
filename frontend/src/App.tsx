@@ -20,6 +20,7 @@ import { VerifyContributorEmailPage } from './pages/auth/VerifyContributorEmailP
 
 // Legal / privacy pages (public, no Layout wrapper)
 import { TakedownPage } from './pages/legal/TakedownPage';
+import { PrivacyPage } from './pages/legal/PrivacyPage';
 // Owner-scoped privacy queue (authenticated, inside Layout)
 import { TakedownsPage } from './pages/legal/TakedownsPage';
 
@@ -112,6 +113,7 @@ function App() {
 
             {/* ── Public privacy pages (no auth, no Layout) ── */}
             <Route path="/privacy/takedown" element={<TakedownPage />} />
+            <Route path="/legal/privacy" element={<PrivacyPage />} />
 
             {/* ── Viewer-accessible tree routes (share token or authenticated) ── */}
             <Route

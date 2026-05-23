@@ -123,6 +123,7 @@ AUTH_ONLY_PATHS = {
     "/auth/owner-signup", "/auth/verify-owner-email", "/auth/resend-owner-verification",
     "/auth/contributor-signup", "/auth/verify-contributor-email", "/auth/resend-contributor-verification",
     "/privacy/config",
+    "/privacy/policy",
     "/privacy/takedown",
     "/takedown",
     "/health",

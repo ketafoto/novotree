@@ -13,8 +13,9 @@ import { TreeLegend } from '../../components/tree/TreeLegend';
 import { ExportControls } from '../../components/tree/ExportControls';
 import { ContributeDialog } from '../../components/common/ContributeDialog';
 import { MobilePersonSheet } from '../../components/tree/MobilePersonSheet';
+import { PrivacyLinks } from '../../components/layout/PrivacyLinks';
 import { useAuth } from '../../contexts/AuthContext';
-import { isPublicApp } from '../../config/appMode';
+import { isPublicApp, isLocalApp } from '../../config/appMode';
 import { formatIndividualName, getLatestName } from '../../utils/nameUtils';
 import { slugifyForFilename } from '../../utils/exportFilename';
 import { useIsMobileViewport } from '../../hooks/useIsMobileViewport';
@@ -193,6 +194,13 @@ export function TreePage() {
             </button>
           )}
 
+          {/* Privacy links — only path to "Remove me / Our Privacy" on the
+              Tree page, which renders as a fullscreen overlay covering the
+              global PrivacyFooter. Critical for share-link viewers. */}
+          {!isLocalApp && (
+            <PrivacyLinks className="text-[11px] text-gray-500 px-2" />
+          )}
+
           {/* Export button */}
           <button
             onClick={() => setShowExport(!showExport)}
@@ -286,6 +294,12 @@ export function TreePage() {
             <Download className="w-4 h-4" />
             Export as image
           </button>
+
+          {!isLocalApp && (
+            <div className="flex items-center justify-center pt-1 text-xs text-gray-500">
+              <PrivacyLinks />
+            </div>
+          )}
         </div>
       )}
 

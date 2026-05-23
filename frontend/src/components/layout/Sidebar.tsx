@@ -75,7 +75,7 @@ export function Sidebar() {
   const { editor, isOwner, logout } = useAuth();
 
   return (
-    <aside className="w-64 bg-white border-r border-gray-200 min-h-screen flex flex-col p-4">
+    <aside className="w-64 bg-white border-r border-gray-200 flex flex-col p-4">
       <nav className="space-y-1 flex-1">
         <NavItem
           to="/"

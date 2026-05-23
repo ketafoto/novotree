@@ -4,23 +4,34 @@ Privacy & legal-posture endpoints.
   GET /privacy/config — public subset of PrivacySettings, used by the frontend
                         to render legal text, banners, age thresholds, and
                         retention windows without hard-coding values.
+  GET /privacy/policy — rendered privacy policy markdown + version string
+                        (Tier 1 §2.3). Sourced from docs/legal/privacy.md.
 
 The takedown / "remove me" feature lives in its own module
 ([backend/api/takedown.py](takedown.py)) — separated because it owns a router
 of its own, an intake email path, and the SLA sweeper. Keeping privacy.py
-focused on static legal-posture endpoints (config now, /privacy/policy later)
-makes the boundary easy to extend.
+focused on static legal-posture endpoints makes the boundary easy to extend.
 
-Tier 1 §2.1 of docs/PRIVACY_DESIGN.md. No auth required — the values exposed
-here are the same ones that appear in the public privacy policy.
+Tier 1 §2.1 + §2.3 of docs/PRIVACY_DESIGN.md. No auth required — the values
+exposed here are the same ones that appear in the public privacy policy.
 """
 
-from fastapi import APIRouter
+from pathlib import Path
+
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
 from backend.config import privacy_settings
 
 router = APIRouter(prefix="/privacy", tags=["Privacy"])
+
+# Privacy policy markdown is shipped in-repo at docs/legal/privacy.md.
+# Resolved relative to this module so it works both in dev (running from a
+# checkout) and when packaged. Read once at first request and cached for the
+# process lifetime — matches the immutability posture of PrivacySettings
+# itself, where edits require a service restart.
+_POLICY_PATH = Path(__file__).resolve().parent.parent.parent / "docs" / "legal" / "privacy.md"
+_policy_cache: str | None = None
 
 
 class PrivacyConfigResponse(BaseModel):
@@ -69,4 +80,26 @@ def get_privacy_config() -> PrivacyConfigResponse:
         privacy_contact_email=p.privacy_contact_email,
         hosting_region=p.hosting_region,
         analytics_enabled=p.analytics_enabled,
+    )
+
+
+class PrivacyPolicyResponse(BaseModel):
+    version: str
+    content_markdown: str
+
+
+@router.get("/policy", response_model=PrivacyPolicyResponse)
+def get_privacy_policy() -> PrivacyPolicyResponse:
+    global _policy_cache
+    if _policy_cache is None:
+        try:
+            _policy_cache = _POLICY_PATH.read_text(encoding="utf-8")
+        except OSError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Privacy policy is temporarily unavailable.",
+            ) from exc
+    return PrivacyPolicyResponse(
+        version=privacy_settings.privacy_policy_version,
+        content_markdown=_policy_cache,
     )

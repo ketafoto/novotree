@@ -2,13 +2,15 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { TreeDeciduous } from 'lucide-react';
+import { TreeDeciduous, Info, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
 import { usePrivacyConfig } from '../../hooks/usePrivacyConfig';
 import { privacyApi } from '../../api/privacy';
+import { useAuth } from '../../contexts/AuthContext';
 
 // Field length bounds mirror backend/api/privacy.py — keep in sync.
 const schema = z.object({
@@ -21,22 +23,96 @@ const schema = z.object({
 });
 type FormData = z.infer<typeof schema>;
 
-function readPrefillOwnerId(): string {
-  // Order of precedence: explicit ?owner= in the URL → resolved share-token
-  // owner stored in sessionStorage by the share-link viewer flow → empty
-  // (the form will require the user to type it).
+type PrefillSource = 'url' | 'share-token' | 'authenticated-self' | 'none';
+
+interface OwnerContext {
+  prefillValue: string;
+  source: PrefillSource;
+}
+
+function resolveOwnerContext(
+  viewerOwnerId: string | null,
+  authenticatedOwnerId: string | null,
+): OwnerContext {
+  // Precedence:
+  //  1. ?owner= in the URL — explicit, set by the global PrivacyLinks footer
+  //     and by Tree page links once a share-token session knows the owner.
+  //  2. share-token session in this tab.
+  //  3. authenticated session — but the field is NOT prefilled with the
+  //     signed-in user's own owner_id (filing a takedown against yourself is
+  //     the wrong affordance; the banner steers them to Settings instead).
+  //  4. nothing — the field stays empty and the banner explains that an
+  //     off-platform requester needs to type the username.
   const params = new URLSearchParams(window.location.search);
-  return params.get('owner') ?? sessionStorage.getItem('share_owner_id') ?? '';
+  const fromUrl = params.get('owner');
+  if (fromUrl) return { prefillValue: fromUrl, source: 'url' };
+  if (viewerOwnerId) return { prefillValue: viewerOwnerId, source: 'share-token' };
+  if (authenticatedOwnerId) return { prefillValue: '', source: 'authenticated-self' };
+  return { prefillValue: '', source: 'none' };
+}
+
+interface OwnerBannerProps {
+  context: OwnerContext;
+  authenticatedOwnerId: string | null;
+}
+
+function OwnerBanner({ context, authenticatedOwnerId }: OwnerBannerProps) {
+  // The banner exists so a tester (or any visitor) can tell at a glance
+  // whether the empty/filled "Tree owner" field reflects what the page
+  // knows. Each branch says exactly which context the page is in.
+  if (context.source === 'url' || context.source === 'share-token') {
+    return (
+      <div className="flex items-start gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+        <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0 text-emerald-600" />
+        <span>
+          You arrived from <span className="font-mono font-semibold">{context.prefillValue}</span>'s
+          tree. This request will be filed against that tree. If you meant a different one, edit
+          the field below.
+        </span>
+      </div>
+    );
+  }
+  if (context.source === 'authenticated-self') {
+    return (
+      <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+        <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-600" />
+        <span>
+          You are signed in as <span className="font-mono font-semibold">{authenticatedOwnerId}</span>.
+          This form is for <em>other people</em> to ask the tree owner to remove their data —
+          filing it against your own tree usually isn't what you want. To delete your own data,
+          use{' '}
+          <Link to="/settings" className="underline hover:text-amber-700">
+            Settings
+          </Link>{' '}
+          instead. Otherwise, type the username of the tree the request concerns.
+        </span>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+      <Info className="w-4 h-4 mt-0.5 flex-shrink-0 text-blue-600" />
+      <span>
+        We don't know which tree this request is about. If you were given a share link, the tree
+        owner's username is the part after <span className="font-mono">?owner=</span> in the URL;
+        otherwise ask the person who told you about the tree, or describe it in the message field.
+      </span>
+    </div>
+  );
 }
 
 export function TakedownPage() {
   const { config, loading } = usePrivacyConfig();
+  const { editor, viewerOwnerId } = useAuth();
   const [submitted, setSubmitted] = useState(false);
+
+  const authenticatedOwnerId = editor?.owner_id ?? null;
+  const ownerContext = resolveOwnerContext(viewerOwnerId, authenticatedOwnerId);
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
-      tree_owner_id: readPrefillOwnerId(),
+      tree_owner_id: ownerContext.prefillValue,
     },
   });
 
@@ -67,7 +143,7 @@ export function TakedownPage() {
 
   if (submitted) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="min-h-full bg-gray-50 flex items-center justify-center p-4">
         <div className="max-w-xl w-full bg-white rounded-lg shadow p-8 space-y-4">
           <div className="flex items-center gap-3">
             <TreeDeciduous className="text-emerald-600" size={32} />
@@ -93,7 +169,7 @@ export function TakedownPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+    <div className="min-h-full bg-gray-50 flex items-center justify-center p-4">
       <div className="max-w-xl w-full bg-white rounded-lg shadow p-8 space-y-6">
         <div className="flex items-center gap-3">
           <TreeDeciduous className="text-emerald-600" size={32} />
@@ -110,9 +186,18 @@ export function TakedownPage() {
           <p className="text-gray-500">
             We may contact you to verify your identity before acting on this request.
           </p>
+          <p className="text-gray-500">
+            See our{' '}
+            <Link to="/legal/privacy" className="text-emerald-700 underline hover:text-emerald-800">
+              Privacy Policy
+            </Link>{' '}
+            for how we handle this request.
+          </p>
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
+          <OwnerBanner context={ownerContext} authenticatedOwnerId={authenticatedOwnerId} />
+
           <Input
             label="Tree owner (username) or tree URL"
             required

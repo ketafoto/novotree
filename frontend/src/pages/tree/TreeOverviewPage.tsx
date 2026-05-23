@@ -11,6 +11,8 @@ import { TreeLegend } from '../../components/tree/TreeLegend';
 import { ExportControls } from '../../components/tree/ExportControls';
 import { ContributeDialog } from '../../components/common/ContributeDialog';
 import { MobilePersonSheet } from '../../components/tree/MobilePersonSheet';
+import { PrivacyLinks } from '../../components/layout/PrivacyLinks';
+import { isLocalApp } from '../../config/appMode';
 import { useAuth } from '../../contexts/AuthContext';
 import { useIsMobileViewport } from '../../hooks/useIsMobileViewport';
 
@@ -131,6 +133,12 @@ export function TreeOverviewPage() {
             </button>
           )}
 
+          {/* Privacy links — see TreePage for rationale (fullscreen overlay
+              hides the global PrivacyFooter; critical path for viewers). */}
+          {!isLocalApp && (
+            <PrivacyLinks className="text-[11px] text-gray-500 px-2" />
+          )}
+
           <button
             onClick={() => setShowExport(!showExport)}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
@@ -211,6 +219,12 @@ export function TreeOverviewPage() {
             <Download className="w-4 h-4" />
             Export as image
           </button>
+
+          {!isLocalApp && (
+            <div className="flex items-center justify-center pt-1 text-xs text-gray-500">
+              <PrivacyLinks />
+            </div>
+          )}
         </div>
       )}
 

@@ -43,6 +43,11 @@ export interface TakedownRequestAck {
   id: number;
 }
 
+export interface PrivacyPolicy {
+  version: string;
+  content_markdown: string;
+}
+
 export const privacyApi = {
   getConfig: async (): Promise<PrivacyConfig> => {
     const res = await apiClient.get<PrivacyConfig>('/privacy/config');
@@ -50,6 +55,10 @@ export const privacyApi = {
   },
   submitTakedown: async (payload: TakedownRequestPayload): Promise<TakedownRequestAck> => {
     const res = await apiClient.post<TakedownRequestAck>('/privacy/takedown', payload);
+    return res.data;
+  },
+  getPolicy: async (): Promise<PrivacyPolicy> => {
+    const res = await apiClient.get<PrivacyPolicy>('/privacy/policy');
     return res.data;
   },
 };
