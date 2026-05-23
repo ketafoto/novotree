@@ -235,3 +235,14 @@ Go public
 Next Phase
 =======================
 *. speech-to-text + AI for CRUD operation by voice
+
+
+
+Test
+-----------------
+1. Takedown - deploy on VM share link, send takedown request
+   a. Ensure mail is received
+   b. Check UI - takeaway requests
+   c. Set SLA to 1 minute and ensure mails is received
+   d. Set retention to 3 minutes - ensure escalated to admin
+2. Remove individual - ensure request is resolved on UI. Deleted?

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { privacyApi, PrivacyConfig } from '../api/privacy';
+import { privacyApi, type PrivacyConfig } from '../api/privacy';
 
 // Single shared promise — every consumer of usePrivacyConfig waits on the
 // same network request, and a successful fetch is cached for the rest of

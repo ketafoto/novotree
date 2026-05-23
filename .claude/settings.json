@@ -11,6 +11,8 @@
       "Bash(source .venv/bin/activate && python -c *)",
       "Bash(source .venv/bin/activate && python -m pytest *)",
       "Bash(source .venv/bin/activate *)",
+      "Bash(venv-win/Scripts/python.exe:*)",
+      "Bash(venv-win/Scripts/python:*)",
       "Bash(sqlite3 *)",
       "Bash(node -e \"const r = require\\('c:/temp/novotree.git/frontend/node_modules/react-dom/package.json'\\); console.log\\('react-dom:', r.version\\)\")",
       "Bash(node -e \"const r = require\\('c:/temp/novotree.git/frontend/node_modules/react-dom/cjs/react-dom-test-utils.production.js'\\); console.log\\(typeof r.act\\)\")",

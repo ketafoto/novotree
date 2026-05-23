@@ -29,9 +29,27 @@ export interface PrivacyConfig {
   analytics_enabled: boolean;
 }
 
+export interface TakedownRequestPayload {
+  tree_owner_id: string;
+  individual_id?: string;
+  requester_name: string;
+  requester_email: string;
+  requester_phone?: string;
+  message: string;
+}
+
+export interface TakedownRequestAck {
+  ok: boolean;
+  id: number;
+}
+
 export const privacyApi = {
   getConfig: async (): Promise<PrivacyConfig> => {
     const res = await apiClient.get<PrivacyConfig>('/privacy/config');
+    return res.data;
+  },
+  submitTakedown: async (payload: TakedownRequestPayload): Promise<TakedownRequestAck> => {
+    const res = await apiClient.post<TakedownRequestAck>('/privacy/takedown', payload);
     return res.data;
   },
 };

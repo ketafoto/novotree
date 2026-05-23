@@ -6,6 +6,7 @@ import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './contexts/AuthContext';
 import { useAuth } from './contexts/AuthContext';
 import { Layout } from './components/layout/Layout';
+import { PrivacyFooter } from './components/layout/PrivacyFooter';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
 import { typesApi } from './api/types';
 import { isLocalApp } from './config/appMode';
@@ -16,6 +17,11 @@ import { OwnerSignupPage } from './pages/auth/SignupPage';
 import { SetPasswordPage } from './pages/auth/SetPasswordPage';
 import { VerifyOwnerEmailPage } from './pages/auth/VerifyEmailPage';
 import { VerifyContributorEmailPage } from './pages/auth/VerifyContributorEmailPage';
+
+// Legal / privacy pages (public, no Layout wrapper)
+import { TakedownPage } from './pages/legal/TakedownPage';
+// Owner-scoped privacy queue (authenticated, inside Layout)
+import { TakedownsPage } from './pages/legal/TakedownsPage';
 
 // Main pages
 import { DashboardPage } from './pages/dashboard/DashboardPage';
@@ -94,6 +100,8 @@ function App() {
       <BrowserRouter basename={import.meta.env.BASE_URL}>
         <AuthProvider>
           <PrefetchTypes />
+          <div className="min-h-screen flex flex-col">
+          <div className="flex-1">
           <Routes>
             {/* ── Public auth pages (no Layout wrapper) ── */}
             <Route path="/login" element={<LoginPage />} />
@@ -101,6 +109,9 @@ function App() {
             <Route path="/set-password" element={<SetPasswordPage />} />
             <Route path="/verify-owner-email" element={<VerifyOwnerEmailPage />} />
             <Route path="/verify-contributor-email" element={<VerifyContributorEmailPage />} />
+
+            {/* ── Public privacy pages (no auth, no Layout) ── */}
+            <Route path="/privacy/takedown" element={<TakedownPage />} />
 
             {/* ── Viewer-accessible tree routes (share token or authenticated) ── */}
             <Route
@@ -171,6 +182,16 @@ function App() {
                 }
               />
 
+              {/* Privacy — Owner-only takedown triage queue */}
+              <Route
+                path="privacy/takedowns"
+                element={
+                  <ProtectedRoute minRole="owner">
+                    <TakedownsPage />
+                  </ProtectedRoute>
+                }
+              />
+
               {/* Settings */}
               <Route path="settings" element={<SettingsPage />} />
 
@@ -190,6 +211,9 @@ function App() {
             {/* Catch-all */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          </div>
+          <PrivacyFooter />
+          </div>
 
           <Toaster
             position="top-right"

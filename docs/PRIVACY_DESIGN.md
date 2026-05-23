@@ -13,9 +13,8 @@
 > [PRIVACY_ANALYSIS.md](PRIVACY_ANALYSIS.md) first to understand the problem
 > space, then this file to see what is built, in progress, or queued.
 
-**Status overall: TIER 1 STARTED.** §2.1 (central privacy config) is shipped:
-`PrivacySettings` dataclass, `GET /privacy/config` endpoint, and frontend
-`usePrivacyConfig()` hook are in. Remaining Tier 1 items (§2.2–§2.6) are
+**Status overall: TIER 1 IN PROGRESS.** §2.1 (central privacy config) and §2.2
+(public takedown flow) are shipped. Remaining Tier 1 items (§2.3–§2.6) are
 queued — see the per-section checkboxes below.
 
 ---
@@ -139,27 +138,77 @@ risk-reduction to effort.
       that fetches once and caches (module-scoped promise). API typings in
       [frontend/src/api/privacy.ts](../frontend/src/api/privacy.ts).
 
+> **Note on editability:** `PrivacySettings` is loaded from environment
+> variables (`/etc/novotree.env`) at startup and is **read-only at runtime**.
+> Changes today require editing the env file and `systemctl restart novotree`.
+> An in-app admin UI for these values is a Mode-C concern — see §4.10.
+
 ### 2.2 Public takedown / "remove me" flow (M-04)
 
 Single highest risk-reduction action. Even in Mode A.
 
-- [ ] New table `takedown_requests` in
+The form must serve two distinct requester populations — viewers who saw a
+share link AND off-platform people who never did. See
+[PRIVACY_ANALYSIS.md §1 → "Who files a takedown"](PRIVACY_ANALYSIS.md#who-files-a-takedown--two-populations).
+Consequence: takedown is **text-only** and reachable from a single public
+URL. Any TreeView-driven "select individuals to remove" UI is a future
+convenience for the viewer population only — never a substitute (a
+TreeView selection mode that prefills the form is the Tier-2 follow-up
+below).
+
+- [x] New table `takedown_requests` in
       [database/system_models.py](../database/system_models.py):
       `id`, `tree_owner_id`, `individual_id` (nullable), `requester_name`,
-      `requester_email`, `message`, `status` (open / acknowledged / resolved /
-      escalated), `created_at`, `resolved_at`.
-- [ ] Public endpoint `POST /privacy/takedown` in new
-      [backend/api/privacy.py](../backend/api/privacy.py). Rate-limited by IP
-      (5/hour). No auth.
-- [ ] Email notification to the Owner on receipt; reminder at day 14;
-      auto-escalate at `takedown_sla_days` (default 30). Use the existing
-      SMTP plumbing in `backend/api/auth.py`.
-- [ ] Admin endpoint `GET/PATCH /admin/takedown` to triage tickets. Admin
-      can mark resolved or hide records on Owner's behalf if escalated.
-- [ ] Persistent **"Privacy / remove me"** link in the layout footer for
-      every shared view ([frontend/src/components/Layout.tsx](../frontend/src/components/Layout.tsx)).
-- [ ] Public takedown form page at `/privacy/takedown`
-      ([frontend/src/pages/legal/](../frontend/src/pages/legal/)).
+      `requester_email`, `requester_phone` (nullable), `message`, `status`
+      (open / acknowledged / resolved / escalated), `created_at`,
+      `resolved_at`, plus `reminder_sent_at` / `escalated_at` for sweeper
+      idempotency.
+- [x] Public endpoint `POST /privacy/takedown` in
+      [backend/api/takedown.py](../backend/api/takedown.py). Rate-limited by IP
+      (5/hour) via
+      [backend/api/_takedown_rate_limit.py](../backend/api/_takedown_rate_limit.py).
+      No auth. Disabled in `is_local` (desktop) mode.
+- [x] Email notification to the Owner on receipt; reminder at day 14;
+      auto-escalate at `takedown_sla_days` (default 30). Sweep logic lives
+      in [backend/api/_takedown_sweep.py](../backend/api/_takedown_sweep.py);
+      shared SMTP helper extracted to
+      [backend/api/_email.py](../backend/api/_email.py).
+- [x] In-process scheduler started from FastAPI lifespan in
+      [backend/main.py](../backend/main.py) — primary path.
+- [x] Standalone backstop at
+      [tools/operational/scheduled_jobs/](../tools/operational/scheduled_jobs/)
+      driven by `novotree-backend-monitor.{service,timer}` on the VM. Runs
+      only when the backend `/health` probe fails. DB-level claim columns
+      make both paths safe to run concurrently.
+- [x] Persistent **"Privacy / remove me"** link rendered globally in
+      [frontend/src/App.tsx](../frontend/src/App.tsx) via
+      [PrivacyFooter.tsx](../frontend/src/components/layout/PrivacyFooter.tsx).
+      Visible to viewers (share-token sessions) as well as owners. Hidden
+      in `isLocalApp`.
+- [x] Public takedown form page at `/privacy/takedown`
+      ([frontend/src/pages/legal/TakedownPage.tsx](../frontend/src/pages/legal/TakedownPage.tsx)).
+- [x] Owner-scoped triage queue: `GET /takedown`, `PATCH /takedown/{id}`,
+      `DELETE /takedown/{id}` in
+      [backend/api/takedown.py](../backend/api/takedown.py). Owner sees only
+      their own rows; allowed transition is `open|escalated → resolved`. Hard
+      delete is allowed only on terminal rows (operator escape hatch before
+      retention sweep). UI at
+      [frontend/src/pages/legal/TakedownsPage.tsx](../frontend/src/pages/legal/TakedownsPage.tsx),
+      reachable from the "Privacy" sidebar item.
+- [x] Retention enforcement: sweep pass in
+      [_takedown_sweep.py](../backend/api/_takedown_sweep.py) hard-deletes
+      `resolved` / `escalated` rows older than
+      `takedown_request_retention_months` (default 12). No separate cron —
+      same sweep cadence as reminders / escalations.
+
+**Cross-Owner admin triage deferred to Mode C.** The Owner-scoped queue
+above is sufficient when the operator is the only Owner (Mode A) — they
+*are* the admin for their own data. The admin endpoint that lets the
+operator triage takedowns *across all Owners* (needed once multiple
+Owners exist on the server) is §4.9.
+
+**Tier-2 follow-up:** TreeView selection mode that prefills the takedown
+form with selected `individual_ids` for the viewer population. See §3.9.
 
 ### 2.3 Privacy policy page + footer link (Phase 0.2-0.3 partial)
 
@@ -255,10 +304,12 @@ It is not a separate ticket-tracker product. "Triage" means the operator
 reviewing rows where `status='open'` and choosing the next action (forward to
 Owner / mark resolved / escalate / hide records).
 
-- [ ] CLI is sufficient to start (no separate admin web page yet).
-      Commands: list owners, manual backup trigger, list and resolve open
-      `takedown_requests` rows, force-delete an Individual on Owner's behalf
-      after the SLA expires.
+- [ ] CLI is the canonical admin path in Mode A. (The in-app admin endpoint
+      is intentionally deferred to Mode C — see §4.9 — because in Mode A
+      the operator is the only Owner and an in-app endpoint duplicates the
+      Owner's own access.) Commands: list owners, manual backup trigger,
+      list and resolve open `takedown_requests` rows, force-delete an
+      Individual on Owner's behalf after the SLA expires.
 
 ### 3.6 Verify GEDCOM importer stamps `created_by`
 
@@ -292,12 +343,26 @@ Defer if no minors in the tree; do before going public.
 - [ ] Minors not exposed to viewer payload unless Owner explicitly opts in
       per share token.
 
+### 3.9 TreeView selection-mode prefill for takedown (M-04 convenience)
+
+Convenience-only enhancement of §2.2 for the viewer requester population.
+**Does not replace** the text-only takedown form — population (b) in
+[PRIVACY_ANALYSIS.md §1](PRIVACY_ANALYSIS.md#who-files-a-takedown--two-populations)
+never reaches the UI.
+
+- [ ] TreeView selection mode: multi-check individuals on the tree.
+- [ ] "Send takedown request for selected" CTA navigates to
+      `/privacy/takedown` with `?owner=...&individual_ids=...`.
+- [ ] Takedown page accepts and prefills the comma-separated IDs into the
+      message field (or extends the payload to accept a list — see how it
+      shakes out at implementation time).
+
 ---
 
 ## 4. Tier 3 — Before enabling Mode B or Mode C
 
 > **Everything in Tier 3 is conditional on completing §4.1 first.** Do not
-> start any code in §4.2–§4.8 before the lawyer consultation. The whole point
+> start any code in §4.2–§4.10 before the lawyer consultation. The whole point
 > of §4.1 is to decide whether Mode B or Mode C is workable in your
 > jurisdiction with acceptable obligations — if the answer is "no, not at this
 > scale," all of the development effort below is wasted.
@@ -308,9 +373,10 @@ Tier 3 covers two destinations:
 
 - **Mode B (contributors-only)** needs: §4.1 (lawyer), §4.5 (contributor ack),
   §4.6 (audit trail), §4.7 (hosting + DPA). It does NOT need §4.3 (owner
-  self-unregister), §4.4 (owner ToS at signup), or §4.8 (donate button).
+  self-unregister), §4.4 (owner ToS at signup), §4.8 (donate button),
+  §4.9 (cross-Owner takedown admin), or §4.10 (PrivacySettings admin UI).
 - **Mode C (public service, including gated/admin-approved owner signup)**
-  needs all of §4.1–§4.8.
+  needs all of §4.1–§4.10.
 
 §6.5 explains why gated owner signup is Mode C, not Mode B, and contains the
 side-by-side obligation table.
@@ -346,9 +412,9 @@ and discover the obligations afterwards.
 
 - [ ] **Go / no-go decision recorded here:**
       ☐ GO Mode B (contributors-only) — proceed with §4.5, §4.6, §4.7.
-      ☐ GO Mode C (public / gated owner signup) — proceed with §4.2–§4.8.
+      ☐ GO Mode C (public / gated owner signup) — proceed with §4.2–§4.10.
       ☐ NO-GO — keep NovoTree in Mode A indefinitely; close out Tier 3.
-- [ ] After §4.2–§4.8 development is complete, schedule a short second
+- [ ] After §4.2–§4.10 development is complete, schedule a short second
       session (~30 min) to review the final ToS, privacy policy, and cookie
       banner texts before launch.
 
@@ -441,6 +507,78 @@ makes "who edited this last?" answerable, which becomes meaningful in Mode B.
 
 - [ ] Pick provider (Stripe / PayPal). Note: payment provider becomes another
       sub-processor; document in privacy policy.
+
+### 4.9 Admin takedown triage endpoint and UI (M-04 extension) — Mode C only
+
+In Mode A and Mode B the operator is the only Owner, and an admin endpoint
+for takedowns duplicates the Owner's own access (you can already see your
+own takedowns by reading the notification email, and you triage by editing
+your own data). Once multiple Owners exist on the server, the operator
+needs a way to act over the head of a non-responsive Owner — that is what
+this endpoint is for.
+
+- [ ] `GET /admin/takedown?status=open` to list rows.
+- [ ] `PATCH /admin/takedown/{id}` accepting
+      `{status: "acknowledged"|"resolved"|"escalated"}`, stamping
+      `resolved_at` for terminal transitions.
+- [ ] Auth gate: a real admin role (not "owner whose email matches
+      `settings.admin_email`") — Mode C will need this distinction anyway.
+- [ ] Admin UI page (minimum: list + status-change buttons). The Tier-2
+      §3.5 admin CLI ships first; this is the web-UI version.
+
+> The Tier-2 §3.5 admin CLI handles the Mode-A operator's needs (list,
+> resolve, force-delete). It is sufficient until Mode C requires the
+> in-app endpoint above.
+
+### 4.10 Admin UI for `PrivacySettings` — Mode C only
+
+Today the `PrivacySettings` dataclass in
+[backend/config.py](../backend/config.py) is loaded from `/etc/novotree.env`
+at startup and is read-only at runtime. Changes require editing the env file
+and `systemctl restart novotree`. That is fine in Mode A — the operator owns
+the shell, the restart drops only their own session, and the env file is
+already the single source of truth.
+
+It does not scale to Mode C. The operator will want to flip
+`allow_owner_signup` to False the moment abuse spikes without dropping
+in-flight sessions, rotate `privacy_contact_email` when staff changes, and
+update `controller_name` / `dpo_email` without a deploy window. That is the
+job of this admin UI.
+
+**Design questions to resolve before building:**
+
+- **Persistence model.** Env-only (today), DB-only, or env-default + DB-override?
+  The last is most flexible but creates two sources of truth. Recommend
+  DB-override with env as boot-time default.
+- **Live reload.** Re-read settings on every request, or signal workers to
+  reload on change? Either way: `PrivacySettings` stops being frozen.
+- **Auto-version-bumping.** Changing legally-relevant fields
+  (`takedown_sla_days`, `controller_name`, `child_age_threshold_years`)
+  must auto-bump the matching `*_version` string and re-prompt users for
+  acceptance. Today the versions are operator-edited; making them auto-bump
+  on UI change means encoding the legal-relevance map somewhere.
+- **Audit log.** Who changed what when. Regulators ask this question.
+- **Field allow-list.** Not every field is safe to edit from the UI
+  (`*_version` are protocol-level; `hosting_region` affects compliance
+  posture — flipping it from "EEA" to anything else triggers new SCC / DPF
+  obligations that can't be back-dated). Explicit allow-list in code, NOT
+  "edit anything in the dataclass."
+
+**Action items (sequential):**
+
+- [ ] Pick persistence model and live-reload strategy (design doc).
+- [ ] Add `settings_overrides` table to `database/system_models.py`
+      (key/value/changed_by/changed_at).
+- [ ] Replace `privacy_settings = load_privacy_settings()` module-level
+      singleton with a function/dependency that merges env-defaults with
+      DB-overrides on read.
+- [ ] `GET /admin/settings` returning the merged view + per-field
+      "source" (env or DB-override).
+- [ ] `PATCH /admin/settings` with the field allow-list and auto-version-
+      bumping for legally-relevant fields.
+- [ ] Admin UI page under the same `/admin` route as §4.9.
+- [ ] Audit log: every PATCH writes to `settings_audit_log`.
+- [ ] Reuses the §4.9 admin-role gate — same operator audience, same auth.
 
 ---
 
@@ -634,6 +772,8 @@ the obligation gates the launch of that mode.
 | §4.6 Audit trail `updated_by` / `updated_at` (M-11) | **Required** (multiple editors share one tree) | Required |
 | §4.7 Hetzner DPA + Cloudflare DPA | Required | Required |
 | §4.8 Donate button infrastructure | Not required | Optional |
+| §4.9 Admin takedown triage endpoint + UI | Not required (operator IS the admin) | Required (multiple Owners; operator must act over Owner's head) |
+| §4.10 Admin UI for `PrivacySettings` | Not required (env file + `systemctl restart` is fine) | Required (live toggle of signup flags / contact emails without restart) |
 | `allow_owner_signup` flag | `False` | `True` |
 | `owner_signup_requires_approval` flag | (n/a) | `True` (gated) or `False` (open) |
 | `allow_contributor_signup` flag | `True` | `True` |

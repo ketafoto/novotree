@@ -39,6 +39,27 @@ We address it with a layered model:
 5. **Necessary-only cookies** — we use only authentication cookies. Notice required;
    opt-in consent banner is **not** required.
 
+### Who files a takedown — two populations
+
+The takedown flow (M-04, §2.2 in [PRIVACY_DESIGN.md](PRIVACY_DESIGN.md)) must
+serve two distinct requester populations:
+
+- **(a) Viewer-as-requester.** A relative or acquaintance who opened a share
+  link, recognized themselves on the tree, and wants to be removed. They
+  have seen NovoTree's UI; in principle they could navigate it.
+- **(b) Off-platform requester.** Someone who has never visited NovoTree but
+  heard about the tree via word-of-mouth, a forwarded screenshot, a search
+  engine snippet, or a printed PDF a relative gave them. They may not even
+  know what NovoTree looks like.
+
+Both populations are equally entitled to file under GDPR Art. 17. The
+implication for design: the takedown form must be **text-only and reachable
+from a single URL**. UI-driven identification (e.g. selecting individuals
+inside the TreeView) cannot be the primary path, because population (b)
+will never reach the UI. UI-assisted prefill for population (a) is a
+convenience feature, not a substitute. See M-04 for the resulting
+constraints on the form.
+
 ---
 
 ## 2. Glossary
@@ -179,13 +200,36 @@ Log the click with timestamp + IP into the auth DB.
 ### M-04 — Public takedown / "this is me, remove me" flow (covers C-01, C-05, C-08, C-09)
 
 Every shared view exposes a small, persistent "Privacy / remove me" link. It opens
-a public form: name, email, free-text description. Backend creates a takedown
-ticket, emails the Owner with a 30-day SLA, and copies the admin (you). If the
-Owner does not respond, admin can hide the records.
+a public form: name, email, optional phone, free-text description. Backend creates
+a takedown ticket, emails the Owner with a 30-day SLA, and copies the admin (you).
+If the Owner does not respond, admin can hide the records.
 
 This single flow addresses three of the highest-risk concerns at once and is the
 strongest piece of evidence of "good faith effort" if a complaint reaches a
 regulator.
+
+**Form must be text-only and reachable from a single public URL.** §1 above
+identifies two requester populations: (a) viewers who saw the tree, and (b)
+off-platform people who never did. Because population (b) cannot use any
+UI-driven identification flow (they have not opened the share link, may not
+even have one), the takedown form must work entirely from typed input. A
+TreeView selection mode that prefills the form is a fine convenience for
+population (a) but is **never** the only path. The form is the source of
+truth.
+
+**Verification is not the form's job.** Per GDPR Art. 12(6), the controller
+(Owner) may request additional information to confirm the requester's
+identity when there are reasonable doubts. The form captures enough for the
+Owner to attempt contact; the Owner exercises judgement during triage. Junk
+name/email submissions are not the form's problem to reject — they are the
+Owner's to verify before acting. The notification email to the Owner
+instructs them accordingly.
+
+**No auto-cascade.** The form takes at most a single `individual_id` hint;
+removal of related individuals (children, partners, ancestors) is **not**
+implied. Each data subject must file their own request. A parent asserting
+parental authority over a minor child's record is a case the Owner
+resolves manually during triage.
 
 ### M-05 — Special-category data gating (covers C-02)
 

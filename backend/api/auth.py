@@ -22,6 +22,7 @@ from jose import JWTError, jwt
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from backend.api._email import send_email
 from backend.config import settings
 from database.owner_info import DEFAULT_OWNER_ID
 from database.system_db import get_system_db
@@ -159,82 +160,30 @@ async def _send_verification_email(
     role: str = "Owner",
     owner_display_name: Optional[str] = None,
 ) -> bool:
-    if not settings.smtp_enabled:
-        return False
-    try:
-        import aiosmtplib
-        from email.message import EmailMessage
-
-        msg = EmailMessage()
-        msg["From"] = settings.smtp_from
-        msg["To"] = to
-
-        if role == "Contributor":
-            msg["Subject"] = "Verify your Novotree contributor request"
-            tree_line = f"Tree: {owner_display_name}\n" if owner_display_name else ""
-            body = (
-                f"Hello {display_name},\n\n"
-                f"You signed up to contribute to a family tree on Novotree.\n\n"
-                f"Role: Contributor\n"
-                f"{tree_line}"
-                f"\nClick the link below to verify your email. After verification, "
-                f"the tree owner will review and approve your request before you can log in.\n\n"
-                f"{verify_url}\n\n"
-                f"This link expires in {_CONTRIBUTOR_VERIFY_TOKEN_TTL_HOURS} hours.\n\n"
-                f"If you did not submit this request, you can ignore this email."
-            )
-        else:
-            msg["Subject"] = "Verify your Novotree account"
-            body = (
-                f"Hello {display_name},\n\n"
-                f"Click the link below to verify your email and complete account creation:\n\n"
-                f"{verify_url}\n\n"
-                f"This link expires in {_EMAIL_VERIFY_TOKEN_TTL_HOURS} hour.\n\n"
-                f"If you did not create this account, you can ignore this email."
-            )
-
-        msg.set_content(body)
-
-        await aiosmtplib.send(
-            msg,
-            hostname=settings.smtp_host,
-            port=settings.smtp_port,
-            username=settings.smtp_user,
-            password=settings.smtp_password,
-            start_tls=True,
+    if role == "Contributor":
+        subject = "Verify your Novotree contributor request"
+        tree_line = f"Tree: {owner_display_name}\n" if owner_display_name else ""
+        body = (
+            f"Hello {display_name},\n\n"
+            f"You signed up to contribute to a family tree on Novotree.\n\n"
+            f"Role: Contributor\n"
+            f"{tree_line}"
+            f"\nClick the link below to verify your email. After verification, "
+            f"the tree owner will review and approve your request before you can log in.\n\n"
+            f"{verify_url}\n\n"
+            f"This link expires in {_CONTRIBUTOR_VERIFY_TOKEN_TTL_HOURS} hours.\n\n"
+            f"If you did not submit this request, you can ignore this email."
         )
-        return True
-    except Exception as e:
-        logger.warning(f"Failed to send verification email to {to}: {e}")
-        return False
-
-
-async def _send_email(to: str, subject: str, body: str) -> bool:
-    """Send a plain-text email. Returns True if sent, False if SMTP is disabled or fails."""
-    if not settings.smtp_enabled:
-        return False
-    try:
-        import aiosmtplib
-        from email.message import EmailMessage
-
-        msg = EmailMessage()
-        msg["From"] = settings.smtp_from
-        msg["To"] = to
-        msg["Subject"] = subject
-        msg.set_content(body)
-
-        await aiosmtplib.send(
-            msg,
-            hostname=settings.smtp_host,
-            port=settings.smtp_port,
-            username=settings.smtp_user,
-            password=settings.smtp_password,
-            start_tls=True,
+    else:
+        subject = "Verify your Novotree account"
+        body = (
+            f"Hello {display_name},\n\n"
+            f"Click the link below to verify your email and complete account creation:\n\n"
+            f"{verify_url}\n\n"
+            f"This link expires in {_EMAIL_VERIFY_TOKEN_TTL_HOURS} hour.\n\n"
+            f"If you did not create this account, you can ignore this email."
         )
-        return True
-    except Exception as e:
-        logger.warning(f"Failed to send email to {to}: {e}")
-        return False
+    return await send_email(to, subject, body)
 
 
 # ---------------------------------------------------------------------------

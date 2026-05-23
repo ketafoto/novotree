@@ -2,17 +2,19 @@ import { useState } from 'react';
 import { shareUrl } from '../../utils/shareUrl';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { User, Heart, Calendar, Image, ArrowRight, Plus, Share2, Copy, Trash2, Users } from 'lucide-react';
+import { User, Heart, Calendar, Image, ArrowRight, Plus, Share2, Copy, Trash2, Users, Shield, AlertTriangle } from 'lucide-react';
 import { individualsApi } from '../../api/individuals';
 import { familiesApi } from '../../api/families';
 import { eventsApi } from '../../api/events';
 import { mediaApi } from '../../api/media';
 import { usersApi } from '../../api/auth';
+import { takedownApi } from '../../api/takedown';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
 import { Spinner } from '../../components/common/Spinner';
 import { formatIndividualName, getLatestName } from '../../utils/nameUtils';
 import { useAuth } from '../../contexts/AuthContext';
+import { isLocalApp } from '../../config/appMode';
 import toast from 'react-hot-toast';
 import { apiErrorMessage } from '../../utils/apiError';
 
@@ -129,6 +131,69 @@ function ShareLinksWidget() {
   );
 }
 
+/**
+ * Always-visible summary of the Owner's takedown queue.
+ *
+ * Renders even at zero so the Owner remembers the feature exists (per
+ * docs/PRIVACY_DESIGN.md §2.2). Severity is conditional:
+ *   - any escalated row → red (SLA missed, immediate attention)
+ *   - else any open row → amber (within SLA, action needed)
+ *   - empty            → neutral grey
+ *
+ * Shares the query key `['takedowns', false]` with TakedownsPage so
+ * navigating between dashboard and queue is a cache hit, no extra fetch.
+ */
+function TakedownSummaryCard() {
+  const { data, isLoading } = useQuery({
+    queryKey: ['takedowns', false],
+    queryFn: () => takedownApi.list(false),
+  });
+
+  const rows = data ?? [];
+  const escalatedCount = rows.filter((r) => r.status === 'escalated').length;
+  const openCount = rows.filter((r) => r.status === 'open').length;
+  const total = openCount + escalatedCount;
+
+  const severity = escalatedCount > 0 ? 'red' : openCount > 0 ? 'amber' : 'neutral';
+  const tone = {
+    red: { border: 'border-red-300', iconBg: 'bg-red-100', iconFg: 'text-red-600' },
+    amber: { border: 'border-amber-300', iconBg: 'bg-amber-100', iconFg: 'text-amber-600' },
+    neutral: { border: 'border-gray-200', iconBg: 'bg-gray-100', iconFg: 'text-gray-500' },
+  }[severity];
+
+  return (
+    <Link to="/privacy/takedowns" className="block">
+      <div className={`bg-white rounded-lg border ${tone.border} p-6 hover:shadow-md transition-shadow`}>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-gray-600 flex items-center gap-2">
+              Takedown requests
+              {escalatedCount > 0 && (
+                <AlertTriangle className="w-4 h-4 text-red-600" aria-label="SLA exceeded" />
+              )}
+            </p>
+            <p className="text-3xl font-bold text-gray-900 mt-1">
+              {isLoading ? '—' : total}
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              {isLoading
+                ? 'Loading…'
+                : total === 0
+                ? 'No requests awaiting action'
+                : escalatedCount > 0
+                ? `${escalatedCount} escalated, ${openCount} open`
+                : `${openCount} open, within SLA`}
+            </p>
+          </div>
+          <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${tone.iconBg}`}>
+            <Shield className={`w-6 h-6 ${tone.iconFg}`} />
+          </div>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
 export function DashboardPage() {
   const { isOwner } = useAuth();
   const { data: individuals, isLoading: loadingIndividuals } = useQuery({
@@ -210,6 +275,10 @@ export function DashboardPage() {
           color="bg-amber-500"
         />
       </div>
+
+      {/* Takedown queue summary — Owner-only, hidden in local mode (no public
+          takedown surface there, so the card would always be a confusing zero). */}
+      {isOwner && !isLocalApp && <TakedownSummaryCard />}
 
       {/* Quick Actions */}
       <Card title="Quick Actions">

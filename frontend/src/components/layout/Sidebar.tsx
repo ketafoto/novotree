@@ -8,6 +8,7 @@ import {
   Upload,
   ArrowLeftRight,
   Settings,
+  Shield,
   ChevronDown,
   Users,
   LogOut,
@@ -127,6 +128,17 @@ export function Sidebar() {
             to="/users"
             icon={<Users className="w-5 h-5" />}
             label="User Manager"
+          />
+        )}
+
+        {/* Privacy: Owner-only triage queue for "remove me" takedown requests.
+            Hidden in local mode — local app has no public surface to file
+            takedowns against. */}
+        {isOwner && !isLocalApp && (
+          <NavItem
+            to="/privacy/takedowns"
+            icon={<Shield className="w-5 h-5" />}
+            label="Privacy"
           />
         )}
 

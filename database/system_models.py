@@ -9,6 +9,7 @@ Tables:
 - auth_pending_contributors: email-verification staging for contributor self-signups (24-hour TTL)
 - auth_set_password_tokens : one-time tokens for contributor onboarding / password reset
 - auth_invitations         : legacy invitation records (kept for data; no longer used by UI)
+- takedown_requests        : public "remove me" requests (Privacy §2.2)
 """
 
 from sqlalchemy import (
@@ -139,6 +140,38 @@ class AuthPendingOwner(SystemBase):
     password_hash = Column(String, nullable=False)        # already hashed at signup time
     expires_at = Column(String, nullable=False)           # ISO-8601 UTC; 1-hour TTL
     created_at = Column(String, nullable=False)           # ISO-8601 UTC
+
+
+class TakedownRequest(SystemBase):
+    """
+    Public "remove me from a tree" request (GDPR Art. 17). Submitted via the
+    unauthenticated POST /privacy/takedown endpoint and reviewed by the tree
+    owner. See docs/PRIVACY_DESIGN.md §2.2 and PRIVACY_ANALYSIS.md M-04.
+
+    Status transitions:
+      open → acknowledged → resolved
+      open → escalated  (auto, after takedown_sla_days)
+    """
+
+    __tablename__ = "takedown_requests"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tree_owner_id = Column(String, nullable=False)        # which owner's tree the request targets
+    individual_id = Column(String, nullable=True)         # optional pointer if requester knows the ID
+    requester_name = Column(String, nullable=False)
+    requester_email = Column(String, nullable=False)
+    requester_phone = Column(String, nullable=True)       # optional; aids identity verification
+    message = Column(String, nullable=False)
+    status = Column(String, nullable=False, default="open")  # 'open'|'acknowledged'|'resolved'|'escalated'
+    created_at = Column(String, nullable=False)           # ISO-8601 UTC
+    resolved_at = Column(String, nullable=True)           # ISO-8601 UTC; set when status reaches resolved/escalated
+
+    # Sweeper bookkeeping — see backend/api/privacy.py:_sweep_takedowns().
+    # `RETURNING id` on UPDATE … WHERE … IS NULL gives first-writer-wins idempotency
+    # so the in-process loop and the standalone scheduled-jobs backstop can both run
+    # safely without double-sending mail.
+    reminder_sent_at = Column(String, nullable=True)      # ISO-8601 UTC; day-14 reminder
+    escalated_at = Column(String, nullable=True)          # ISO-8601 UTC; SLA-day auto-escalation
 
 
 class AuthPendingContributor(SystemBase):
