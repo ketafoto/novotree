@@ -11,32 +11,51 @@ import { ProtectedRoute } from './components/common/ProtectedRoute';
 import { typesApi } from './api/types';
 import { isLocalApp } from './config/appMode';
 
-// Auth pages (no layout wrapper)
+// Auth pages (no layout wrapper) — kept eager: needed on first paint for unauthenticated users
 import { LoginPage } from './pages/auth/LoginPage';
 import { OwnerSignupPage } from './pages/auth/SignupPage';
 import { SetPasswordPage } from './pages/auth/SetPasswordPage';
 import { VerifyOwnerEmailPage } from './pages/auth/VerifyEmailPage';
 import { VerifyContributorEmailPage } from './pages/auth/VerifyContributorEmailPage';
 
-// Legal / privacy pages (public, no Layout wrapper)
+// Legal / privacy pages — kept eager: public routes with no heavy dependencies
 import { TakedownPage } from './pages/legal/TakedownPage';
 import { PrivacyPage } from './pages/legal/PrivacyPage';
-// Owner-scoped privacy queue (authenticated, inside Layout)
-import { TakedownsPage } from './pages/legal/TakedownsPage';
 
-// Main pages
-import { DashboardPage } from './pages/dashboard/DashboardPage';
-import { IndividualsListPage } from './pages/individuals/IndividualsListPage';
-import { IndividualDetailPage } from './pages/individuals/IndividualDetailPage';
-import { IndividualFormPage } from './pages/individuals/IndividualFormPage';
-import { FamiliesListPage } from './pages/families/FamiliesListPage';
-import { FamilyDetailPage } from './pages/families/FamilyDetailPage';
-import { FamilyFormPage } from './pages/families/FamilyFormPage';
-import { ExportPage } from './pages/export/ExportPage';
-import { ImportPage } from './pages/import/ImportPage';
-import { SettingsPage } from './pages/settings/SettingsPage';
-
-// Lazy-load heavy pages
+// Lazy-load all authenticated pages to keep the initial bundle small
+const TakedownsPage = lazy(() =>
+  import('./pages/legal/TakedownsPage').then((m) => ({ default: m.TakedownsPage }))
+);
+const DashboardPage = lazy(() =>
+  import('./pages/dashboard/DashboardPage').then((m) => ({ default: m.DashboardPage }))
+);
+const IndividualsListPage = lazy(() =>
+  import('./pages/individuals/IndividualsListPage').then((m) => ({ default: m.IndividualsListPage }))
+);
+const IndividualDetailPage = lazy(() =>
+  import('./pages/individuals/IndividualDetailPage').then((m) => ({ default: m.IndividualDetailPage }))
+);
+const IndividualFormPage = lazy(() =>
+  import('./pages/individuals/IndividualFormPage').then((m) => ({ default: m.IndividualFormPage }))
+);
+const FamiliesListPage = lazy(() =>
+  import('./pages/families/FamiliesListPage').then((m) => ({ default: m.FamiliesListPage }))
+);
+const FamilyDetailPage = lazy(() =>
+  import('./pages/families/FamilyDetailPage').then((m) => ({ default: m.FamilyDetailPage }))
+);
+const FamilyFormPage = lazy(() =>
+  import('./pages/families/FamilyFormPage').then((m) => ({ default: m.FamilyFormPage }))
+);
+const ExportPage = lazy(() =>
+  import('./pages/export/ExportPage').then((m) => ({ default: m.ExportPage }))
+);
+const ImportPage = lazy(() =>
+  import('./pages/import/ImportPage').then((m) => ({ default: m.ImportPage }))
+);
+const SettingsPage = lazy(() =>
+  import('./pages/settings/SettingsPage').then((m) => ({ default: m.SettingsPage }))
+);
 const TreePage = lazy(() =>
   import('./pages/tree/TreePage').then((m) => ({ default: m.TreePage }))
 );
@@ -47,7 +66,7 @@ const UserManagerPage = lazy(() =>
   import('./pages/users/UserManagerPage').then((m) => ({ default: m.UserManagerPage }))
 );
 
-const TreeFallback = <div className="flex items-center justify-center h-screen text-gray-500">Loading tree…</div>;
+const PageFallback = <div className="flex items-center justify-center h-screen text-gray-500">Loading…</div>;
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -103,6 +122,7 @@ function App() {
           <PrefetchTypes />
           <div className="min-h-screen flex flex-col">
           <div className="flex-1">
+          <Suspense fallback={PageFallback}>
           <Routes>
             {/* ── Public auth pages (no Layout wrapper) ── */}
             <Route path="/login" element={<LoginPage />} />
@@ -120,7 +140,7 @@ function App() {
               path="/tree"
               element={
                 <ProtectedRoute allowViewer>
-                  <Suspense fallback={TreeFallback}><TreeOverviewPage /></Suspense>
+                  <TreeOverviewPage />
                 </ProtectedRoute>
               }
             />
@@ -128,7 +148,7 @@ function App() {
               path="/individuals/:id/tree"
               element={
                 <ProtectedRoute allowViewer>
-                  <Suspense fallback={TreeFallback}><TreePage /></Suspense>
+                  <TreePage />
                 </ProtectedRoute>
               }
             />
@@ -202,9 +222,7 @@ function App() {
                 path="users"
                 element={
                   <ProtectedRoute minRole="owner">
-                    <Suspense fallback={<div className="p-8 text-gray-500">Loading…</div>}>
-                      <UserManagerPage />
-                    </Suspense>
+                    <UserManagerPage />
                   </ProtectedRoute>
                 }
               />
@@ -213,6 +231,7 @@ function App() {
             {/* Catch-all */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          </Suspense>
           </div>
           <PrivacyFooter />
           </div>

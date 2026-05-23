@@ -12,6 +12,19 @@ export default defineConfig({
   // VITE_BASE_PATH is injected at build time by vm-setup.py, which knows the
   // deployment path. Defaults to '/' for local dev (npm run dev).
   base: process.env.VITE_BASE_PATH ?? '/',
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-query': ['@tanstack/react-query'],
+          'vendor-tree': ['@xyflow/react', 'html-to-image'],
+          'vendor-forms': ['react-hook-form', 'zod', '@hookform/resolvers'],
+          'vendor-ui': ['framer-motion', 'lucide-react', 'date-fns'],
+        },
+      },
+    },
+  },
   server: {
     // Bind to 0.0.0.0 so the dev server is reachable from other devices on the
     // LAN (e.g. a phone on the same Wi-Fi hitting http://<laptop-ip>:3000).
