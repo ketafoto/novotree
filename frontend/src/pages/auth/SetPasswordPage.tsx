@@ -48,7 +48,7 @@ export function SetPasswordPage() {
 
   if (!token) {
     return (
-      <div className="min-h-full bg-gray-50 flex items-center justify-center p-4">
+      <div className="flex-1 bg-gray-50 flex items-center justify-center p-4">
         <div className="w-full max-w-sm text-center">
           <p className="text-red-600 font-medium">Invalid or missing invitation link.</p>
           <Link to="/login" className="text-emerald-600 hover:underline text-sm mt-4 block">
@@ -61,7 +61,7 @@ export function SetPasswordPage() {
 
   if (pendingApproval) {
     return (
-      <div className="min-h-full bg-gray-50 flex items-center justify-center p-4">
+      <div className="flex-1 bg-gray-50 flex items-center justify-center p-4">
         <div className="w-full max-w-sm text-center">
           <div className="inline-flex items-center justify-center w-14 h-14 bg-amber-500 rounded-xl mb-6">
             <Clock className="w-8 h-8 text-white" />
@@ -103,7 +103,7 @@ export function SetPasswordPage() {
   };
 
   return (
-    <div className="min-h-full bg-gray-50 flex items-center justify-center p-4">
+    <div className="flex-1 bg-gray-50 flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="text-center mb-8">

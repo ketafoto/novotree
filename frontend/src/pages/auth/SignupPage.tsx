@@ -67,7 +67,7 @@ export function OwnerSignupPage() {
 
   if (submittedEmail) {
     return (
-      <div className="min-h-full bg-gray-50 flex items-center justify-center p-4">
+      <div className="flex-1 bg-gray-50 flex items-center justify-center p-4">
         <div className="w-full max-w-sm text-center">
           <div className="inline-flex items-center justify-center w-14 h-14 bg-emerald-600 rounded-xl mb-6">
             <Mail className="w-8 h-8 text-white" />
@@ -100,7 +100,7 @@ export function OwnerSignupPage() {
   }
 
   return (
-    <div className="min-h-full bg-gray-50 flex items-center justify-center p-4">
+    <div className="flex-1 bg-gray-50 flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="text-center mb-8">

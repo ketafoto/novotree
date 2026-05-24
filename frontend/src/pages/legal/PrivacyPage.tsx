@@ -55,7 +55,7 @@ export function PrivacyPage() {
   const containerMaxWidth = tocLayout === 'sidebar' ? 'max-w-6xl' : 'max-w-3xl';
 
   return (
-    <div className="min-h-full bg-gray-50 py-10 px-4">
+    <div className="flex-1 bg-gray-50 py-10 px-4">
       <div className={`${containerMaxWidth} mx-auto bg-white rounded-lg shadow p-8 space-y-6`}>
         <header className="flex items-center justify-between gap-3 border-b border-gray-200 pb-4">
           <Link to="/" className="flex items-center gap-2 text-emerald-700 hover:text-emerald-800">

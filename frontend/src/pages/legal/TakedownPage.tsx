@@ -143,7 +143,7 @@ export function TakedownPage() {
 
   if (submitted) {
     return (
-      <div className="min-h-full bg-gray-50 flex items-center justify-center p-4">
+      <div className="flex-1 bg-gray-50 flex items-center justify-center p-4">
         <div className="max-w-xl w-full bg-white rounded-lg shadow p-8 space-y-4">
           <div className="flex items-center gap-3">
             <TreeDeciduous className="text-emerald-600" size={32} />
@@ -169,7 +169,7 @@ export function TakedownPage() {
   }
 
   return (
-    <div className="min-h-full bg-gray-50 flex items-center justify-center p-4">
+    <div className="flex-1 bg-gray-50 flex items-center justify-center p-4">
       <div className="max-w-xl w-full bg-white rounded-lg shadow p-8 space-y-6">
         <div className="flex items-center gap-3">
           <TreeDeciduous className="text-emerald-600" size={32} />

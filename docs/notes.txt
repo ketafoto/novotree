@@ -166,7 +166,7 @@ Backend (UviCorn + FastAPI + SqlAlchemy):
        OR
        uvicorn backend.main:app --reload --reload-dir .
        OR
-       python ./backend/dev_run_backend auth-on - supports full OCV signup/login flow, uses backend/.env.dev.auth-on to set environment
+       python ./backend/run_dev_backend auth-on - supports full OCV signup/login flow, uses backend/.env.dev.auth-on to set environment
     3. http://localhost:8000 in Browser
 
 Frontend (Vite + React + TailWind):
