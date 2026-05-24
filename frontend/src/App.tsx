@@ -121,7 +121,7 @@ function App() {
         <AuthProvider>
           <PrefetchTypes />
           <div className="min-h-screen flex flex-col">
-          <div className="flex-1">
+          <div className="flex-1 flex flex-col">
           <Suspense fallback={PageFallback}>
           <Routes>
             {/* ── Public auth pages (no Layout wrapper) ── */}
