@@ -251,9 +251,11 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
     const is401 = (error as { response?: { status?: number } })?.response?.status === 401;
     return (
       <div className="text-center py-12">
-        <p className="text-gray-600">
-          {is401 ? 'Session expired — please log in again' : 'Individual not found'}
-        </p>
+        {(!readOnly || !is401) && (
+          <p className="text-gray-600">
+            {is401 ? 'Session expired — please log in again' : 'Individual not found'}
+          </p>
+        )}
         <Link to={readOnly ? '/tree' : '/individuals'} className="text-emerald-600 hover:underline">
           {readOnly ? 'Back to tree' : 'Back to list'}
         </Link>
