@@ -2,9 +2,29 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
+// Reminds the developer that `npm run dev:dev-auth-on` only flips the FRONTEND
+// into public/auth mode — the backend must ALSO be started with
+// NOVOTREE_APP_MODE=public, otherwise /auth/me still returns the dev owner and
+// the login screen never appears.
+const devAuthOnReminderPlugin = (mode: string) => ({
+  name: 'dev-auth-on-reminder',
+  configureServer() {
+    if (mode !== 'dev-auth-on') return;
+    const yellow = (s: string) => `\x1b[33m${s}\x1b[0m`;
+    const bold = (s: string) => `\x1b[1m${s}\x1b[0m`;
+    console.log('');
+    console.log(yellow(bold('  ⚠  dev-auth-on: frontend is in PUBLIC mode.')));
+    console.log(yellow('     To actually see the login screen, the BACKEND must also run with'));
+    console.log(yellow('     NOVOTREE_APP_MODE=public  (otherwise /auth/me returns the dev owner'));
+    console.log(yellow('     and you stay auto-authenticated). Also clear any stale access_token'));
+    console.log(yellow('     cookie for localhost:3000 in your browser.'));
+    console.log('');
+  },
+});
+
 // https://vite.dev/config/
-export default defineConfig({
-  plugins: [react(), tailwindcss()],
+export default defineConfig(({ mode }) => ({
+  plugins: [react(), tailwindcss(), devAuthOnReminderPlugin(mode)],
   // "base" tells Vite what URL prefix the app is served under.
   // Vite embeds this prefix into all generated asset URLs (JS, CSS, images),
   // so the browser can find them. Without the correct prefix, the browser
@@ -40,4 +60,4 @@ export default defineConfig({
       },
     },
   },
-})
+}))
