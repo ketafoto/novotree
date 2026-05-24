@@ -23,7 +23,7 @@ Logs to stdout; systemd captures and routes to journalctl. Use:
 
 to follow live, or:
 
-    python3 -m tools.operational.scheduled_jobs.scheduled_jobs --force
+    python3 -m tools.ops.scheduled_jobs.scheduled_jobs --force
 
 to run all jobs unconditionally (debugging).
 """
@@ -35,7 +35,7 @@ import urllib.error
 import urllib.request
 
 # Each job is a callable taking no arguments. Add new jobs here.
-from tools.operational.scheduled_jobs.jobs import takedown_requests_monitor
+from tools.ops.scheduled_jobs.jobs import takedown_requests_monitor
 
 JOBS = [takedown_requests_monitor]
 

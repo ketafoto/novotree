@@ -177,7 +177,7 @@ below).
 - [x] In-process scheduler started from FastAPI lifespan in
       [backend/main.py](../backend/main.py) — primary path.
 - [x] Standalone backstop at
-      [tools/operational/scheduled_jobs/](../tools/operational/scheduled_jobs/)
+      [tools/ops/scheduled_jobs/](../tools/ops/scheduled_jobs/)
       driven by `novotree-backend-monitor.{service,timer}` on the VM. Runs
       only when the backend `/health` probe fails. DB-level claim columns
       make both paths safe to run concurrently.

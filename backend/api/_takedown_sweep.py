@@ -3,7 +3,7 @@ Takedown SLA sweeper — single source of truth for reminder/escalation logic.
 
 Called from two places:
   - backend.api.privacy._in_process_sweeper_loop  (async loop in the backend)
-  - tools/operational/scheduled_jobs/jobs/takedown_requests_monitor.py
+  - tools/ops/scheduled_jobs/jobs/takedown_requests_monitor.py
     (standalone script run by systemd timer when the backend is down)
 
 Idempotent via DB-level claim: each row carries `reminder_sent_at` and

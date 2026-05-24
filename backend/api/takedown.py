@@ -15,7 +15,7 @@ Routes:
 Also exposes start/stop hooks for the in-process SLA sweeper that the FastAPI
 lifespan in backend.main calls. Sweep logic lives in _takedown_sweep.py and is
 shared with the standalone scheduled-jobs backstop in
-tools/operational/scheduled_jobs/.
+tools/ops/scheduled_jobs/.
 
 Why this lives in its own module (and not in privacy.py): privacy.py owns
 static legal-posture endpoints (/privacy/config now, /privacy/policy later).

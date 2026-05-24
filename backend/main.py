@@ -76,7 +76,7 @@ async def lifespan(app: FastAPI):
     # Takedown SLA sweeper — in-process reminder/escalation loop. Only meaningful
     # when the public takedown endpoint is exposed (i.e. not the local desktop app).
     # The standalone scheduled-jobs backstop covers the case where this process is
-    # not running; see tools/operational/scheduled_jobs/.
+    # not running; see tools/ops/scheduled_jobs/.
     if not settings.is_local:
         takedown_api.start_in_process_sweeper()
 
