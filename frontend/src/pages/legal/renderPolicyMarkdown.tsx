@@ -11,10 +11,51 @@ import { Link } from 'react-router-dom';
  *
  * Internal links (paths starting with "/") render as react-router <Link>;
  * everything else renders as a plain anchor.
+ *
+ * Returns {content, headings} so the caller can render a separate ToC
+ * keyed to the same slugified heading IDs. ToC includes h2 only; h3 is
+ * deliberately omitted to keep the list flat (the current policy has only
+ * one h3 and the lopsided nesting reads worse than no nesting).
  */
 
 interface ParsedRow {
   cells: string[];
+}
+
+export interface PolicyHeading {
+  slug: string;
+  text: string;
+}
+
+export interface RenderedPolicy {
+  content: ReactNode;
+  headings: PolicyHeading[];
+}
+
+/**
+ * Slugify a heading for anchor IDs. Mirrors the simple kebab-case style
+ * GitHub uses for its rendered markdown — lowercase, alphanumerics + hyphens,
+ * collapse runs. We do not need to handle collisions because the policy
+ * authors are us and we'll notice in review.
+ */
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, '')   // drop punctuation
+    .trim()
+    .replace(/\s+/g, '-');
+}
+
+/**
+ * Strip inline markdown markers from a heading so the ToC label reads as
+ * plain text (no asterisks, no backticks, no link-syntax brackets).
+ */
+function stripInlineMarkers(text: string): string {
+  return text
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\*([^*]+)\*/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
 }
 
 function parseTableRow(line: string): ParsedRow | null {
@@ -97,9 +138,10 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
   return nodes;
 }
 
-export function renderPolicyMarkdown(source: string): ReactNode {
+export function renderPolicyMarkdown(source: string): RenderedPolicy {
   const lines = source.replace(/\r\n/g, '\n').split('\n');
   const blocks: ReactNode[] = [];
+  const headings: PolicyHeading[] = [];
   let i = 0;
   let blockKey = 0;
 
@@ -126,22 +168,27 @@ export function renderPolicyMarkdown(source: string): ReactNode {
     if (heading) {
       const level = heading[1].length;
       const key = next();
-      const content = renderInline(heading[2], `h${level}-${blockKey}`);
+      const rawText = heading[2];
+      const slug = slugify(stripInlineMarkers(rawText));
+      const content = renderInline(rawText, `h${level}-${blockKey}`);
       if (level === 1) {
         blocks.push(
-          <h1 key={key} className="text-3xl font-semibold mt-4 mb-3">
+          <h1 key={key} id={slug} className="text-3xl font-semibold mt-4 mb-3">
             {content}
           </h1>
         );
       } else if (level === 2) {
+        // Bigger top margin than h3 so section breaks are visually obvious in
+        // a dense policy. mt-10 ≈ 40px feels right next to mt-3 paragraphs.
         blocks.push(
-          <h2 key={key} className="text-xl font-semibold mt-6 mb-2">
+          <h2 key={key} id={slug} className="text-xl font-semibold mt-10 mb-2 scroll-mt-6">
             {content}
           </h2>
         );
+        headings.push({ slug, text: stripInlineMarkers(rawText) });
       } else {
         blocks.push(
-          <h3 key={key} className="text-lg font-semibold mt-5 mb-2">
+          <h3 key={key} id={slug} className="text-lg font-semibold mt-5 mb-2 scroll-mt-6">
             {content}
           </h3>
         );
@@ -237,5 +284,5 @@ export function renderPolicyMarkdown(source: string): ReactNode {
     );
   }
 
-  return <Fragment>{blocks}</Fragment>;
+  return { content: <Fragment>{blocks}</Fragment>, headings };
 }
