@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import secrets
 from dataclasses import dataclass, field
@@ -264,6 +265,18 @@ class PrivacySettings:
     #          analytics script must not load until Accept is clicked.
     analytics_enabled: bool
 
+    # --- TEST-ONLY: do NOT enable in production ---
+    # When True, Owners can edit `created_at` / `resolved_at` on their own
+    # takedown rows from the queue UI. This exists so the SLA reminder /
+    # escalation / retention sweep paths can be exercised on a test VM
+    # without waiting 30 days for each transition. In production this is
+    # a data-integrity risk (an Owner could defeat the SLA by resetting
+    # `created_at`), so the default is False and the flag is logged loudly
+    # at startup when it flips on. Symbols implementing this path are
+    # `test_`-prefixed throughout the codebase so they grep cleanly during
+    # review.
+    test_allow_timestamp_override: bool
+
 
 def load_privacy_settings() -> PrivacySettings:
     mode = os.getenv("NOVOTREE_DEPLOYMENT_MODE", "A").strip().upper() or "A"
@@ -302,7 +315,17 @@ def load_privacy_settings() -> PrivacySettings:
         dpo_email=os.getenv("DPO_EMAIL") or None,
         hosting_region=os.getenv("HOSTING_REGION", "EEA"),
         analytics_enabled=_as_bool(os.getenv("ANALYTICS_ENABLED"), default=False),
+        test_allow_timestamp_override=_as_bool(
+            os.getenv("PRIVACY_ALLOW_TIMESTAMP_OVERRIDE"), default=False
+        ),
     )
 
 
 privacy_settings = load_privacy_settings()
+
+if privacy_settings.test_allow_timestamp_override:
+    logging.getLogger("novotree.backend").warning(
+        "PRIVACY_ALLOW_TIMESTAMP_OVERRIDE is ON — Owners can edit takedown "
+        "timestamps from the UI. This is a TEST-ONLY flag and must NOT be "
+        "set in production."
+    )

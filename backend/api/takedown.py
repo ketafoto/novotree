@@ -27,7 +27,7 @@ along multiple unrelated axes.
 import asyncio
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
@@ -131,6 +131,21 @@ class TakedownStatusUpdate(BaseModel):
                 f"other statuses are administrative."
             )
         return v
+
+
+class TestTakedownTimestampOverride(BaseModel):
+    """
+    TEST-ONLY payload for shifting takedown timestamps. Used to exercise the
+    SLA reminder / escalation / retention sweep paths without waiting weeks.
+
+    Both fields are optional; at least one must be present. Each is ISO-8601
+    UTC. Symbols on this code path are `test_`-prefixed so reviewers can grep
+    them out cleanly — the path is gated by
+    `privacy_settings.test_allow_timestamp_override` (env
+    `PRIVACY_ALLOW_TIMESTAMP_OVERRIDE`) and must remain off in production.
+    """
+    test_created_at: Optional[str] = Field(default=None, description="ISO-8601 UTC")
+    test_resolved_at: Optional[str] = Field(default=None, description="ISO-8601 UTC")
 
 
 # ---------------------------------------------------------------------------
@@ -307,6 +322,87 @@ def update_my_takedown(
         return TakedownRow.model_validate(row)  # idempotent — already there
     row.status = payload.status  # validated to be 'resolved' above
     row.resolved_at = datetime.now(timezone.utc).isoformat()
+    db.commit()
+    db.refresh(row)
+    return TakedownRow.model_validate(row)
+
+
+def _test_parse_iso(value: str, field_name: str) -> datetime:
+    """TEST-ONLY helper. Parse ISO-8601 and bound it to a sensible window."""
+    try:
+        # datetime.fromisoformat in 3.11+ accepts the trailing 'Z'; older
+        # callers should be sending the same shape the DB stores.
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"{field_name}: not a valid ISO-8601 datetime",
+        ) from exc
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    now = datetime.now(timezone.utc)
+    # Allow up to +1 day in the future so clock-skew accidents don't 400, but
+    # reject obvious nonsense like "year 3000". Floor is the unix epoch.
+    if parsed > now + timedelta(days=1):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"{field_name}: too far in the future",
+        )
+    if parsed.year < 1970:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"{field_name}: before unix epoch",
+        )
+    return parsed
+
+
+@owner_router.patch("/{takedown_id}/test_override", response_model=TakedownRow)
+def test_override_takedown_timestamps(
+    takedown_id: int,
+    payload: TestTakedownTimestampOverride,
+    session: EditorSession = Depends(require_owner),
+    db: Session = Depends(get_system_db),
+) -> TakedownRow:
+    """
+    TEST-ONLY. Shift `created_at` and/or `resolved_at` on the Owner's own
+    takedown row, so the sweeper paths can be exercised without waiting.
+
+    Gated by `privacy_settings.test_allow_timestamp_override` — returns 403
+    unless `PRIVACY_ALLOW_TIMESTAMP_OVERRIDE=true` is set in the backend's
+    environment. Must remain off in production.
+    """
+    if not privacy_settings.test_allow_timestamp_override:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Timestamp override is disabled. Enable PRIVACY_ALLOW_TIMESTAMP_OVERRIDE on test VMs only.",
+        )
+    if payload.test_created_at is None and payload.test_resolved_at is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Provide at least one of test_created_at or test_resolved_at",
+        )
+    row = _load_owned_or_404(db, takedown_id, session.owner_id)
+
+    if payload.test_created_at is not None:
+        new_created = _test_parse_iso(payload.test_created_at, "test_created_at")
+        row.created_at = new_created.isoformat()
+        # Reset the sweeper claim columns so a backdated row goes back into
+        # eligibility — otherwise the reminder/escalation has already been
+        # "claimed" and the sweeper would skip it.
+        row.reminder_sent_at = None
+        row.escalated_at = None
+
+    if payload.test_resolved_at is not None:
+        new_resolved = _test_parse_iso(payload.test_resolved_at, "test_resolved_at")
+        row.resolved_at = new_resolved.isoformat()
+
+    logger.warning(
+        "TEST: timestamp override on takedown #%d by owner %s (created_at=%s, resolved_at=%s)",
+        row.id,
+        session.owner_id,
+        payload.test_created_at,
+        payload.test_resolved_at,
+    )
     db.commit()
     db.refresh(row)
     return TakedownRow.model_validate(row)

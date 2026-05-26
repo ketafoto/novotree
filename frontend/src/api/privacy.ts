@@ -27,6 +27,15 @@ export interface PrivacyConfig {
   hosting_region: string;
 
   analytics_enabled: boolean;
+
+  /**
+   * TEST-ONLY. When true, the Owner's takedown queue page renders
+   * timestamp-override inputs so the SLA reminder / escalation /
+   * retention sweep paths can be exercised on a test VM without
+   * waiting 30 days. Must remain false in production — see
+   * backend PrivacySettings.test_allow_timestamp_override.
+   */
+  test_allow_timestamp_override: boolean;
 }
 
 export interface TakedownRequestPayload {

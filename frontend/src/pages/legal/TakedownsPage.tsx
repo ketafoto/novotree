@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { Button } from '../../components/common/Button';
 import { takedownApi, type TakedownRow, type TakedownStatus } from '../../api/takedown';
 import { usePrivacyConfig } from '../../hooks/usePrivacyConfig';
+import { TestTakedownTimestampPanel } from './TestTakedownTimestampPanel';
 
 const STATUS_LABEL: Record<TakedownStatus, string> = {
   open: 'Open',
@@ -44,12 +45,16 @@ function TakedownCard({
   onDelete,
   resolving,
   deleting,
+  test_allowOverride,
+  test_onOverridden,
 }: {
   row: TakedownRow;
   onResolve: (id: number) => void;
   onDelete: (id: number) => void;
   resolving: boolean;
   deleting: boolean;
+  test_allowOverride: boolean;
+  test_onOverridden: (updated: TakedownRow) => void;
 }) {
   const isTerminal = row.status === 'resolved' || row.status === 'escalated';
   return (
@@ -119,6 +124,10 @@ function TakedownCard({
           </Button>
         )}
       </div>
+
+      {test_allowOverride && (
+        <TestTakedownTimestampPanel row={row} onUpdated={test_onOverridden} />
+      )}
     </div>
   );
 }
@@ -217,6 +226,10 @@ export function TakedownsPage() {
               onDelete={handleDelete}
               resolving={pendingId === row.id && resolveMutation.isPending}
               deleting={pendingId === row.id && deleteMutation.isPending}
+              test_allowOverride={config?.test_allow_timestamp_override ?? false}
+              test_onOverridden={() =>
+                queryClient.invalidateQueries({ queryKey: ['takedowns'] })
+              }
             />
           ))}
         </div>

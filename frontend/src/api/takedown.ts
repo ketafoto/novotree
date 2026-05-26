@@ -44,4 +44,22 @@ export const takedownApi = {
   remove: async (id: number): Promise<void> => {
     await apiClient.delete(`/takedown/${id}`);
   },
+
+  /**
+   * TEST-ONLY. Shift created_at / resolved_at on a takedown row so the SLA
+   * sweeper paths can be exercised without waiting weeks. The backend
+   * returns 403 unless PRIVACY_ALLOW_TIMESTAMP_OVERRIDE=true is set in its
+   * environment. Symbols are test_-prefixed throughout the codepath; this
+   * method MUST stay out of any production UX surface.
+   */
+  test_overrideTimestamps: async (
+    id: number,
+    payload: { test_created_at?: string; test_resolved_at?: string },
+  ): Promise<TakedownRow> => {
+    const res = await apiClient.patch<TakedownRow>(
+      `/takedown/${id}/test_override`,
+      payload,
+    );
+    return res.data;
+  },
 };

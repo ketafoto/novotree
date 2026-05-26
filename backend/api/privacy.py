@@ -58,6 +58,11 @@ class PrivacyConfigResponse(BaseModel):
 
     analytics_enabled: bool
 
+    # TEST-ONLY: tells the frontend to render timestamp-override inputs on
+    # the takedown queue page. See PrivacySettings.test_allow_timestamp_override.
+    # Must remain False in production.
+    test_allow_timestamp_override: bool
+
 
 @router.get("/config", response_model=PrivacyConfigResponse)
 def get_privacy_config() -> PrivacyConfigResponse:
@@ -80,6 +85,7 @@ def get_privacy_config() -> PrivacyConfigResponse:
         privacy_contact_email=p.privacy_contact_email,
         hosting_region=p.hosting_region,
         analytics_enabled=p.analytics_enabled,
+        test_allow_timestamp_override=p.test_allow_timestamp_override,
     )
 
 

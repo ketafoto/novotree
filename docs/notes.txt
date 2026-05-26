@@ -166,7 +166,7 @@ Backend (UviCorn + FastAPI + SqlAlchemy):
        OR
        uvicorn backend.main:app --reload --reload-dir .
        OR
-       python ./backend/run_dev_backend auth-on - supports full OCV signup/login flow, uses backend/.env.dev.auth-on to set environment
+       python ./backend/run_dev_backend auth-on - "sets NOVOTREE_APP_MODE=public", so it supports full OCV signup/login flow, uses backend/.env.dev.auth-on to set environment
     3. http://localhost:8000 in Browser
 
 Frontend (Vite + React + TailWind):
@@ -223,8 +223,6 @@ export interface PrivacyConfig {
   owner_signup_requires_approval: boolean;
   allow_contributor_signup: boolean;
 
-
-
 X. I want to publish SaaS for relative and friends only, not for public server.
    So I was thinking of adding "approval" flow for owners by admin during signup process.
    Same like we have today for approval contributors by owner.
@@ -267,4 +265,3 @@ Test
    b. Check UI - takeaway requests
    c. Set SLA to 1 minute and ensure mails is received
    d. Set retention to 3 minutes - ensure escalated to admin
-2. Remove individual - ensure request is resolved on UI. Deleted?
