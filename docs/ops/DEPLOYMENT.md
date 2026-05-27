@@ -33,6 +33,43 @@ For the JWT cookie strategy, password policy, and signup flows see
 
 ---
 
+## Frontend static assets
+
+Anything under [frontend/public/](../../frontend/public/) is served verbatim
+under the configured base path (see also [frontend/PUBLIC_DIR.md](../../frontend/PUBLIC_DIR.md)
+for the public-vs-src-assets cheat sheet). There is no asset allowlist in
+the deploy scripts — `npm run build` copies the entire `public/` tree into
+`dist/`, and the deploy scripts then `cp -r dist/. → /var/www/novospace/novotree/`.
+
+The two pieces of project-specific glue:
+
+| Where | What it does |
+|---|---|
+| [vite.config.ts](../../frontend/vite.config.ts) `base` | Reads `VITE_BASE_PATH` at build time; defaults to `/` for `npm run dev`. |
+| [scripts/deployment/vm-setup.py](../../../novospace.git/scripts/deployment/vm-setup.py) and [vm-update.py](../../../novospace.git/scripts/deployment/vm-update.py) | Run `npm run build` with `VITE_BASE_PATH=/novotree/`, then `rm -rf` the web root and `cp -r frontend/dist/.` into it. |
+
+Concrete example — adding `frontend/public/donate/kofi2.png`:
+
+1. File lands on the VM via `git pull` in `vm-update.py` step 1.
+2. `npm run build` writes it to `frontend/dist/donate/kofi2.png`.
+3. The recursive copy puts it at `/var/www/novospace/novotree/donate/kofi2.png`.
+4. Caddy's `handle /novotree/*` block serves it as
+   `https://novospace.cz/novotree/donate/kofi2.png`.
+5. In code, reference it via `${import.meta.env.BASE_URL}donate/kofi2.png` —
+   `BASE_URL` is the same `VITE_BASE_PATH` value, so the URL is correct in
+   both `npm run dev` (`/donate/kofi2.png`) and prod (`/novotree/donate/kofi2.png`).
+
+**Do** put static assets under `public/` when you want them shipped as-is
+(images that aren't imported, robots.txt, favicons, third-party logos that
+should be self-hosted to avoid referer leaks).
+
+**Don't** put assets under `public/` if they should be hashed and
+tree-shaken — those go under `frontend/src/assets/` and are `import`-ed.
+Vite fingerprints those for cache-busting; `public/` files are served at
+their original path with no cache-busting.
+
+---
+
 ## Post-deploy smoke test
 
 Once `novospace` is provisioned and `novotree.service` is running, verify the

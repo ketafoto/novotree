@@ -1,18 +1,23 @@
 import { Link } from 'react-router-dom';
+import { usePrivacyConfig } from '../../hooks/usePrivacyConfig';
+import { DonateLink } from '../common/DonateButton';
 
 /**
- * The "Remove me / Our Privacy" link pair used by both [PrivacyFooter.tsx]
- * (every page that participates in the document flow) and the Tree page
- * top-bar (where the global footer would otherwise be hidden by the
- * `fixed inset-0 z-50` fullscreen overlay).
+ * The privacy-link cluster used by both [PrivacyFooter.tsx] (every page that
+ * participates in the document flow) and the Tree pages' top-bar (where the
+ * global footer would otherwise be hidden by the `fixed inset-0 z-50`
+ * fullscreen overlay).
  *
- * Order is "Remove me" first — it is the more important affordance for a
- * viewer who recognized themselves on a forwarded share link. "Our Privacy"
- * is the supporting context. Both are visually unobtrusive; the takedown
- * link gets a tiny coloured accent so it stands out from the chrome.
+ * Order is "Remove Me" first — the more important affordance for a viewer who
+ * recognized themselves on a forwarded share link. "Our Privacy" is the
+ * supporting context. In Mode A only, a small pink "Donate" link follows,
+ * styled to match the privacy peers so it does not dominate them
+ * (docs/legal/PRIVACY_DESIGN.md §4.8 Pattern A). Modes B and C deliberately
+ * omit Donate — placement there requires the §4.1 lawyer review first.
  *
- * Hidden in the local desktop app via the caller — neither link has a second
- * party to address when the user is also the controller.
+ * Hidden in the local desktop app via the caller — neither privacy link has
+ * a second party to address when the user is also the controller. The local
+ * app shows DonateButton in its Header instead.
  */
 const TAKEDOWN_BASE_PATH = '/privacy/takedown';
 const PRIVACY_POLICY_PATH = '/legal/privacy';
@@ -31,6 +36,9 @@ interface PrivacyLinksProps {
 }
 
 export function PrivacyLinks({ className = '' }: PrivacyLinksProps) {
+  const { config } = usePrivacyConfig();
+  const showDonate = config?.deployment_mode === 'A' && !config.analytics_enabled;
+
   return (
     <span className={`inline-flex items-center gap-3 ${className}`}>
       <Link
@@ -46,6 +54,12 @@ export function PrivacyLinks({ className = '' }: PrivacyLinksProps) {
       >
         Our Privacy
       </Link>
+      {showDonate && (
+        <>
+          <span aria-hidden className="text-gray-300">/</span>
+          <DonateLink />
+        </>
+      )}
     </span>
   );
 }

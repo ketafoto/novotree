@@ -112,7 +112,11 @@ becomes true, schedule a paid review:
   trigger for Mode B.
 - Owner signup is enabled in any form, gated or open (`allow_owner_signup = True`
   with or without `owner_signup_requires_approval`) — triggers full Mode C.
-- A donate button or any payment integration is added.
+- An **embedded** payment integration is added — i.e. a checkout, donor
+  receipt, donor wall, or any flow where money or donor PII passes through
+  NovoTree's server or DB. **Pure link-out donate buttons** (a heart icon
+  that opens GitHub Sponsors or Ko-fi in a new tab, NovoTree never sees the
+  transaction) do NOT trigger Tier 3 — see §4.8.
 - Analytics with non-essential cookies are introduced (`analytics_enabled = True`).
 - Sensitive data is intentionally exposed via share tokens.
 
@@ -241,7 +245,6 @@ that exposes both.
       is the only path that keeps the takedown affordance visible to
       share-link viewers — the population the link primarily exists for.
       Hidden in `isLocalApp` everywhere.
-- [ ] (Cookies and ToS pages are deferred to Tier 3 — see §4.3.)
 
 ### 2.4 Viewer notice on first share-link load (M-16)
 
@@ -466,6 +469,13 @@ cascade machinery.
 
 ### 4.4 Full Owner ToS at signup + cookie notice banner (Phase 1, M-01, M-12) — Mode C only
 
+This section is also where the **ToS and Cookies markdown pages** are
+deferred from Tier 1 §2.3. In Mode A and Mode B the operator does not
+accept ToS from themselves and the cookie banner is unnecessary (only
+strictly-necessary auth cookies are set; ePrivacy 5(3) exemption applies).
+The pages and banner become meaningful only when a second Owner can sign
+up — i.e. when this section is built.
+
 - [ ] Add `tos_accepted_at`, `tos_version` columns to `auth_editors`.
 - [ ] Required signup checkbox + backend rejection if absent.
 - [ ] Re-acceptance prompt on login when `tos_version` increases.
@@ -521,10 +531,42 @@ makes "who edited this last?" answerable, which becomes meaningful in Mode B.
 - [ ] Sign Cloudflare DPA via dashboard.
 - [ ] List both as sub-processors in the privacy policy.
 
-### 4.8 Donate button (notes.txt L249) — Mode C only
+### 4.8 Donate button (notes.txt L249)
 
-- [ ] Pick provider (Stripe / PayPal). Note: payment provider becomes another
-      sub-processor; document in privacy policy.
+Two distinct patterns with very different privacy postures. Read this section
+before adding *any* donate UI in *any* mode.
+
+**Pattern A — Link-out (mode-agnostic, no Tier 3 review needed).** A button
+that opens GitHub Sponsors and/or Ko-fi in a new browser tab. NovoTree never
+sees the transaction; the destination is the controller of all payment data;
+no cookies are set on NovoTree's domain; no new sub-processor relationship is
+created. The local desktop app already ships this pattern — see
+[docs/features/LOCAL_APP.md §Donations](../features/LOCAL_APP.md#donations).
+
+- Safe in Mode A, Mode B, Mode C, and the local app.
+- Implementation: a `<DonateButton>` component that opens
+  `https://github.com/sponsors/<handle>` and/or `https://ko-fi.com/<handle>`
+  via `window.open(url, '_blank', 'noopener,noreferrer')`. Do NOT append donor
+  email, name, or any identifier to the outbound URL — that would make
+  NovoTree the originating controller of that PII transfer.
+- One-line mention in the privacy policy under "Who we share with" is good
+  hygiene but not legally required (no controller relationship to declare).
+- Hint copy on the button ("opens github.com / ko-fi.com in a new tab") is
+  defensive UX, not a legal requirement.
+
+**Pattern B — Embedded payment integration (Mode C only).** A Stripe / PayPal
+checkout rendered inside NovoTree, a donor wall that shows names, donor
+receipts emailed by NovoTree, a thank-you page that reads order data, or any
+flow where money or donor PII passes through NovoTree's server or DB.
+
+- [ ] Pick provider (Stripe / PayPal). Payment provider becomes a sub-processor;
+      list in privacy policy and sign their DPA.
+- [ ] Update Mode C cookie banner: most embedded checkout scripts set
+      non-essential cookies before user interaction. May force banner from
+      notice-only to real Accept/Reject.
+- [ ] Schedule a short follow-up lawyer session covering: donor-data
+      retention, receipt/invoice obligations, charity-vs-gift framing in your
+      jurisdiction.
 
 ### 4.9 Admin takedown triage endpoint and UI (M-04 extension) — Mode C only
 
@@ -789,7 +831,8 @@ the obligation gates the launch of that mode.
 | §4.5 Contributor acknowledgement modal (M-15) | **Required** | Required |
 | §4.6 Audit trail `updated_by` / `updated_at` (M-11) | **Required** (multiple editors share one tree) | Required |
 | §4.7 Hetzner DPA + Cloudflare DPA | Required | Required |
-| §4.8 Donate button infrastructure | Not required | Optional |
+| §4.8 Donate button — link-out (GitHub Sponsors / Ko-fi) | Allowed (mode-agnostic; same as Mode A and the local app) | Allowed |
+| §4.8 Donate button — embedded payment (Stripe / PayPal) | Not allowed | Optional (adds sub-processor + may force consent-style cookie banner) |
 | §4.9 Admin takedown triage endpoint + UI | Not required (operator IS the admin) | Required (multiple Owners; operator must act over Owner's head) |
 | §4.10 Admin UI for `PrivacySettings` | Not required (env file + `systemctl restart` is fine) | Required (live toggle of signup flags / contact emails without restart) |
 | `allow_owner_signup` flag | `False` | `True` |
@@ -799,8 +842,10 @@ the obligation gates the launch of that mode.
 ### Recommendation for "friends and family only"
 
 If relatives only need to **add and edit information in your tree**, Mode B is
-the cheapest path out of Mode A — skip §4.3, §4.4, §4.8, but still pay for
-§4.1 (lawyer) and build §4.5, §4.6, §4.7.
+the cheapest path out of Mode A — skip §4.3, §4.4, and §4.8 Pattern B
+(embedded payments), but still pay for §4.1 (lawyer) and build §4.5, §4.6,
+§4.7. §4.8 Pattern A (link-out donate button) is allowed in any mode and
+needs no Tier 3 work.
 
 If relatives genuinely need **their own separate trees** on your server, the
 honest classification is Mode C (gated). The approval gate is worth doing for

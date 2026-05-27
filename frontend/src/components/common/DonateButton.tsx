@@ -3,16 +3,26 @@ import { Heart } from 'lucide-react';
 import { Modal } from './Modal';
 
 /**
- * Donate ♥ pieces shown in the local desktop app's header. Two exports:
+ * Donate ♥ pieces. Three exports:
  *
- *  - DonateButton: self-contained heart-button + modal (drop-in for the header).
+ *  - DonateButton: self-contained pink heart-button + modal. Used in the local
+ *                  desktop app's Header where prominence is appropriate.
+ *  - DonateLink:   plain pink underlined "Donate" anchor + modal. Used inside
+ *                  PrivacyLinks in the Mode A web build so it sits next to
+ *                  "Remove Me / Our Privacy" without dominating them.
  *  - DonateModal:  modal-only, controlled by the caller. Used by AboutDialog so
  *                  clicking "Donate" inside About opens this modal.
  *
- * Both render a privacy disclaimer + GitHub Sponsors + Ko-fi links. The links
- * open in the user's default browser, not inside the pywebview window.
+ * All three render the same privacy disclaimer + GitHub Sponsors + Ko-fi links.
+ * NovoTree never sees the transaction — this is Pattern A (link-out) in
+ * docs/legal/PRIVACY_DESIGN.md §4.8. The Ko-fi logo is inline-hosted from
+ * `public/donate/` so opening the modal does not leak a referer to ko-fi.com.
  *
- * Local-app-only — gated by isLocalApp at the call site (Header.tsx).
+ * Gated at call sites:
+ *   - Local desktop app: rendered in Header.tsx via `isLocalApp`.
+ *   - Mode A web build:  rendered inside PrivacyLinks via deployment_mode.
+ * Modes B and C deliberately do NOT show it — placement requires the §4.1
+ * lawyer review first.
  */
 
 interface DonateModalProps {
@@ -50,7 +60,7 @@ function DonateModalContents() {
           aria-label="Buy Me a Coffee at ko-fi.com"
         >
           <img
-            src="https://storage.ko-fi.com/cdn/kofi2.png?v=3"
+            src={`${import.meta.env.BASE_URL}donate/kofi2.png`}
             alt="Buy Me a Coffee at ko-fi.com"
             height={36}
             style={{ border: 0, borderRadius: 6, height: 36 }}
@@ -91,6 +101,29 @@ export function DonateButton({ trigger }: DonateButtonProps = {}) {
           <span>Donate</span>
         </button>
       )}
+      <DonateModal open={open} onClose={() => setOpen(false)} />
+    </>
+  );
+}
+
+/**
+ * Plain text "Donate" link, sized to match peer links like Remove Me /
+ * Our Privacy. Pink so it reads as a support affordance, underlined like its
+ * neighbours so it reads as a link. Opens the same modal as DonateButton.
+ */
+export function DonateLink() {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        title="Support NovoTree development"
+        className="text-pink-600 hover:text-pink-700 underline bg-transparent border-0 p-0 cursor-pointer"
+        style={{ font: 'inherit' }}
+      >
+        Donate
+      </button>
       <DonateModal open={open} onClose={() => setOpen(false)} />
     </>
   );
