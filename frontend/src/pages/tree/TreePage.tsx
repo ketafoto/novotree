@@ -138,35 +138,39 @@ export function TreePage() {
   return (
     <div className="fixed inset-0 z-50 bg-slate-50 flex flex-col">
       {/* Header toolbar */}
-      <div className="flex items-center justify-between px-4 py-2 bg-white border-b border-gray-200 shadow-sm">
-        <div className="flex items-center gap-3 min-w-0">
-          <GitBranch className="w-5 h-5 text-emerald-600 flex-shrink-0" />
-          <div className="min-w-0">
-            <h1 className="text-sm font-semibold text-gray-900 truncate">
-              Family Tree: {displayName}
+      <div className="flex items-center justify-between gap-3 px-4 py-2 bg-slate-50 border-b border-slate-200 shadow-sm">
+        {/* Identity pill */}
+        <div className="flex items-center gap-2.5 min-w-0 px-3 py-1.5 bg-white rounded-full border border-slate-200">
+          <GitBranch className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+          <div className="min-w-0 leading-tight">
+            <h1 className="text-xs font-semibold text-slate-900 truncate">
+              {displayName}
             </h1>
             {individual?.gedcom_id && (
-              <p className="text-[10px] text-gray-400 truncate">{individual.gedcom_id}</p>
+              <p className="text-[10px] text-slate-400 truncate">{individual.gedcom_id}</p>
             )}
           </div>
         </div>
 
-        {/* Desktop toolbar — full controls inline */}
+        {/* Desktop toolbar — pill-grouped controls */}
         <div className="hidden md:flex items-center gap-2">
-          {/* Depth sliders */}
+          {/* Depth pill — Ancestors + Lock + Descendants share one border */}
           {treeData && (
-            <DepthSlider
-              ancestorDepth={ancestorDepth}
-              descendantDepth={descendantDepth}
-              maxAncestorDepth={treeData.max_ancestor_depth}
-              maxDescendantDepth={treeData.max_descendant_depth}
-              onAncestorDepthChange={setAncestorDepth}
-              onDescendantDepthChange={setDescendantDepth}
-            />
+            <div className="px-3 py-1.5 bg-white rounded-full border border-slate-200">
+              <DepthSlider
+                ancestorDepth={ancestorDepth}
+                descendantDepth={descendantDepth}
+                maxAncestorDepth={treeData.max_ancestor_depth}
+                maxDescendantDepth={treeData.max_descendant_depth}
+                onAncestorDepthChange={setAncestorDepth}
+                onDescendantDepthChange={setDescendantDepth}
+              />
+            </div>
           )}
 
-          <div className="flex items-center gap-2 px-2 py-1 bg-slate-100 rounded-lg border border-slate-200">
-            <label htmlFor="photo-interval-slider" className="text-[11px] text-slate-600 whitespace-nowrap">
+          {/* Photo carousel pill */}
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-full border border-slate-200">
+            <label htmlFor="photo-interval-slider" className="text-[11px] font-medium text-slate-600 whitespace-nowrap">
               Photo {photoIntervalSec}s
             </label>
             <input
@@ -177,46 +181,50 @@ export function TreePage() {
               step={1}
               value={photoIntervalSec}
               onChange={(e) => setPhotoIntervalSec(Number(e.target.value))}
-              className="w-20 accent-emerald-600"
+              className="w-20 h-1.5 accent-emerald-600"
               title="Photo carousel interval (1-10 seconds)"
             />
           </div>
 
-          {/* Contribute button — visible to viewers (share token) only */}
+          {/* Contribute button — visible to viewers (share token) only.
+              Kept as its own emphasis pill (blue) so it remains the call-to-action. */}
           {isViewer && ownerOwnerId && (
             <button
               onClick={() => setShowContribute(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-full hover:bg-blue-700 transition-colors"
               title="Sign up as a contributor to this tree"
             >
               <UserPlus className="w-3.5 h-3.5" />
-              Wanna contribute to this tree? 🌿
+              Contribute 🌿
             </button>
           )}
 
-          {/* Privacy links — only path to "Remove me / Our Privacy" on the
-              Tree page, which renders as a fullscreen overlay covering the
-              global PrivacyFooter. Critical for share-link viewers. */}
-          {!isLocalApp && (
-            <PrivacyLinks className="text-[11px] text-gray-500 px-2" />
-          )}
+          {/* Actions pill — Privacy links + Export share one border.
+              PrivacyLinks is the only path to "Remove Me / Our Privacy" on the
+              Tree page (the fullscreen overlay hides the global PrivacyFooter). */}
+          <div className="flex items-center gap-1 px-2 py-1 bg-white rounded-full border border-slate-200">
+            {!isLocalApp && (
+              <>
+                <PrivacyLinks className="text-[11px] text-slate-500 px-2" />
+                <span aria-hidden className="w-px h-4 bg-slate-200 mx-1" />
+              </>
+            )}
+            <button
+              onClick={() => setShowExport(!showExport)}
+              className="p-1.5 hover:bg-slate-100 rounded-full transition-colors"
+              title="Export as image"
+            >
+              <Download className="w-4 h-4 text-slate-600" />
+            </button>
+          </div>
 
-          {/* Export button */}
-          <button
-            onClick={() => setShowExport(!showExport)}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            title="Export as image"
-          >
-            <Download className="w-4 h-4 text-gray-600" />
-          </button>
-
-          {/* Close button */}
+          {/* Close button — outside the pill so it clearly closes the whole tree view, not the pill */}
           <button
             onClick={handleClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-slate-200 rounded-full transition-colors"
             title="Close tree view"
           >
-            <X className="w-5 h-5 text-gray-600" />
+            <X className="w-5 h-5 text-slate-600" />
           </button>
         </div>
 
@@ -244,14 +252,16 @@ export function TreePage() {
       {isMobileViewport && mobileMenuOpen && (
         <div className="md:hidden bg-white border-b border-gray-200 shadow-sm px-4 py-3 space-y-3">
           {treeData && (
-            <DepthSlider
-              ancestorDepth={ancestorDepth}
-              descendantDepth={descendantDepth}
-              maxAncestorDepth={treeData.max_ancestor_depth}
-              maxDescendantDepth={treeData.max_descendant_depth}
-              onAncestorDepthChange={setAncestorDepth}
-              onDescendantDepthChange={setDescendantDepth}
-            />
+            <div className="px-3 py-2 rounded-lg border border-slate-200 bg-white">
+              <DepthSlider
+                ancestorDepth={ancestorDepth}
+                descendantDepth={descendantDepth}
+                maxAncestorDepth={treeData.max_ancestor_depth}
+                maxDescendantDepth={treeData.max_descendant_depth}
+                onAncestorDepthChange={setAncestorDepth}
+                onDescendantDepthChange={setDescendantDepth}
+              />
+            </div>
           )}
 
           <div className="flex items-center gap-2 px-2 py-2 bg-slate-100 rounded-lg border border-slate-200">

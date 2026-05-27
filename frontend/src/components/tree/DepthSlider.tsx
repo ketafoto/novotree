@@ -45,10 +45,10 @@ export function DepthSlider({
   );
 
   return (
-    <div className="flex items-center gap-4 px-4 py-2 bg-white/90 backdrop-blur-sm rounded-lg shadow-sm border border-gray-200">
+    <div className="flex items-center gap-3">
       {/* Ancestor slider */}
       <div className="flex items-center gap-2">
-        <label className="text-xs font-medium text-gray-600 whitespace-nowrap w-20">
+        <label className="text-[11px] font-medium text-slate-600 whitespace-nowrap">
           Ancestors
         </label>
         <input
@@ -57,9 +57,9 @@ export function DepthSlider({
           max={maxAncestorDepth}
           value={ancestorDepth}
           onChange={(e) => handleAncestorChange(Number(e.target.value))}
-          className="w-28 h-1.5 accent-emerald-600"
+          className="w-24 h-1.5 accent-emerald-600"
         />
-        <span className="text-xs text-gray-500 w-10 text-right tabular-nums">
+        <span className="text-[11px] text-slate-500 w-9 text-right tabular-nums">
           {ancestorDepth} / {maxAncestorDepth}
         </span>
       </div>
@@ -67,10 +67,10 @@ export function DepthSlider({
       {/* Lock toggle */}
       <button
         onClick={() => setLocked(!locked)}
-        className={`p-1.5 rounded-md transition-colors ${
+        className={`p-1 rounded-md transition-colors ${
           locked
-            ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
-            : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+            ? 'text-emerald-700 hover:bg-emerald-100'
+            : 'text-slate-400 hover:bg-slate-200'
         }`}
         title={locked ? 'Sliders locked (symmetric)' : 'Sliders unlocked (independent)'}
       >
@@ -79,7 +79,7 @@ export function DepthSlider({
 
       {/* Descendant slider */}
       <div className="flex items-center gap-2">
-        <label className="text-xs font-medium text-gray-600 whitespace-nowrap w-24">
+        <label className="text-[11px] font-medium text-slate-600 whitespace-nowrap">
           Descendants
         </label>
         <input
@@ -88,9 +88,9 @@ export function DepthSlider({
           max={maxDescendantDepth}
           value={descendantDepth}
           onChange={(e) => handleDescendantChange(Number(e.target.value))}
-          className="w-28 h-1.5 accent-emerald-600"
+          className="w-24 h-1.5 accent-emerald-600"
         />
-        <span className="text-xs text-gray-500 w-10 text-right tabular-nums">
+        <span className="text-[11px] text-slate-500 w-9 text-right tabular-nums">
           {descendantDepth} / {maxDescendantDepth}
         </span>
       </div>
