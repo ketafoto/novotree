@@ -13,11 +13,11 @@
 > [PRIVACY_ANALYSIS.md](PRIVACY_ANALYSIS.md) first to understand the problem
 > space, then this file to see what is built, in progress, or queued.
 
-**Status overall: TIER 1 IN PROGRESS.** §2.1 (central privacy config), §2.2
-(public takedown flow), §2.3 (privacy policy page + footer link), §2.4
-(viewer notice on first share-link load), and §2.5 (per-share
-acknowledgement) are shipped. §2.6 is the last queued Tier 1 item — see
-the per-section checkboxes below.
+**Status overall: TIER 1 COMPLETE.** All of §2.1–§2.6 are shipped:
+§2.1 (central privacy config), §2.2 (public takedown flow), §2.3 (privacy
+policy page + footer link), §2.4 (viewer notice on first share-link load),
+§2.5 (per-share acknowledgement), §2.6 (right-of-access export per
+Individual). Mode A is defensible. Tier 2 (operational hardening) is next.
 
 ---
 
@@ -305,10 +305,311 @@ link further than intended and someone later complains.
 
 ### 2.6 Right-of-access export per Individual (M-09, Phase 7)
 
-- [ ] Endpoint `GET /individuals/{id}/data-export` returning JSON of every
+- [x] Endpoint `GET /individuals/{id}/data-export` returning JSON of every
       field, event, media reference, and contributor attribution (`created_by` /
-      `created_at`). Owner-only.
-- [ ] "Export this person's data" button on Individual page.
+      `created_at`). Owner-only. Lives in
+      [backend/api/individuals.py](../backend/api/individuals.py) (next to the
+      resource — deviates from PRIVACY_ANALYSIS.md Phase 7.1 which pointed at
+      `export.py`; that file is reserved for whole-tree GEDCOM export with
+      different auth scope). Delivered as `application/json` with a
+      `Content-Disposition: attachment` header. `_meta` block documents that
+      `updated_by` / `updated_at` are deferred to Tier 3 §4.6 and that
+      `FamilyMember` / `FamilyChild` join rows carry no per-link attribution
+      today (parent Family's `created_by` is the proxy; see
+      [docs/notes.txt](../notes.txt) under "Go contributors" for the column-add
+      action item).
+- [x] "Export data" button on Individual page
+      ([IndividualDetailPage.tsx](../frontend/src/pages/individuals/IndividualDetailPage.tsx)).
+      Hidden for viewers (share-token) and contributors — owner-only, mirroring
+      the backend gate. Reuses the shared `saveBlob` helper used by the
+      whole-tree GEDCOM export so the local desktop app gets a native SaveAs
+      dialog without extra work.
+
+**Scope and intake — what this section does and does not cover.** §2.6 ships
+the *Owner-side machinery* for GDPR Art. 15 (right of access): the legal model
+is that NovoTree is the processor and the Owner is the controller, so when a
+data subject asks "what do you hold about me?", the Owner must answer — this
+endpoint is the tool that makes the answer cheap to produce and uniformly
+formatted. It is deliberately Owner-only; exposing the export to viewers
+would publish other relatives' PII to anyone with a share link.
+
+The matching *requester-side* intake channel is **not yet built**. Today a
+data subject who wants their own data must either (a) write to
+`privacy_contact_email` published in the privacy policy (§2.3), or (b) abuse
+the §2.2 takedown form by typing "I want my data, not removal" into the
+free-text message — neither is a deliberate access-request UX. §2.7 below
+closes this gap by generalizing the §2.2 form into a single public
+*privacy-request* intake that routes access, correction, and removal
+requests through one URL, one mailbox, and one SLA — and uses this §2.6
+endpoint to *fulfil* the access ones once the Owner triages them.
+
+### 2.7 Public privacy-request intake (M-04 extension; GDPR Art. 15–17)
+
+**Status:** SPEC DRAFT, NOT YET BUILT. Queued for Tier 1, to land after §2.6
+in a separate dedicated implementation session. Do not start the code from
+this section without first re-reading §2.6 (the access fulfillment path) and
+§2.2 (the existing erasure intake this section refactors).
+
+**Why this exists.** §2.6 above ships the Owner-side export tool, but no
+requester-facing UI exists for a data subject to *ask* for that export. The
+takedown form (§2.2) handles erasure requests (Art. 17) from off-platform
+people via a public URL with no auth; access requests (Art. 15) and
+correction requests (Art. 16) have no equivalent entry point today. A
+regulator's first question on an Art. 15 complaint is *"how could the
+subject reach you to make the request?"* — the current answer is "find the
+privacy contact email in the policy and write a free-form message," which
+is the same answer §2.2 was built to *replace* for erasure.
+
+**Design.** Promote the existing §2.2 form into a generic privacy-request
+intake. One public URL, one table, one triage queue, one SLA — three
+request kinds:
+
+| `request_type` | GDPR article | Owner fulfillment path |
+|---|---|---|
+| `removal` (default — preserves §2.2 behavior) | Art. 17 | Owner deletes the records or marks resolved after manual action. |
+| `access` | Art. 15 | Owner identifies the named Individual from the message text, clicks "Export data" (§2.6), forwards the JSON to `requester_email`, marks resolved. |
+| `correction` | Art. 16 | Owner edits the records on the Individual page, marks resolved. |
+
+**Why one table, not three.** All three request kinds share the same shape
+(requester identity + message + status), the same retention window
+(default 12 months — see config-key rename below), the same SLA
+(`takedown_sla_days` — same key name preserved; see below), the same
+triage queue UI, the same email-the-Owner / day-14 reminder / SLA
+escalation machinery, and the same hostile-population threat model (the
+form is public and rate-limited). A second table would duplicate every
+one of those mechanisms for no benefit.
+
+### Naming — internal rename, user-facing label preserved
+
+Single user-facing affordance keeps its recognizable brand; everything
+behind the form gets honest names. **No data-migration code is needed**
+because the project has no production users yet (single-Owner dev,
+backups + GEDCOM/JSON exports cover any local rows). A drop-and-recreate
+on the `data.sqlite.system` table is the simplest path.
+
+**Keep verbatim — user-visible:**
+
+- Footer link label: **"Remove me"** in
+  [PrivacyLinks.tsx](../frontend/src/components/layout/PrivacyLinks.tsx)
+  /
+  [PrivacyFooter.tsx](../frontend/src/components/layout/PrivacyFooter.tsx)
+  and in the Tree pages' top bar.
+- The systemd unit name on the VM: `novotree-backend-monitor.{service,timer}`.
+  It is request-kind-agnostic; the unit watches backend `/health` and
+  fires the standalone sweeper backstop regardless of what is in the
+  queue. Do not rename — it would invalidate the deployed
+  `novospace.git/scripts/deployment/` units and require a coordinated
+  cut-over on the VM.
+
+**Rename everything else (internal-only):**
+
+| Today | After §2.7 |
+|---|---|
+| `takedown_requests` (table) | `privacy_requests` |
+| `TakedownRequest` (SQLAlchemy model in [system_models.py](../database/system_models.py)) | `PrivacyRequest` |
+| `POST /privacy/takedown` (public endpoint) | `POST /privacy/request` |
+| `GET/PATCH/DELETE /takedown/*` (owner triage endpoints) | `GET/PATCH/DELETE /privacy/requests/*` (note: under `/privacy` namespace, not its own top-level) |
+| `backend/api/takedown.py` | `backend/api/privacy_requests.py` |
+| `backend/api/_takedown_sweep.py` | `backend/api/_privacy_request_sweep.py` |
+| `backend/api/_takedown_rate_limit.py` | `backend/api/_privacy_request_rate_limit.py` |
+| `tools/ops/scheduled_jobs/jobs/takedown_requests_monitor.py` | `tools/ops/scheduled_jobs/jobs/privacy_requests_monitor.py` |
+| `frontend/src/api/takedown.ts` | `frontend/src/api/privacy_requests.ts` |
+| `frontend/src/pages/legal/TakedownPage.tsx` (public form) | `frontend/src/pages/legal/PrivacyRequestPage.tsx` |
+| `frontend/src/pages/legal/TakedownsPage.tsx` (owner triage) | `frontend/src/pages/legal/PrivacyRequestsPage.tsx` |
+| `frontend/src/pages/legal/TestTakedownTimestampPanel.tsx` | `frontend/src/pages/legal/TestPrivacyRequestTimestampPanel.tsx` |
+| `takedown_request_retention_months` (config key in [config.py](../backend/config.py) + `.env.public.example`) | `privacy_request_retention_months` |
+| Sidebar nav label "Takedowns" (in [Sidebar.tsx](../frontend/src/components/layout/Sidebar.tsx)) | "Privacy requests" |
+| Tags in FastAPI routers (`tags=["Privacy"]` already today — no change needed there) | (unchanged) |
+
+**Keep verbatim — config key with intentional historical name:**
+
+- `takedown_sla_days` stays as-is. The SLA is the same 30-day Art. 12(3)
+  clock for all three request kinds. Renaming would force operators to
+  edit `/etc/novotree.env` on the VM (this is the env-only config per
+  the §2.1 "Note on editability"). The name is acceptable as a historical
+  artefact and is documented in the dataclass docstring. *Alternative:*
+  rename to `privacy_request_sla_days` and add a one-line backward-compat
+  read of the old env key with a deprecation warning. Implementer's call
+  — both are fine.
+
+**Page route URL — also renamed.**
+
+`/privacy/takedown` → `/privacy/request` for the public form;
+`/legal/takedowns` (or wherever the owner-scoped triage page is mounted in
+the frontend router) → `/legal/privacy-requests`. The footer link's *target
+URL* moves with the rename — only the *label text* "Remove me" stays the
+same. Acceptable here because the project is pre-launch; there are no
+external bookmarks to break.
+
+### Schema — drop and recreate
+
+```python
+# database/system_models.py — replaces TakedownRequest entirely.
+
+class PrivacyRequest(SystemBase):
+    """Public privacy request from a data subject (GDPR Art. 15-17).
+
+    Submitted via the unauthenticated POST /privacy/request endpoint and
+    reviewed by the tree owner. Supersedes the original takedown_requests
+    table (§2.2); the rename happened in §2.7 once access and correction
+    request kinds were added.
+    """
+    __tablename__ = "privacy_requests"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tree_owner_id = Column(String, nullable=False)
+    individual_id = Column(String, nullable=True)
+    request_type = Column(String, nullable=False)  # 'removal' | 'access' | 'correction'
+    requester_name = Column(String, nullable=False)
+    requester_email = Column(String, nullable=False)
+    requester_phone = Column(String, nullable=True)
+    message = Column(String, nullable=False)
+    status = Column(String, nullable=False, default="open")
+    created_at = Column(String, nullable=False)
+    resolved_at = Column(String, nullable=True)
+    reminder_sent_at = Column(String, nullable=True)
+    escalated_at = Column(String, nullable=True)
+```
+
+`init_system_db()` runs `Base.metadata.create_all(engine)` on first boot;
+since no production rows exist, the implementer can either:
+
+- delete the existing `data.sqlite.system` file from the dev VM and let
+  it recreate, OR
+- inside `init_system_db()`, run a one-shot
+  `DROP TABLE IF EXISTS takedown_requests` before `create_all` so the
+  rename is idempotent across re-runs.
+
+The second is friendlier (no manual file deletion step) and self-cleans
+on every boot until the codebase is well past the rename. After 1–2
+releases the `DROP TABLE` line can come out.
+
+### Action items (sequential)
+
+- [ ] **Schema:** rename model class `TakedownRequest` → `PrivacyRequest`,
+      table name `takedown_requests` → `privacy_requests`, add
+      `request_type` column (NOT NULL, enum of three values, no default —
+      every row must explicitly state its kind). Add the one-shot
+      `DROP TABLE IF EXISTS takedown_requests` in `init_system_db()`.
+- [ ] **Backend rename pass:**
+      `backend/api/takedown.py` → `privacy_requests.py`;
+      `_takedown_sweep.py` → `_privacy_request_sweep.py`;
+      `_takedown_rate_limit.py` → `_privacy_request_rate_limit.py`.
+      Update imports in [backend/main.py](../backend/main.py) (router
+      include block; `AUTH_ONLY_PATHS` set still needs `/privacy/request`
+      and the new owner-triage prefix). Update FastAPI router prefixes:
+      public router stays at `prefix="/privacy"` with `.post("/request")`;
+      owner router moves from `prefix="/takedown"` to
+      `prefix="/privacy/requests"`.
+- [ ] **Backend Pydantic:** add `request_type: Literal["removal", "access", "correction"]`
+      to the request-creation schema. No default — the form must send it
+      explicitly. The Pydantic enum value flows straight into the DB row.
+- [ ] **Backend email templates:** the sweep emitter in
+      `_privacy_request_sweep.py` branches on `request_type` for subject
+      and body. Subject template: `f"{REQUEST_KIND_LABEL[t]} request from {requester_name}"`
+      with `REQUEST_KIND_LABEL = {"removal": "Removal", "access": "Access", "correction": "Correction"}`.
+      Body text per kind lives next to the existing copy.
+- [ ] **Standalone backstop:** rename
+      `tools/ops/scheduled_jobs/jobs/takedown_requests_monitor.py` →
+      `privacy_requests_monitor.py`. Update the job registry in
+      `tools/ops/scheduled_jobs/jobs/__init__.py`. The systemd unit
+      `novotree-backend-monitor.{service,timer}` itself does NOT change —
+      it invokes the package, not a specific job file.
+- [ ] **Config:** rename `takedown_request_retention_months` →
+      `privacy_request_retention_months` in
+      [config.py](../backend/config.py) and
+      [backend/.env.public.example](../backend/.env.public.example) and any
+      reference docs. (`takedown_sla_days` stays — see "Keep verbatim"
+      above; reconfirm at implementation time.)
+- [ ] **Frontend rename pass:** `api/takedown.ts` → `api/privacy_requests.ts`;
+      `pages/legal/TakedownPage.tsx` → `PrivacyRequestPage.tsx`;
+      `pages/legal/TakedownsPage.tsx` → `PrivacyRequestsPage.tsx`;
+      `TestTakedownTimestampPanel.tsx` → `TestPrivacyRequestTimestampPanel.tsx`.
+      Update all imports. Update router paths in
+      [App.tsx](../frontend/src/App.tsx).
+- [ ] **Frontend form:** in the renamed `PrivacyRequestPage.tsx` add a
+      `request_type` selector at the top, three radio options, no
+      pre-selection — the user must pick. Plain-language labels (no
+      GDPR article numbers); the privacy policy carries the legal text.
+      Page title: *"Privacy request — remove, access, or correct your
+      data"* (final copy lives in [PRIVACY_ANALYSIS.md §9.8](PRIVACY_ANALYSIS.md),
+      see next item).
+- [ ] **Footer labels:** keep "Remove me" verbatim in
+      [PrivacyLinks.tsx](../frontend/src/components/layout/PrivacyLinks.tsx)
+      and [PrivacyFooter.tsx](../frontend/src/components/layout/PrivacyFooter.tsx).
+      Only the *target URL* changes from `/privacy/takedown` to
+      `/privacy/request`. The label is now load-bearing in a way it was
+      not before (it advertises one of three rights), which is the entire
+      naming-discussion compromise. Bump the label *only* if a real user
+      reports confusion — not pre-emptively.
+- [ ] **Owner triage UI:** in `PrivacyRequestsPage.tsx` show
+      `request_type` as a column with a small badge. Three colors are
+      fine; do not invent icons. For `access` rows, render an inline
+      "Open Individual" link if the requester's message text can be
+      mapped to an Individual ID (best-effort regex on `I\d+` or a
+      Sidebar-style search field is overkill — implementer's call).
+      Mark a `request_type` filter in the queue header so the Owner
+      can sort/filter by kind during triage.
+- [ ] **Sidebar:** label "Takedowns" → "Privacy requests" in
+      [Sidebar.tsx](../frontend/src/components/layout/Sidebar.tsx).
+- [ ] **Public form copy — PRIVACY_ANALYSIS.md §9.8:**
+      replace §9.5 with a generalized version. Three short paragraphs
+      naming the three options to the requester in plain language. Each
+      paragraph references the relevant Art. only as a footnote-style
+      parenthetical, not in the lead. Default radio = unselected (the
+      form rejects submission until one is picked).
+- [ ] **Privacy policy update** ([privacy.md](privacy.md)):
+      the "Your rights" section currently only mentions removal via the
+      form. Update to name access, correction, and removal explicitly,
+      and point all three at the same form URL. Bump
+      `privacy_policy_version`. This is the *legal load-bearing* surface
+      — the GDPR Art. 12-14 transparency obligation is discharged here,
+      not in the footer label.
+- [ ] **Docs sweep:** grep for `takedown` across the whole repo and
+      update prose references in:
+      [PRIVACY_DESIGN.md](PRIVACY_DESIGN.md) (this file — §2.2 needs a
+      "see §2.7 for the rename" note, status table updated),
+      [PRIVACY_ANALYSIS.md](PRIVACY_ANALYSIS.md) (M-04, Phase 4 file
+      pointers, "Who files a takedown" → "Who files a privacy request"),
+      [docs/notes.txt](../notes.txt) (the "Test" section's
+      "Takedown - deploy on VM" item),
+      [docs/ops/DEPLOYMENT.md](../ops/DEPLOYMENT.md) (mentions of the
+      sweeper),
+      [docs/features/LOCAL_APP.md](../features/LOCAL_APP.md) (if it
+      references the form).
+      Keep the *historical* word "takedown" only where it accurately
+      describes the original §2.2 scope or appears in commit history.
+
+### What this does NOT do
+
+- **It does not auto-export.** The Owner still triages access requests by
+  hand and clicks "Export data" on the named Individual. Auto-fulfillment
+  would require identity verification machinery that does not exist (and
+  that, in Mode A's hostile-population threat model, would be the wrong
+  trade-off — a stranger who guesses a relative's name is not entitled to
+  the JSON, even if they correctly identify the Individual).
+- **It does not change the SLA.** All three request kinds share the
+  30-day GDPR Art. 12(3) SLA encoded in `takedown_sla_days` (config key
+  retains its historical name; see "Keep verbatim" above).
+- **It does not replace `privacy_contact_email`.** The contact email
+  remains the documented channel for everything that does not fit the
+  form (regulator inquiries, journalist questions, complex multi-subject
+  requests). The form is the path for *individual data subjects*.
+- **It does not address the share-link viewer population separately.** The
+  Tier-2 §3.9 selection-mode prefill (TreeView → form with
+  `individual_ids` prefilled) already accommodates viewers; it stays
+  scoped to removal at first and can be extended to access later if
+  ever asked for.
+- **It does not introduce identity verification.** The form trusts the
+  requester's stated identity. The Owner is expected to use judgment
+  before fulfilling an *access* request — for example, by replying to
+  the stated email and asking a question only the real subject could
+  answer. This matches §2.2's existing posture.
+- **It does not migrate any rows.** Project is pre-launch; the rename is
+  a destructive schema swap on a dev DB. If by the time §2.7 is built
+  there are real `takedown_requests` rows on a deployed VM, the
+  implementer must add a data-copy migration step before dropping —
+  re-evaluate the "drop and recreate" decision at implementation time.
 
 ### Notes on what is NOT in Tier 1 (and why)
 

@@ -164,7 +164,7 @@ Backend (UviCorn + FastAPI + SqlAlchemy):
        OR
        uvicorn backend.main:app --reload --reload-dir .
        OR
-       python ./backend/run_dev_backend auth-on - "sets NOVOTREE_APP_MODE=public", so it supports full OCV signup/login flow, uses backend/.env.dev.auth-on to set environment
+       python ./backend/run_dev_backend.py auth-on - "sets NOVOTREE_APP_MODE=public", so it supports full OCV signup/login flow, uses backend/.env.dev.auth-on to set environment
     3. http://localhost:8000 in Browser
 
 Frontend (Vite + React + TailWind):
@@ -215,7 +215,7 @@ Go private
 *. Add link to downloadable application, so friends could build their tree privately
 
 *.
-As we have mode A, B and C of project usate according the @novotree/docs/legal/PRIVACY_DESIGN.md , and some B/C features are already in, and we go with the mode A at the first place, I want to add configuration that puts backend into porper mode and cause it:
+As we have mode A, B and C of project usage according the @novotree/docs/legal/PRIVACY_DESIGN.md , and some B/C features are already in, and we go with the mode A at the first place, I want to add configuration that puts backend into porper mode and cause it:
 1. To rejects requests for flows that are not supported be the current mode.
 For example, clicking on "Wanna contirbute" should bring kind of "This feature is blocked due to legal. Consider to use local applicatoin instead: <https://github.com/ketafoto/novotree/releases/tag/v1.0.1 >"  the will hide features fro UI that are not related to the current mode.
 2. To implement router for the mode, so the fronend could load correspondent UI elements.
@@ -236,6 +236,23 @@ export interface PrivacyConfig {
 
 Go contributors (mode B - payed consultation with lawyer & tier 2)
 -----------------------------
+*. Share-link cards (Dashboard widget + Users page tab): expose the per-share consent record
+   from auth_share_consents as a "✓ acknowledged on <date>" footnote next to created_at. In Mode A
+   it is just self-reassurance for the Owner; in Mode B+ it becomes meaningful — distinguishes
+   "who created this link" once contributors can also issue shares, and surfaces which links were
+   accepted under an earlier privacy_policy_version after a version bump (informs whether to
+   revoke + re-issue). Keep raw IP off the card (regulator/incident-response data, not UI data);
+   leave full per-row inspection for the Mode-C admin UI alongside §4.9 / §4.10.
+*. Add created_by / created_at columns to FamilyMember and FamilyChild join tables. Today they are
+   pure FK link rows with no attribution — when an editor wires individual X into family Y as a
+   spouse or child, no record of "who linked them and when" exists; the parent Family row's
+   created_by is the only available proxy. Fine in Mode A (single Owner), but in Mode B contributors
+   start linking people into families and per-join attribution becomes a real question. Pairs with
+   Tier 3 §4.6 (updated_by / updated_at on Individual, IndividualName, Family, FamilyMember,
+   FamilyChild, Event, Media) — do both column additions in one migration. Right-of-access export
+   (§2.6) currently documents this gap in its _meta block; once columns exist, drop the note and
+   include per-join attribution.
+*.
 
 Go public
 -----------------------------

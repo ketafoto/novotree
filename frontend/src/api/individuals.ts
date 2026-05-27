@@ -53,5 +53,14 @@ export const individualsApi = {
     const response = await apiClient.delete('/individuals/all');
     return response.data;
   },
+
+  /**
+   * Right-of-access export for one individual (privacy §2.6 / M-09). Owner-only.
+   * Returns the raw response so the caller can read Content-Disposition before
+   * passing the blob to saveBlob().
+   */
+  dataExport: async (id: number) => {
+    return apiClient.get(`/individuals/${id}/data-export`, { responseType: 'blob' });
+  },
 };
 

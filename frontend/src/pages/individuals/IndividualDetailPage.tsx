@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   Trash2,
   Calendar,
+  Download,
   MapPin,
   Heart,
   Image,
@@ -36,6 +37,8 @@ import toast from 'react-hot-toast';
 import { apiErrorMessage } from '../../utils/apiError';
 import { formatIndividualName, getLatestName } from '../../utils/nameUtils';
 import { sortEventsChronologically } from '../../utils/eventSort';
+import { saveBlob } from '../../utils/saveBlob';
+import { useAuth } from '../../contexts/AuthContext';
 import type { Event, Media } from '../../types/models';
 
 type SectionModal = 'basic' | 'names' | 'birth' | 'death' | 'notes' | 'events' | 'photos' | 'families' | null;
@@ -48,6 +51,7 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { isOwner } = useAuth();
 
   const { data: individual, isLoading, isError, error } = useQuery({
     queryKey: ['individuals', id],
@@ -239,6 +243,22 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
     }
   };
 
+  const handleDataExport = async () => {
+    try {
+      const response = await individualsApi.dataExport(Number(id));
+      const contentDisposition = response.headers['content-disposition'];
+      let extractedFileName = `individual-${id}-data-export.json`;
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename="?(.+?)"?$/);
+        if (match) extractedFileName = match[1];
+      }
+      const blob = new Blob([response.data], { type: 'application/json' });
+      await saveBlob(blob, extractedFileName);
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Failed to export individual data'));
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -315,6 +335,16 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
               View Tree
             </Button>
           </Link>
+          {!readOnly && isOwner && (
+            <Button
+              variant="secondary"
+              onClick={handleDataExport}
+              title="Download a JSON file with every field, event, media reference, and contributor attribution for this person (right-of-access export)"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Export data
+            </Button>
+          )}
           {!readOnly && (
             <Button variant="danger" onClick={handleDelete}>
                 <Trash2 className="w-4 h-4 mr-2" />
