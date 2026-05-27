@@ -14,9 +14,9 @@
 > space, then this file to see what is built, in progress, or queued.
 
 **Status overall: TIER 1 IN PROGRESS.** §2.1 (central privacy config), §2.2
-(public takedown flow), and §2.3 (privacy policy page + footer link) are
-shipped. Remaining Tier 1 items (§2.4–§2.6) are queued — see the per-section
-checkboxes below.
+(public takedown flow), §2.3 (privacy policy page + footer link), and §2.4
+(viewer notice on first share-link load) are shipped. Remaining Tier 1
+items (§2.5, §2.6) are queued — see the per-section checkboxes below.
 
 ---
 
@@ -248,12 +248,22 @@ that exposes both.
 
 ### 2.4 Viewer notice on first share-link load (M-16)
 
-- [ ] First load of `?share=<token>` shows a small notice with text from
+- [x] First load of `?share=<token>` shows a small notice with text from
       [PRIVACY_ANALYSIS.md §9.3](PRIVACY_ANALYSIS.md#93-viewer-notice-shown-on-first-share-link-load).
-      Dismissed once per token (key = `viewer_notice_dismissed:<token_hash>` in
-      `sessionStorage`).
-- [ ] Component: `ViewerNotice.tsx`. Hook into
-      [frontend/src/contexts/AuthContext.tsx](../frontend/src/contexts/AuthContext.tsx).
+      Dismissed once per token (key =
+      `viewer_notice_dismissed:<token_hash>:<cookie_notice_version>` in
+      `sessionStorage`; the token is SHA-256 hashed so the raw share token
+      never appears under this key, and the version suffix re-shows the
+      notice when `cookie_notice_version` is bumped).
+- [x] Component: [ViewerNotice.tsx](../frontend/src/components/ViewerNotice.tsx).
+      Mounted at the App level in
+      [frontend/src/App.tsx](../frontend/src/App.tsx); reads
+      `shareToken` / `isLoading` from
+      [AuthContext](../frontend/src/contexts/AuthContext.tsx) and
+      `cookie_notice_version` from
+      [usePrivacyConfig](../frontend/src/hooks/usePrivacyConfig.ts).
+      Hidden in `isLocalApp` (no viewers there); not gated on
+      `deployment_mode` — applies in Modes A, B, and C.
 
 ### 2.5 Per-share acknowledgement (M-03)
 

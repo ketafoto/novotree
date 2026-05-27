@@ -566,8 +566,8 @@ Plain-language form is intentional — easier to read and harder to dispute.
 > Please do not redistribute, copy, or scrape its contents. The information
 > here belongs to the families it describes.
 >
-> If you appear in this tree and want to be removed, use the **Privacy /
-> remove me** link in the footer.
+> If you appear in this tree and want to be removed, use the **Remove Me**
+> link.
 >
 > [Got it]
 

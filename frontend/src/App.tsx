@@ -7,6 +7,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { useAuth } from './contexts/AuthContext';
 import { Layout } from './components/layout/Layout';
 import { PrivacyFooter } from './components/layout/PrivacyFooter';
+import { ViewerNotice } from './components/ViewerNotice';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
 import { typesApi } from './api/types';
 import { isLocalApp } from './config/appMode';
@@ -234,6 +235,7 @@ function App() {
           </Suspense>
           </div>
           <PrivacyFooter />
+          <ViewerNotice />
           </div>
 
           <Toaster
