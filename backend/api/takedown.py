@@ -34,6 +34,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request,
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
+from backend.api._client_ip import get_client_ip
 from backend.api._email import send_email
 from backend.api._takedown_rate_limit import check_takedown_rate
 from backend.api._takedown_sweep import sweep_once
@@ -152,13 +153,6 @@ class TestTakedownTimestampOverride(BaseModel):
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _client_ip(request: Request) -> str:
-    fwd = request.headers.get("x-forwarded-for")
-    if fwd:
-        return fwd.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
-
-
 def _takedown_intake_subject(req_id: int) -> str:
     return f"Privacy / takedown request #{req_id} received"
 
@@ -237,7 +231,7 @@ def submit_takedown_request(
     db: Session = Depends(get_system_db),
 ) -> TakedownRequestAck:
     # Reject quickly when over quota — same 429 shape as the global limiter.
-    ip = _client_ip(request)
+    ip = get_client_ip(request)
     if not settings.is_dev and not check_takedown_rate(ip):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,

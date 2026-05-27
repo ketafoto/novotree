@@ -27,6 +27,7 @@ from backend.api import users as users_api
 from backend.api import local as local_api
 from backend.api import privacy as privacy_api
 from backend.api import takedown as takedown_api
+from backend.api._client_ip import get_client_ip
 from backend.api.auth import DEFAULT_OWNER_ID, _ALGORITHM
 from backend.config import settings
 from backend.logging import setup_logging, request_user
@@ -131,13 +132,6 @@ AUTH_ONLY_PATHS = {
 _request_windows: dict[str, deque[float]] = defaultdict(deque)
 
 
-def _get_client_ip(request: Request) -> str:
-    forwarded_for = request.headers.get("x-forwarded-for")
-    if forwarded_for:
-        return forwarded_for.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
-
-
 def _resolve_owner_id_from_request(request: Request) -> str | None:
     """
     Determine which owner's database to open for this request.
@@ -196,7 +190,7 @@ async def owner_db_router(request: Request, call_next):
 
     # Rate limiting in production
     if not settings.is_dev:
-        ip = _get_client_ip(request)
+        ip = get_client_ip(request)
         now = time.time()
         window = _request_windows[ip]
         while window and now - window[0] > 60:
@@ -247,7 +241,7 @@ async def owner_db_router(request: Request, call_next):
     # Emit access log from here so request_user ContextVar (set above) is visible to _UserFilter.
     access_logger.info(
         '%s - "%s %s HTTP/%s" %d',
-        _get_client_ip(request),
+        get_client_ip(request),
         request.method,
         path,
         request.scope.get("http_version", "1.1"),

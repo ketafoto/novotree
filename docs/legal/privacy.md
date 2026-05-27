@@ -155,6 +155,6 @@ re-accept on next login. The policy is not silently updated.
 
 ---
 
-_This document is engineering and product guidance for a small hobby
+This document is engineering and product guidance for a small hobby
 deployment. A paid legal review is scheduled before any larger launch (see
-the project's `PRIVACY_DESIGN.md` §4.1)._
+the project's `PRIVACY_DESIGN.md` §4.1).

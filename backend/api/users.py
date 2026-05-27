@@ -14,18 +14,20 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from backend.api._client_ip import get_client_ip
 from backend.api.auth import (
     EditorSession,
     hash_password,
     require_owner,
 )
-from backend.config import settings
+from backend.config import privacy_settings, settings
 from database.system_db import get_system_db
 from database.system_models import (
     AuthEditor,
     AuthEditorTree,
     AuthInvitation,
     AuthSetPasswordToken,
+    AuthShareConsent,
     AuthShareToken,
 )
 
@@ -57,6 +59,11 @@ class ShareTokenCreate(BaseModel):
     label: Optional[str] = None
     description: Optional[str] = None  # frontend alias for label
     expires_after_days: int = 90
+    # Per-share acknowledgement (Privacy §2.5, M-03). Must be True; the modal
+    # in the UI sets it on submit. Backend rejects creation without it so the
+    # consent row in auth_share_consents is the authoritative record that the
+    # Owner saw and accepted the §9.4 text.
+    acknowledgement: bool = False
 
 
 class ContributorResponse(BaseModel):
@@ -234,21 +241,37 @@ def list_share_tokens(
 @router.post("/share-tokens", response_model=ShareTokenResponse, status_code=status.HTTP_201_CREATED)
 def create_share_token(
     body: ShareTokenCreate,
+    request: Request,
     session: EditorSession = Depends(require_owner),
     db: Session = Depends(get_system_db),
 ):
     """Create a new viewer share token for the owner's tree."""
+    if not body.acknowledgement:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Share-link acknowledgement is required.",
+        )
     label = body.label or body.description or None
     raw = secrets.token_urlsafe(32)
+    now = _now()
     row = AuthShareToken(
         owner_id=session.owner_id,
         token=raw,
         label=label,
         is_active=True,
         expires_after_days=max(1, body.expires_after_days),
-        created_at=_now(),
+        created_at=now,
     )
     db.add(row)
+    db.flush()  # populate row.id for the consent FK
+    db.add(AuthShareConsent(
+        editor_id=session.editor_id,
+        tree_owner_id=session.owner_id,
+        share_token_id=row.id,
+        accepted_at=now,
+        accepted_ip=get_client_ip(request),
+        privacy_policy_version=privacy_settings.privacy_policy_version,
+    ))
     db.commit()
     db.refresh(row)
     return row

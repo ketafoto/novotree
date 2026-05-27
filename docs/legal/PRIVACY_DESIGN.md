@@ -14,9 +14,10 @@
 > space, then this file to see what is built, in progress, or queued.
 
 **Status overall: TIER 1 IN PROGRESS.** §2.1 (central privacy config), §2.2
-(public takedown flow), §2.3 (privacy policy page + footer link), and §2.4
-(viewer notice on first share-link load) are shipped. Remaining Tier 1
-items (§2.5, §2.6) are queued — see the per-section checkboxes below.
+(public takedown flow), §2.3 (privacy policy page + footer link), §2.4
+(viewer notice on first share-link load), and §2.5 (per-share
+acknowledgement) are shipped. §2.6 is the last queued Tier 1 item — see
+the per-section checkboxes below.
 
 ---
 
@@ -268,14 +269,39 @@ that exposes both.
 ### 2.5 Per-share acknowledgement (M-03)
 
 A defensive log of "I, the Owner, confirmed I had the right to share this tree"
-each time a share link is created or extended. Useful evidence if a relative
-forwards the link further than intended and someone later complains.
+each time a share link is created. Useful evidence if a relative forwards the
+link further than intended and someone later complains.
 
-- [ ] New table `auth_share_consents`: `id`, `editor_id`, `tree_owner_id`,
-      `share_token_id`, `accepted_at`, `accepted_ip`, `tos_version`.
-- [ ] Modal shown when Owner clicks "Create share link" or extends visibility.
-      Text from [PRIVACY_ANALYSIS.md §9.4](PRIVACY_ANALYSIS.md#94-per-share-acknowledgement-shown-when-creating-or-extending-a-share-link).
-- [ ] Persist consent on submit. Do not let share tokens be created without it.
+- [x] New table `auth_share_consents` in
+      [database/system_models.py](../database/system_models.py): `id`,
+      `editor_id`, `tree_owner_id`, `share_token_id` (nullable, reserved for
+      future extend flow), `accepted_at`, `accepted_ip`,
+      `privacy_policy_version`. **Diverges from spec:** stores
+      `privacy_policy_version` instead of `tos_version`. Mode A ships no
+      ToS (Tier 3 §4.4); the privacy policy is the only legal document
+      currently in force, and the modal's "respond within 30 days" promise
+      is policy-driven. `tos_version` was a holdover from the original
+      §9.4 draft assuming ToS existed at Tier 1.
+- [x] Modal shown when Owner clicks "Create share link", text verbatim from
+      [PRIVACY_ANALYSIS.md §9.4](PRIVACY_ANALYSIS.md#94-per-share-acknowledgement-shown-when-creating-or-extending-a-share-link).
+      Component: [ShareConsentModal.tsx](../frontend/src/components/ShareConsentModal.tsx).
+      Mounted in both share-token entry points:
+      [UserManagerPage.tsx](../frontend/src/pages/users/UserManagerPage.tsx)
+      (full ShareTokensTab) and
+      [DashboardPage.tsx](../frontend/src/pages/dashboard/DashboardPage.tsx)
+      (ShareLinksWidget). The "or extending" clause of §9.4 is **deferred** —
+      no extend-visibility endpoint or UI action exists today (only
+      Create and Revoke). When such an action is added, reuse the same
+      modal and write a fresh `auth_share_consents` row (the nullable
+      `share_token_id` already permits this).
+- [x] Persist consent on submit. `POST /users/share-tokens` requires
+      `acknowledgement: true` in the body and rejects with HTTP 400
+      otherwise, writing the consent row in the same transaction as the
+      share token. Client IP is captured via the shared helper at
+      [backend/api/_client_ip.py](../backend/api/_client_ip.py), extracted
+      from previously-duplicated copies in
+      [backend/main.py](../backend/main.py) and
+      [backend/api/takedown.py](../backend/api/takedown.py).
 
 ### 2.6 Right-of-access export per Individual (M-09, Phase 7)
 

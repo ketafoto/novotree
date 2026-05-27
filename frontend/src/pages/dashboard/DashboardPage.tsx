@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { shareUrl } from '../../utils/shareUrl';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { User, Heart, Calendar, Image, ArrowRight, Plus, Share2, Copy, Trash2, Users, Shield, AlertTriangle } from 'lucide-react';
+import { User, Heart, Calendar, Image, ArrowRight, Plus, Share2, Copy, Trash2, Users, Shield, AlertTriangle, Check } from 'lucide-react';
 import { individualsApi } from '../../api/individuals';
 import { familiesApi } from '../../api/families';
 import { eventsApi } from '../../api/events';
@@ -12,6 +12,7 @@ import { takedownApi } from '../../api/takedown';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
 import { Spinner } from '../../components/common/Spinner';
+import { ShareConsentModal } from '../../components/ShareConsentModal';
 import { formatIndividualName, getLatestName } from '../../utils/nameUtils';
 import { useAuth } from '../../contexts/AuthContext';
 import { isLocalApp } from '../../config/appMode';
@@ -51,15 +52,17 @@ function ShareLinksWidget() {
     queryFn: usersApi.listShareTokens,
   });
   const [isCreating, setIsCreating] = useState(false);
+  const [showConsent, setShowConsent] = useState(false);
 
   const activeTokens = tokens.filter(t => t.is_active);
 
   const create = async () => {
     setIsCreating(true);
     try {
-      await usersApi.createShareToken({ description: 'Family share link' });
+      await usersApi.createShareToken({ description: 'Family share link', acknowledgement: true });
       qc.invalidateQueries({ queryKey: ['share-tokens'] });
       toast.success('Share link created');
+      setShowConsent(false);
     } catch (err) {
       toast.error(apiErrorMessage(err, 'Failed to create share link'));
     } finally {
@@ -99,9 +102,9 @@ function ShareLinksWidget() {
         <div className="text-center py-4">
           <Share2 className="w-8 h-8 mx-auto mb-2 text-gray-300" />
           <p className="text-sm text-gray-500 mb-3">No share links yet.</p>
-          <Button size="sm" onClick={create} disabled={isCreating}>
+          <Button size="sm" onClick={() => setShowConsent(true)} disabled={isCreating}>
             <Plus className="w-3.5 h-3.5 mr-1" />
-            {isCreating ? 'Creating…' : 'Create link'}
+            Create link
           </Button>
         </div>
       ) : (
@@ -113,6 +116,11 @@ function ShareLinksWidget() {
                 <p className="text-xs text-gray-400 font-mono truncate">
                   {shareUrl(t.token)}
                 </p>
+                {t.created_at && (
+                  <p className="text-xs text-gray-400" title="Your confirmation that you had the right to share this tree was recorded when the link was created.">
+                    <Check className="inline w-3 h-3 text-emerald-500 mr-0.5" aria-hidden /> Acknowledged on {new Date(t.created_at).toLocaleDateString()}
+                  </p>
+                )}
               </div>
               <button onClick={() => copy(t.token)} className="p-1.5 hover:bg-gray-100 rounded" title="Copy link">
                 <Copy className="w-4 h-4 text-gray-500" />
@@ -122,11 +130,17 @@ function ShareLinksWidget() {
               </button>
             </div>
           ))}
-          <button onClick={create} disabled={isCreating} className="text-xs text-blue-600 hover:underline">
-            {isCreating ? 'Creating…' : '+ New link'}
+          <button onClick={() => setShowConsent(true)} disabled={isCreating} className="text-xs text-blue-600 hover:underline">
+            + New link
           </button>
         </div>
       )}
+      <ShareConsentModal
+        open={showConsent}
+        onCancel={() => setShowConsent(false)}
+        onConfirm={create}
+        isSubmitting={isCreating}
+      />
     </Card>
   );
 }

@@ -242,6 +242,7 @@ export interface ShareTokenCreate {
   label?: string;
   description?: string;  // alias accepted by backend
   expires_after_days?: number;
+  acknowledgement: boolean;  // per-share §9.4 modal; backend rejects when false
 }
 
 // ==================== Contributors ====================

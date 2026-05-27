@@ -5,6 +5,7 @@ Tables:
 - auth_editors             : all authenticated users (owners + contributors)
 - auth_editor_trees        : contributor → owner_id access grants (many-to-many)
 - auth_share_tokens        : viewer share links with rolling 90-day expiry
+- auth_share_consents      : per-share-create acknowledgement audit log (Privacy §2.5)
 - auth_pending_owners      : email-verification staging for owner signups (1-hour TTL)
 - auth_pending_contributors: email-verification staging for contributor self-signups (24-hour TTL)
 - auth_set_password_tokens : one-time tokens for contributor onboarding / password reset
@@ -87,6 +88,32 @@ class AuthShareToken(SystemBase):
 
     created_at = Column(String, nullable=True)       # ISO-8601 UTC
     last_used_at = Column(String, nullable=True)     # ISO-8601 UTC (rolling anchor)
+
+
+class AuthShareConsent(SystemBase):
+    """
+    Per-share-create acknowledgement (Privacy §2.5, PRIVACY_ANALYSIS.md M-03 / §9.4).
+    One row written every time an Owner confirms the share-link modal. Defensive
+    audit log: evidence that the Owner accepted responsibility for what they
+    shared at the moment the link was issued.
+
+    `share_token_id` is nullable for forward-compatibility with a future
+    "extend visibility" action that would re-acknowledge an existing token
+    without creating a new one — not exercised today (no extend endpoint
+    exists). `privacy_policy_version` records which policy version was in
+    force at acceptance; preferred over `tos_version` because Mode A ships
+    no ToS — the policy is the only legal document the modal text leans on.
+    """
+
+    __tablename__ = "auth_share_consents"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    editor_id = Column(String, nullable=False)            # who clicked accept (always the Owner today)
+    tree_owner_id = Column(String, nullable=False)        # which tree the share grants access to
+    share_token_id = Column(Integer, nullable=True)       # FK→auth_share_tokens.id; NULL reserved for future extend flow
+    accepted_at = Column(String, nullable=False)          # ISO-8601 UTC
+    accepted_ip = Column(String, nullable=False)          # client IP at acceptance (best-effort, behind CF/proxy)
+    privacy_policy_version = Column(String, nullable=False)
 
 
 class AuthInvitation(SystemBase):

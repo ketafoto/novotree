@@ -22,6 +22,7 @@ import { usersApi } from '../../api/auth';
 import { Button } from '../../components/common/Button';
 import { Card } from '../../components/common/Card';
 import { Spinner } from '../../components/common/Spinner';
+import { ShareConsentModal } from '../../components/ShareConsentModal';
 import toast from 'react-hot-toast';
 import { apiErrorMessage } from '../../utils/apiError';
 
@@ -56,6 +57,7 @@ function ShareTokensTab() {
   const [label, setLabel] = useState('');
   const [expiryDays, setExpiryDays] = useState(90);
   const [showCreate, setShowCreate] = useState(false);
+  const [showConsent, setShowConsent] = useState(false);
   const [copiedTokenId, setCopiedTokenId] = useState<number | null>(null);
 
   const activeTokens = tokens.filter((t) => t.is_active);
@@ -63,11 +65,16 @@ function ShareTokensTab() {
   const create = async () => {
     setIsCreating(true);
     try {
-      await usersApi.createShareToken({ label: label.trim() || undefined, expires_after_days: expiryDays });
+      await usersApi.createShareToken({
+        label: label.trim() || undefined,
+        expires_after_days: expiryDays,
+        acknowledgement: true,
+      });
       qc.invalidateQueries({ queryKey: ['share-tokens'] });
       toast.success('Share link created');
       setLabel('');
       setShowCreate(false);
+      setShowConsent(false);
     } catch (err) {
       toast.error(apiErrorMessage(err, 'Failed to create share link'));
     } finally {
@@ -115,7 +122,7 @@ function ShareTokensTab() {
               onChange={(e) => setLabel(e.target.value)}
               placeholder="e.g. Family reunion 2026"
               className="block w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              onKeyDown={(e) => { if (e.key === 'Enter') void create(); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') setShowConsent(true); }}
             />
           </div>
           <div>
@@ -132,7 +139,7 @@ function ShareTokensTab() {
               <option value={3650}>10 years</option>
             </select>
           </div>
-          <Button size="sm" onClick={create} disabled={isCreating} isLoading={isCreating}>
+          <Button size="sm" onClick={() => setShowConsent(true)} disabled={isCreating}>
             Create
           </Button>
           <Button size="sm" variant="ghost" onClick={() => setShowCreate(false)}>
@@ -140,6 +147,13 @@ function ShareTokensTab() {
           </Button>
         </div>
       )}
+
+      <ShareConsentModal
+        open={showConsent}
+        onCancel={() => setShowConsent(false)}
+        onConfirm={create}
+        isSubmitting={isCreating}
+      />
 
       {activeTokens.length === 0 ? (
         <div className="text-center py-8 text-gray-400">
@@ -157,14 +171,19 @@ function ShareTokensTab() {
                   {shareUrl(t.token)}
                 </p>
                 {t.created_at && (
-                  <p className="text-xs text-gray-400">
-                    Created {new Date(t.created_at).toLocaleDateString()}
-                    {t.last_used_at && ` · Last used ${new Date(t.last_used_at).toLocaleDateString()}`}
-                    {' · '}
-                    <span className="text-emerald-600">
-                      Expires {new Date(new Date(t.created_at).getTime() + t.expires_after_days * 86400000).toLocaleDateString()}
-                    </span>
-                  </p>
+                  <>
+                    <p className="text-xs text-gray-400">
+                      Created {new Date(t.created_at).toLocaleDateString()}
+                      {t.last_used_at && ` · Last used ${new Date(t.last_used_at).toLocaleDateString()}`}
+                      {' · '}
+                      <span className="text-emerald-600">
+                        Expires {new Date(new Date(t.created_at).getTime() + t.expires_after_days * 86400000).toLocaleDateString()}
+                      </span>
+                    </p>
+                    <p className="text-xs text-gray-400" title="Your confirmation that you had the right to share this tree was recorded when the link was created.">
+                      <Check className="inline w-3 h-3 text-emerald-500 mr-0.5" aria-hidden /> Acknowledged on {new Date(t.created_at).toLocaleDateString()}
+                    </p>
+                  </>
                 )}
               </div>
               <button
