@@ -7,13 +7,15 @@ Privacy & legal-posture endpoints.
   GET /privacy/policy — rendered privacy policy markdown + version string
                         (Tier 1 §2.3). Sourced from docs/legal/privacy.md.
 
-The takedown / "remove me" feature lives in its own module
-([backend/api/takedown.py](takedown.py)) — separated because it owns a router
-of its own, an intake email path, and the SLA sweeper. Keeping privacy.py
-focused on static legal-posture endpoints makes the boundary easy to extend.
+The public privacy-request intake (removal / access / correction) lives in
+its own module ([backend/api/privacy_requests.py](privacy_requests.py)) —
+separated because it owns a router of its own, an intake email path, and the
+SLA sweeper. Keeping privacy.py focused on static legal-posture endpoints
+makes the boundary easy to extend.
 
-Tier 1 §2.1 + §2.3 of docs/PRIVACY_DESIGN.md. No auth required — the values
-exposed here are the same ones that appear in the public privacy policy.
+Tier 1 §2.1, §2.3, §2.7 of docs/legal/PRIVACY_DESIGN.md. No auth required —
+the values exposed here are the same ones that appear in the public privacy
+policy.
 """
 
 from pathlib import Path
@@ -40,13 +42,13 @@ class PrivacyConfigResponse(BaseModel):
     owner_signup_requires_approval: bool
     allow_contributor_signup: bool
 
-    takedown_sla_days: int
+    privacy_request_sla_days: int
     child_age_threshold_years: int
 
     backup_retention_days: int
     access_log_retention_days: int
     error_log_retention_days: int
-    takedown_request_retention_months: int
+    privacy_request_retention_months: int
 
     tos_version: str
     privacy_policy_version: str
@@ -59,8 +61,9 @@ class PrivacyConfigResponse(BaseModel):
     analytics_enabled: bool
 
     # TEST-ONLY: tells the frontend to render timestamp-override inputs on
-    # the takedown queue page. See PrivacySettings.test_allow_timestamp_override.
-    # Must remain False in production.
+    # the privacy-requests queue page. See
+    # PrivacySettings.test_allow_timestamp_override. Must remain False in
+    # production.
     test_allow_timestamp_override: bool
 
 
@@ -72,12 +75,12 @@ def get_privacy_config() -> PrivacyConfigResponse:
         allow_owner_signup=p.allow_owner_signup,
         owner_signup_requires_approval=p.owner_signup_requires_approval,
         allow_contributor_signup=p.allow_contributor_signup,
-        takedown_sla_days=p.takedown_sla_days,
+        privacy_request_sla_days=p.privacy_request_sla_days,
         child_age_threshold_years=p.child_age_threshold_years,
         backup_retention_days=p.backup_retention_days,
         access_log_retention_days=p.access_log_retention_days,
         error_log_retention_days=p.error_log_retention_days,
-        takedown_request_retention_months=p.takedown_request_retention_months,
+        privacy_request_retention_months=p.privacy_request_retention_months,
         tos_version=p.tos_version,
         privacy_policy_version=p.privacy_policy_version,
         cookie_notice_version=p.cookie_notice_version,

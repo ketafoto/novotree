@@ -3,23 +3,40 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { TreeDeciduous, Info, AlertTriangle, CheckCircle2 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
 import { usePrivacyConfig } from '../../hooks/usePrivacyConfig';
 import { privacyApi } from '../../api/privacy';
+import type { PrivacyRequestType } from '../../api/privacy_requests';
 import { useAuth } from '../../contexts/AuthContext';
 
-// Field length bounds mirror backend/api/privacy.py — keep in sync.
+// Three request kinds — radio options shown on the form (Tier 1 §2.7 of
+// docs/legal/PRIVACY_DESIGN.md). User copy is plain language; the legal text
+// (GDPR Art. 15-17) lives in the privacy policy, not here. The same labels
+// are used in PRIVACY_ANALYSIS.md §9.8 — keep in sync if either side changes.
+const REQUEST_TYPE_OPTIONS: ReadonlyArray<{
+  value: PrivacyRequestType;
+  label: string;
+}> = [
+  { value: 'removal', label: 'Remove my data from this family tree.' },
+  { value: 'access', label: 'Send me a copy of the data this tree holds about me.' },
+  { value: 'correction', label: 'Correct something this tree gets wrong about me.' },
+];
+
+// Field length bounds mirror backend/api/privacy_requests.py — keep in sync.
 const schema = z.object({
   tree_owner_id: z.string().min(1, 'Required').max(64),
   individual_id: z.string().max(64).optional(),
+  request_type: z.enum(['removal', 'access', 'correction'], {
+    error: () => ({ message: 'Pick what you want the tree owner to do' }),
+  }),
   requester_name: z.string().min(1, 'Required').max(200),
   requester_email: z.string().email('Enter a valid email').max(320),
   requester_phone: z.string().max(40).optional(),
-  message: z.string().min(10, 'Please describe what should be removed (10+ characters)').max(4000),
+  message: z.string().min(10, 'Please describe your request (10+ characters)').max(4000),
 });
 type FormData = z.infer<typeof schema>;
 
@@ -39,8 +56,9 @@ function resolveOwnerContext(
   //     and by Tree page links once a share-token session knows the owner.
   //  2. share-token session in this tab.
   //  3. authenticated session — but the field is NOT prefilled with the
-  //     signed-in user's own owner_id (filing a takedown against yourself is
-  //     the wrong affordance; the banner steers them to Settings instead).
+  //     signed-in user's own owner_id (filing a privacy request against
+  //     yourself is the wrong affordance; the banner steers them to Settings
+  //     instead).
   //  4. nothing — the field stays empty and the banner explains that an
   //     off-platform requester needs to type the username.
   const params = new URLSearchParams(window.location.search);
@@ -78,9 +96,9 @@ function OwnerBanner({ context, authenticatedOwnerId }: OwnerBannerProps) {
         <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-600" />
         <span>
           You are signed in as <span className="font-mono font-semibold">{authenticatedOwnerId}</span>.
-          This form is for <em>other people</em> to ask the tree owner to remove their data —
-          filing it against your own tree usually isn't what you want. To delete your own data,
-          use{' '}
+          This form is for <em>other people</em> to ask the tree owner about their data —
+          filing it against your own tree usually isn't what you want. To delete or change
+          your own data, use{' '}
           <Link to="/settings" className="underline hover:text-amber-700">
             Settings
           </Link>{' '}
@@ -101,7 +119,7 @@ function OwnerBanner({ context, authenticatedOwnerId }: OwnerBannerProps) {
   );
 }
 
-export function TakedownPage() {
+export function PrivacyRequestPage() {
   const { config, loading } = usePrivacyConfig();
   const { editor, viewerOwnerId } = useAuth();
   const [submitted, setSubmitted] = useState(false);
@@ -109,18 +127,24 @@ export function TakedownPage() {
   const authenticatedOwnerId = editor?.owner_id ?? null;
   const ownerContext = resolveOwnerContext(viewerOwnerId, authenticatedOwnerId);
 
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormData>({
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
       tree_owner_id: ownerContext.prefillValue,
+      // request_type intentionally has no default — the user must pick.
     },
   });
 
   const onSubmit = async (data: FormData) => {
     try {
-      await privacyApi.submitTakedown({
+      await privacyApi.submitPrivacyRequest({
         tree_owner_id: data.tree_owner_id,
         individual_id: data.individual_id || undefined,
+        request_type: data.request_type,
         requester_name: data.requester_name,
         requester_email: data.requester_email,
         requester_phone: data.requester_phone || undefined,
@@ -137,9 +161,10 @@ export function TakedownPage() {
     }
   };
 
-  const slaDays = config?.takedown_sla_days ?? 30;
+  const navigate = useNavigate();
+  const slaDays = config?.privacy_request_sla_days ?? 30;
   const contact = config?.privacy_contact_email ?? '';
-  const retentionMonths = config?.takedown_request_retention_months ?? 12;
+  const retentionMonths = config?.privacy_request_retention_months ?? 12;
 
   if (submitted) {
     return (
@@ -151,8 +176,7 @@ export function TakedownPage() {
           </div>
           <p className="text-gray-700">
             We have recorded your request and forwarded it to the Tree Owner. If they
-            do not respond within {slaDays} days, NovoTree will hide the records on
-            your behalf.
+            do not respond within {slaDays} days, NovoTree will act on your behalf.
           </p>
           <p className="text-sm text-gray-500">
             We will store this request only as long as needed to act on it
@@ -163,6 +187,12 @@ export function TakedownPage() {
               Questions or follow-up: <a className="text-emerald-700 underline" href={`mailto:${contact}`}>{contact}</a>
             </p>
           )}
+          <button
+            onClick={() => navigate(-1)}
+            className="text-sm text-emerald-700 underline hover:text-emerald-800"
+          >
+            ← Back
+          </button>
         </div>
       </div>
     );
@@ -172,16 +202,20 @@ export function TakedownPage() {
     <div className="flex-1 bg-gray-50 flex items-center justify-center p-4">
       <div className="max-w-xl w-full bg-white rounded-lg shadow p-8 space-y-6">
         <div className="flex items-center gap-3">
-          <TreeDeciduous className="text-emerald-600" size={32} />
-          <h1 className="text-2xl font-semibold">Privacy — remove me from a tree</h1>
+          <TreeDeciduous className="text-emerald-600 flex-shrink-0" size={32} />
+          <div>
+            <h1 className="text-2xl font-semibold leading-tight">Privacy request</h1>
+            <p className="text-sm text-gray-600 mt-0.5">
+              remove, access, or correct your data
+            </p>
+          </div>
         </div>
 
         <div className="text-gray-700 space-y-2 text-sm">
           <p>
-            If your information appears on NovoTree and you want it removed, fill in
-            the form below. We will forward your request to the Tree Owner; if they
-            do not respond within {slaDays} days, NovoTree will hide the records on
-            your behalf.
+            Use this form to ask the owner of this family tree to remove, send you a copy of,
+            or correct information they hold about you. Pick one and describe your request
+            below. We will email the owner; you should hear back within {slaDays} days.
           </p>
           <p className="text-gray-500">
             We may contact you to verify your identity before acting on this request.
@@ -197,6 +231,29 @@ export function TakedownPage() {
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
           <OwnerBanner context={ownerContext} authenticatedOwnerId={authenticatedOwnerId} />
+
+          <fieldset className="space-y-2">
+            <legend className="block text-sm font-medium text-gray-700">
+              What would you like the tree owner to do?
+              <span className="text-red-500 ml-1">*</span>
+            </legend>
+            <div className="space-y-2">
+              {REQUEST_TYPE_OPTIONS.map((opt) => (
+                <label key={opt.value} className="flex items-start gap-2 text-sm text-gray-700 cursor-pointer">
+                  <input
+                    type="radio"
+                    value={opt.value}
+                    className="mt-1"
+                    {...register('request_type')}
+                  />
+                  <span>{opt.label}</span>
+                </label>
+              ))}
+            </div>
+            {errors.request_type?.message && (
+              <p className="text-sm text-red-600">{errors.request_type.message}</p>
+            )}
+          </fieldset>
 
           <Input
             label="Tree owner (username) or tree URL"
@@ -238,7 +295,7 @@ export function TakedownPage() {
 
           <div className="space-y-1">
             <label htmlFor="message" className="block text-sm font-medium text-gray-700">
-              Describe what should be removed
+              Describe your request
               <span className="text-red-500 ml-1">*</span>
             </label>
             <textarea

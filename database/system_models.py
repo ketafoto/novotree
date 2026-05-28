@@ -10,7 +10,7 @@ Tables:
 - auth_pending_contributors: email-verification staging for contributor self-signups (24-hour TTL)
 - auth_set_password_tokens : one-time tokens for contributor onboarding / password reset
 - auth_invitations         : legacy invitation records (kept for data; no longer used by UI)
-- takedown_requests        : public "remove me" requests (Privacy §2.2)
+- privacy_requests         : public privacy requests — removal, access, correction (Privacy §2.2 + §2.7)
 """
 
 from sqlalchemy import (
@@ -169,22 +169,31 @@ class AuthPendingOwner(SystemBase):
     created_at = Column(String, nullable=False)           # ISO-8601 UTC
 
 
-class TakedownRequest(SystemBase):
+class PrivacyRequest(SystemBase):
     """
-    Public "remove me from a tree" request (GDPR Art. 17). Submitted via the
-    unauthenticated POST /privacy/takedown endpoint and reviewed by the tree
-    owner. See docs/PRIVACY_DESIGN.md §2.2 and PRIVACY_ANALYSIS.md M-04.
+    Public privacy request from a data subject (GDPR Art. 15-17). Submitted via
+    the unauthenticated POST /privacy/request endpoint and reviewed by the tree
+    owner. See docs/legal/PRIVACY_DESIGN.md §2.2 and §2.7.
+
+    One table, one SLA, one triage queue — request_type discriminates the
+    three kinds (removal, access, correction).
+
+    request_type values:
+      'removal'    — Art. 17: erase the requester's records.
+      'access'     — Art. 15: send the requester a copy of their data.
+      'correction' — Art. 16: edit specific records.
 
     Status transitions:
       open → acknowledged → resolved
-      open → escalated  (auto, after takedown_sla_days)
+      open → escalated  (auto, after privacy_request_sla_days)
     """
 
-    __tablename__ = "takedown_requests"
+    __tablename__ = "privacy_requests"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     tree_owner_id = Column(String, nullable=False)        # which owner's tree the request targets
     individual_id = Column(String, nullable=True)         # optional pointer if requester knows the ID
+    request_type = Column(String, nullable=False)         # 'removal'|'access'|'correction'
     requester_name = Column(String, nullable=False)
     requester_email = Column(String, nullable=False)
     requester_phone = Column(String, nullable=True)       # optional; aids identity verification
@@ -193,7 +202,7 @@ class TakedownRequest(SystemBase):
     created_at = Column(String, nullable=False)           # ISO-8601 UTC
     resolved_at = Column(String, nullable=True)           # ISO-8601 UTC; set when status reaches resolved/escalated
 
-    # Sweeper bookkeeping — see backend/api/privacy.py:_sweep_takedowns().
+    # Sweeper bookkeeping — see backend/api/_privacy_request_sweep.py.
     # `RETURNING id` on UPDATE … WHERE … IS NULL gives first-writer-wins idempotency
     # so the in-process loop and the standalone scheduled-jobs backstop can both run
     # safely without double-sending mail.

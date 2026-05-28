@@ -8,7 +8,7 @@ import { familiesApi } from '../../api/families';
 import { eventsApi } from '../../api/events';
 import { mediaApi } from '../../api/media';
 import { usersApi } from '../../api/auth';
-import { takedownApi } from '../../api/takedown';
+import { privacyRequestsApi } from '../../api/privacy_requests';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
 import { Spinner } from '../../components/common/Spinner';
@@ -146,21 +146,21 @@ function ShareLinksWidget() {
 }
 
 /**
- * Always-visible summary of the Owner's takedown queue.
+ * Always-visible summary of the Owner's privacy-requests queue.
  *
  * Renders even at zero so the Owner remembers the feature exists (per
- * docs/PRIVACY_DESIGN.md §2.2). Severity is conditional:
+ * docs/legal/PRIVACY_DESIGN.md §2.2 + §2.7). Severity is conditional:
  *   - any escalated row → red (SLA missed, immediate attention)
  *   - else any open row → amber (within SLA, action needed)
  *   - empty            → neutral grey
  *
- * Shares the query key `['takedowns', false]` with TakedownsPage so
- * navigating between dashboard and queue is a cache hit, no extra fetch.
+ * Shares the query key `['privacy-requests', false]` with PrivacyRequestsPage
+ * so navigating between dashboard and queue is a cache hit, no extra fetch.
  */
-function TakedownSummaryCard() {
+function PrivacyRequestsSummaryCard() {
   const { data, isLoading } = useQuery({
-    queryKey: ['takedowns', false],
-    queryFn: () => takedownApi.list(false),
+    queryKey: ['privacy-requests', false],
+    queryFn: () => privacyRequestsApi.list(false),
   });
 
   const rows = data ?? [];
@@ -176,12 +176,12 @@ function TakedownSummaryCard() {
   }[severity];
 
   return (
-    <Link to="/privacy/takedowns" className="block">
+    <Link to="/legal/privacy-requests" className="block">
       <div className={`bg-white rounded-lg border ${tone.border} p-6 hover:shadow-md transition-shadow`}>
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm font-medium text-gray-600 flex items-center gap-2">
-              Takedown requests
+              Privacy requests
               {escalatedCount > 0 && (
                 <AlertTriangle className="w-4 h-4 text-red-600" aria-label="SLA exceeded" />
               )}
@@ -290,9 +290,10 @@ export function DashboardPage() {
         />
       </div>
 
-      {/* Takedown queue summary — Owner-only, hidden in local mode (no public
-          takedown surface there, so the card would always be a confusing zero). */}
-      {isOwner && !isLocalApp && <TakedownSummaryCard />}
+      {/* Privacy-requests queue summary — Owner-only, hidden in local mode
+          (no public privacy-request surface there, so the card would always
+          be a confusing zero). */}
+      {isOwner && !isLocalApp && <PrivacyRequestsSummaryCard />}
 
       {/* Quick Actions */}
       <Card title="Quick Actions">

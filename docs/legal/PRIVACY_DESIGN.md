@@ -13,11 +13,14 @@
 > [PRIVACY_ANALYSIS.md](PRIVACY_ANALYSIS.md) first to understand the problem
 > space, then this file to see what is built, in progress, or queued.
 
-**Status overall: TIER 1 COMPLETE.** All of §2.1–§2.6 are shipped:
-§2.1 (central privacy config), §2.2 (public takedown flow), §2.3 (privacy
-policy page + footer link), §2.4 (viewer notice on first share-link load),
-§2.5 (per-share acknowledgement), §2.6 (right-of-access export per
-Individual). Mode A is defensible. Tier 2 (operational hardening) is next.
+**Status overall: TIER 1 COMPLETE.** All of §2.1–§2.7 are shipped:
+§2.1 (central privacy config), §2.2 (public privacy-request flow, originally
+"takedown"), §2.3 (privacy policy page + footer link), §2.4 (viewer notice
+on first share-link load), §2.5 (per-share acknowledgement), §2.6
+(right-of-access export per Individual), §2.7 (public privacy-request
+intake — the §2.2 form generalized to removal, access, and correction
+under GDPR Art. 15-17). Mode A is defensible. Tier 2 (operational
+hardening) is next.
 
 ---
 
@@ -40,7 +43,8 @@ NovoTree has three practical deployment modes:
 - **Mode A — Private / read-only.** Single owner (the operator). Owner and
   contributor signups disabled. Share links to relatives still work; assume
   any link can be forwarded → effectively public. Therefore Mode A still
-  needs takedown, viewer notice, audit trail, right-of-access export.
+  needs a privacy-request intake (removal / access / correction), viewer
+  notice, audit trail, right-of-access export.
 - **Mode B — Contributors-only.** Owner signup disabled; contributor signup
   enabled. The operator remains the only Owner / data controller for the
   tree's contents, but invites relatives to *edit* the same tree as
@@ -67,7 +71,7 @@ Tier 1 + Tier 2 below get Mode A defensible. Tier 3 unlocks Mode B and Mode C.
 | Audience legal context | Majority IL + US. Israel has EU adequacy decision (2011). US state laws lighter than GDPR. |
 | Owner-as-controller framing | NovoTree = processor; Owner = data controller for the tree's contents (standard SaaS posture). |
 | Children's age threshold | 16 (most conservative across EU member states). |
-| Takedown SLA | 30 days. |
+| Privacy-request SLA (removal / access / correction) | 30 days. |
 | Backup retention | 30 days. |
 
 ### Glossary — acronyms used in this document
@@ -90,8 +94,8 @@ Tier 1 + Tier 2 below get Mode A defensible. Tier 3 unlocks Mode B and Mode C.
 | **PII** | Personally Identifiable Information | Any data that can identify a living person (names, emails, photos, etc.). |
 | **SaaS** | Software as a Service | Hosted product accessed over the network. NovoTree's public mode is a SaaS. |
 | **SCC** | Standard Contractual Clauses | EU-approved contract template for transferring personal data outside the EEA. |
-| **SLA** | Service Level Agreement | A promised response time (e.g. takedown SLA = 30 days). |
-| **SMTP** | Simple Mail Transfer Protocol | Email-sending backend. Required for verification, takedown, contributor invites. |
+| **SLA** | Service Level Agreement | A promised response time (e.g. privacy-request SLA = 30 days). |
+| **SMTP** | Simple Mail Transfer Protocol | Email-sending backend. Required for verification, privacy-request notifications, contributor invites. |
 | **ToS** | Terms of Service | The contract the Owner accepts at signup. |
 
 The config block in §6 has its own inline glossary for the acronyms it uses; this section covers the body of the document.
@@ -101,10 +105,11 @@ The config block in §6 has its own inline glossary for the acronyms it uses; th
 
 **Not blocking for Tier 1 or Tier 2.** Mode A is a hobby deployment with one
 controller (the operator), no monetization, no analytics, no public signups,
-and a documented takedown flow. The conservative defaults in §6 pick the
-strictest EU thresholds, so the configuration is compliant in every jurisdiction
-it might touch. A regulator complaint against a one-person hobby tree that
-responds to takedowns within 30 days is realistically near-zero risk.
+and a documented privacy-request flow. The conservative defaults in §6 pick
+the strictest EU thresholds, so the configuration is compliant in every
+jurisdiction it might touch. A regulator complaint against a one-person
+hobby tree that responds to privacy requests within 30 days is
+realistically near-zero risk.
 
 **Required before Tier 3 (Mode B or Mode C launch).** Once any of the following
 becomes true, schedule a paid review:
@@ -151,32 +156,42 @@ risk-reduction to effort.
 
 ### 2.2 Public takedown / "remove me" flow (M-04)
 
+**Renamed in §2.7.** The intake form, table, endpoints, and Owner UI were
+generalized from "takedown" to "privacy request" once §2.7 added the access
+and correction request kinds. The original "removal" path described below
+still works the same way — `request_type='removal'` is one of the three
+options on the form, and is the only one §2.2 ever shipped. This section is
+kept in present tense for the historical narrative; the current names are
+those in §2.7.
+
 Single highest risk-reduction action. Even in Mode A.
 
 The form must serve two distinct requester populations — viewers who saw a
 share link AND off-platform people who never did. See
-[PRIVACY_ANALYSIS.md §1 → "Who files a takedown"](PRIVACY_ANALYSIS.md#who-files-a-takedown--two-populations).
+[PRIVACY_ANALYSIS.md §1 → "Who files a privacy request"](PRIVACY_ANALYSIS.md#who-files-a-privacy-request--two-populations).
 Consequence: takedown is **text-only** and reachable from a single public
 URL. Any TreeView-driven "select individuals to remove" UI is a future
 convenience for the viewer population only — never a substitute (a
 TreeView selection mode that prefills the form is the Tier-2 follow-up
 below).
 
-- [x] New table `takedown_requests` in
-      [database/system_models.py](../database/system_models.py):
-      `id`, `tree_owner_id`, `individual_id` (nullable), `requester_name`,
-      `requester_email`, `requester_phone` (nullable), `message`, `status`
-      (open / acknowledged / resolved / escalated), `created_at`,
-      `resolved_at`, plus `reminder_sent_at` / `escalated_at` for sweeper
-      idempotency.
-- [x] Public endpoint `POST /privacy/takedown` in
-      [backend/api/takedown.py](../backend/api/takedown.py). Rate-limited by IP
-      (5/hour) via
-      [backend/api/_takedown_rate_limit.py](../backend/api/_takedown_rate_limit.py).
+- [x] New table `privacy_requests` (renamed from `takedown_requests` in §2.7)
+      in [database/system_models.py](../database/system_models.py):
+      `id`, `tree_owner_id`, `individual_id` (nullable), `request_type`,
+      `requester_name`, `requester_email`, `requester_phone` (nullable),
+      `message`, `status` (open / acknowledged / resolved / escalated),
+      `created_at`, `resolved_at`, plus `reminder_sent_at` / `escalated_at`
+      for sweeper idempotency.
+- [x] Public endpoint `POST /privacy/request` (renamed from `/privacy/takedown`
+      in §2.7) in
+      [backend/api/privacy_requests.py](../backend/api/privacy_requests.py).
+      Rate-limited by IP (5/hour) via
+      [backend/api/_privacy_request_rate_limit.py](../backend/api/_privacy_request_rate_limit.py).
       No auth. Disabled in `is_local` (desktop) mode.
 - [x] Email notification to the Owner on receipt; reminder at day 14;
-      auto-escalate at `takedown_sla_days` (default 30). Sweep logic lives
-      in [backend/api/_takedown_sweep.py](../backend/api/_takedown_sweep.py);
+      auto-escalate at `privacy_request_sla_days` (default 30). Sweep logic
+      lives in
+      [backend/api/_privacy_request_sweep.py](../backend/api/_privacy_request_sweep.py);
       shared SMTP helper extracted to
       [backend/api/_email.py](../backend/api/_email.py).
 - [x] In-process scheduler started from FastAPI lifespan in
@@ -186,35 +201,38 @@ below).
       driven by `novotree-backend-monitor.{service,timer}` on the VM. Runs
       only when the backend `/health` probe fails. DB-level claim columns
       make both paths safe to run concurrently.
-- [x] Persistent **"Privacy / remove me"** link rendered globally in
-      [frontend/src/App.tsx](../frontend/src/App.tsx) via
+- [x] Persistent **"Remove Me / Our Privacy"** link cluster rendered globally
+      in [frontend/src/App.tsx](../frontend/src/App.tsx) via
       [PrivacyFooter.tsx](../frontend/src/components/layout/PrivacyFooter.tsx).
       Visible to viewers (share-token sessions) as well as owners. Hidden
-      in `isLocalApp`.
-- [x] Public takedown form page at `/privacy/takedown`
-      ([frontend/src/pages/legal/TakedownPage.tsx](../frontend/src/pages/legal/TakedownPage.tsx)).
-- [x] Owner-scoped triage queue: `GET /takedown`, `PATCH /takedown/{id}`,
-      `DELETE /takedown/{id}` in
-      [backend/api/takedown.py](../backend/api/takedown.py). Owner sees only
-      their own rows; allowed transition is `open|escalated → resolved`. Hard
-      delete is allowed only on terminal rows (operator escape hatch before
-      retention sweep). UI at
-      [frontend/src/pages/legal/TakedownsPage.tsx](../frontend/src/pages/legal/TakedownsPage.tsx),
-      reachable from the "Privacy" sidebar item.
+      in `isLocalApp`. (Label "Remove Me" preserved verbatim post-§2.7;
+      target URL now `/privacy/request`.)
+- [x] Public privacy-request form page at `/privacy/request` (renamed from
+      `/privacy/takedown` in §2.7) —
+      [frontend/src/pages/legal/PrivacyRequestPage.tsx](../frontend/src/pages/legal/PrivacyRequestPage.tsx).
+- [x] Owner-scoped triage queue: `GET /privacy/requests`,
+      `PATCH /privacy/requests/{id}`, `DELETE /privacy/requests/{id}` in
+      [backend/api/privacy_requests.py](../backend/api/privacy_requests.py).
+      Owner sees only their own rows; allowed transition is
+      `open|escalated → resolved`. Hard delete is allowed only on terminal
+      rows (operator escape hatch before retention sweep). UI at
+      [frontend/src/pages/legal/PrivacyRequestsPage.tsx](../frontend/src/pages/legal/PrivacyRequestsPage.tsx),
+      reachable from the "Privacy requests" sidebar item.
 - [x] Retention enforcement: sweep pass in
-      [_takedown_sweep.py](../backend/api/_takedown_sweep.py) hard-deletes
-      `resolved` / `escalated` rows older than
-      `takedown_request_retention_months` (default 12). No separate cron —
+      [_privacy_request_sweep.py](../backend/api/_privacy_request_sweep.py)
+      hard-deletes `resolved` / `escalated` rows older than
+      `privacy_request_retention_months` (default 12). No separate cron —
       same sweep cadence as reminders / escalations.
 
 **Cross-Owner admin triage deferred to Mode C.** The Owner-scoped queue
 above is sufficient when the operator is the only Owner (Mode A) — they
 *are* the admin for their own data. The admin endpoint that lets the
-operator triage takedowns *across all Owners* (needed once multiple
+operator triage privacy requests *across all Owners* (needed once multiple
 Owners exist on the server) is §4.9.
 
-**Tier-2 follow-up:** TreeView selection mode that prefills the takedown
-form with selected `individual_ids` for the viewer population. See §3.9.
+**Tier-2 follow-up:** TreeView selection mode that prefills the
+privacy-request form with selected `individual_ids` for the viewer
+population. See §3.9.
 
 ### 2.3 Privacy policy page + footer link (Phase 0.2-0.3 partial)
 
@@ -222,8 +240,8 @@ In Mode A the Owner is the operator — accepting one's own ToS is moot, and the
 cookie notice banner is unnecessary (auth cookies are seen only by the operator;
 viewers carry a strictly-necessary share token in `sessionStorage` covered by
 ePrivacy 5(3) and addressed by the viewer notice in §2.5). What is needed in
-Tier 1 is a privacy policy page that the takedown form can link to, and a footer
-that exposes both.
+Tier 1 is a privacy policy page that the privacy-request form can link to,
+and a footer that exposes both.
 
 - [x] Backend serves the policy markdown via
       `GET /privacy/policy` (read from
@@ -243,7 +261,7 @@ that exposes both.
       [TreeOverviewPage.tsx](../frontend/src/pages/tree/TreeOverviewPage.tsx)).
       The Tree pages render as `fixed inset-0 z-50` fullscreen overlays that
       cover the global footer, so embedding the same links in their chrome
-      is the only path that keeps the takedown affordance visible to
+      is the only path that keeps the "Remove Me" affordance visible to
       share-link viewers — the population the link primarily exists for.
       Hidden in `isLocalApp` everywhere.
 
@@ -301,7 +319,7 @@ link further than intended and someone later complains.
       [backend/api/_client_ip.py](../backend/api/_client_ip.py), extracted
       from previously-duplicated copies in
       [backend/main.py](../backend/main.py) and
-      [backend/api/takedown.py](../backend/api/takedown.py).
+      [backend/api/privacy_requests.py](../backend/api/privacy_requests.py).
 
 ### 2.6 Right-of-access export per Individual (M-09, Phase 7)
 
@@ -345,10 +363,10 @@ endpoint to *fulfil* the access ones once the Owner triages them.
 
 ### 2.7 Public privacy-request intake (M-04 extension; GDPR Art. 15–17)
 
-**Status:** SPEC DRAFT, NOT YET BUILT. Queued for Tier 1, to land after §2.6
-in a separate dedicated implementation session. Do not start the code from
-this section without first re-reading §2.6 (the access fulfillment path) and
-§2.2 (the existing erasure intake this section refactors).
+**Status:** BUILT. The §2.2 form, table, endpoints, and Owner UI were
+generalized into a three-option (removal / access / correction) intake;
+the renames listed below all landed. See `privacy_requests.py`,
+`_privacy_request_sweep.py`, and the `PrivacyRequest` model.
 
 **Why this exists.** §2.6 above ships the Owner-side export tool, but no
 requester-facing UI exists for a data subject to *ask* for that export. The
@@ -366,18 +384,17 @@ request kinds:
 
 | `request_type` | GDPR article | Owner fulfillment path |
 |---|---|---|
-| `removal` (default — preserves §2.2 behavior) | Art. 17 | Owner deletes the records or marks resolved after manual action. |
+| `removal` (preserves §2.2 behavior) | Art. 17 | Owner deletes the records or marks resolved after manual action. |
 | `access` | Art. 15 | Owner identifies the named Individual from the message text, clicks "Export data" (§2.6), forwards the JSON to `requester_email`, marks resolved. |
 | `correction` | Art. 16 | Owner edits the records on the Individual page, marks resolved. |
 
 **Why one table, not three.** All three request kinds share the same shape
-(requester identity + message + status), the same retention window
-(default 12 months — see config-key rename below), the same SLA
-(`takedown_sla_days` — same key name preserved; see below), the same
-triage queue UI, the same email-the-Owner / day-14 reminder / SLA
-escalation machinery, and the same hostile-population threat model (the
-form is public and rate-limited). A second table would duplicate every
-one of those mechanisms for no benefit.
+(requester identity + message + kind + status), the same retention window
+(default 12 months — see `privacy_request_retention_months`), the same SLA
+(`privacy_request_sla_days`), the same triage queue UI, the same
+email-the-Owner / day-14 reminder / SLA escalation machinery, and the same
+hostile-population threat model (the form is public and rate-limited). A
+second table would duplicate every one of those mechanisms for no benefit.
 
 ### Naming — internal rename, user-facing label preserved
 
@@ -417,20 +434,20 @@ on the `data.sqlite.system` table is the simplest path.
 | `frontend/src/pages/legal/TakedownPage.tsx` (public form) | `frontend/src/pages/legal/PrivacyRequestPage.tsx` |
 | `frontend/src/pages/legal/TakedownsPage.tsx` (owner triage) | `frontend/src/pages/legal/PrivacyRequestsPage.tsx` |
 | `frontend/src/pages/legal/TestTakedownTimestampPanel.tsx` | `frontend/src/pages/legal/TestPrivacyRequestTimestampPanel.tsx` |
-| `takedown_request_retention_months` (config key in [config.py](../backend/config.py) + `.env.public.example`) | `privacy_request_retention_months` |
+| `takedown_request_retention_months` (config key in [config.py](../backend/config.py)) | `privacy_request_retention_months` |
+| `takedown_sla_days` (config key in [config.py](../backend/config.py); env `TAKEDOWN_SLA_DAYS`) | `privacy_request_sla_days` (env `PRIVACY_REQUEST_SLA_DAYS`) |
 | Sidebar nav label "Takedowns" (in [Sidebar.tsx](../frontend/src/components/layout/Sidebar.tsx)) | "Privacy requests" |
 | Tags in FastAPI routers (`tags=["Privacy"]` already today — no change needed there) | (unchanged) |
 
-**Keep verbatim — config key with intentional historical name:**
-
-- `takedown_sla_days` stays as-is. The SLA is the same 30-day Art. 12(3)
-  clock for all three request kinds. Renaming would force operators to
-  edit `/etc/novotree.env` on the VM (this is the env-only config per
-  the §2.1 "Note on editability"). The name is acceptable as a historical
-  artefact and is documented in the dataclass docstring. *Alternative:*
-  rename to `privacy_request_sla_days` and add a one-line backward-compat
-  read of the old env key with a deprecation warning. Implementer's call
-  — both are fine.
+**SLA config-key decision at implementation time.** The original spec
+proposed keeping `takedown_sla_days` verbatim to avoid forcing operators
+to edit `/etc/novotree.env` on the VM, with an optional alternative to
+rename + add a backward-compat env read. At implementation we chose the
+**clean rename with no back-compat** because the project is pre-launch
+and no operator has the old env key set. The new key is
+`privacy_request_sla_days` (env `PRIVACY_REQUEST_SLA_DAYS`). The old env
+var is not read at all — setting it would silently fall through to the
+30-day default.
 
 **Page route URL — also renamed.**
 
@@ -486,12 +503,12 @@ releases the `DROP TABLE` line can come out.
 
 ### Action items (sequential)
 
-- [ ] **Schema:** rename model class `TakedownRequest` → `PrivacyRequest`,
+- [x] **Schema:** rename model class `TakedownRequest` → `PrivacyRequest`,
       table name `takedown_requests` → `privacy_requests`, add
       `request_type` column (NOT NULL, enum of three values, no default —
       every row must explicitly state its kind). Add the one-shot
       `DROP TABLE IF EXISTS takedown_requests` in `init_system_db()`.
-- [ ] **Backend rename pass:**
+- [x] **Backend rename pass:**
       `backend/api/takedown.py` → `privacy_requests.py`;
       `_takedown_sweep.py` → `_privacy_request_sweep.py`;
       `_takedown_rate_limit.py` → `_privacy_request_rate_limit.py`.
@@ -501,40 +518,38 @@ releases the `DROP TABLE` line can come out.
       public router stays at `prefix="/privacy"` with `.post("/request")`;
       owner router moves from `prefix="/takedown"` to
       `prefix="/privacy/requests"`.
-- [ ] **Backend Pydantic:** add `request_type: Literal["removal", "access", "correction"]`
+- [x] **Backend Pydantic:** add `request_type: Literal["removal", "access", "correction"]`
       to the request-creation schema. No default — the form must send it
       explicitly. The Pydantic enum value flows straight into the DB row.
-- [ ] **Backend email templates:** the sweep emitter in
+- [x] **Backend email templates:** the sweep emitter in
       `_privacy_request_sweep.py` branches on `request_type` for subject
-      and body. Subject template: `f"{REQUEST_KIND_LABEL[t]} request from {requester_name}"`
-      with `REQUEST_KIND_LABEL = {"removal": "Removal", "access": "Access", "correction": "Correction"}`.
+      and body. Subject template uses
+      `REQUEST_KIND_LABEL = {"removal": "Removal", "access": "Access", "correction": "Correction"}`.
       Body text per kind lives next to the existing copy.
-- [ ] **Standalone backstop:** rename
+- [x] **Standalone backstop:** rename
       `tools/ops/scheduled_jobs/jobs/takedown_requests_monitor.py` →
       `privacy_requests_monitor.py`. Update the job registry in
       `tools/ops/scheduled_jobs/jobs/__init__.py`. The systemd unit
       `novotree-backend-monitor.{service,timer}` itself does NOT change —
       it invokes the package, not a specific job file.
-- [ ] **Config:** rename `takedown_request_retention_months` →
-      `privacy_request_retention_months` in
-      [config.py](../backend/config.py) and
-      [backend/.env.public.example](../backend/.env.public.example) and any
-      reference docs. (`takedown_sla_days` stays — see "Keep verbatim"
-      above; reconfirm at implementation time.)
-- [ ] **Frontend rename pass:** `api/takedown.ts` → `api/privacy_requests.ts`;
+- [x] **Config:** rename `takedown_request_retention_months` →
+      `privacy_request_retention_months` AND `takedown_sla_days` →
+      `privacy_request_sla_days` in [config.py](../backend/config.py).
+      Env vars renamed correspondingly (`PRIVACY_REQUEST_RETENTION_MONTHS`,
+      `PRIVACY_REQUEST_SLA_DAYS`). No back-compat — project is pre-launch.
+- [x] **Frontend rename pass:** `api/takedown.ts` → `api/privacy_requests.ts`;
       `pages/legal/TakedownPage.tsx` → `PrivacyRequestPage.tsx`;
       `pages/legal/TakedownsPage.tsx` → `PrivacyRequestsPage.tsx`;
       `TestTakedownTimestampPanel.tsx` → `TestPrivacyRequestTimestampPanel.tsx`.
       Update all imports. Update router paths in
       [App.tsx](../frontend/src/App.tsx).
-- [ ] **Frontend form:** in the renamed `PrivacyRequestPage.tsx` add a
+- [x] **Frontend form:** in the renamed `PrivacyRequestPage.tsx` add a
       `request_type` selector at the top, three radio options, no
       pre-selection — the user must pick. Plain-language labels (no
       GDPR article numbers); the privacy policy carries the legal text.
       Page title: *"Privacy request — remove, access, or correct your
-      data"* (final copy lives in [PRIVACY_ANALYSIS.md §9.8](PRIVACY_ANALYSIS.md),
-      see next item).
-- [ ] **Footer labels:** keep "Remove me" verbatim in
+      data"* (final copy lives in [PRIVACY_ANALYSIS.md §9.8](PRIVACY_ANALYSIS.md)).
+- [x] **Footer labels:** keep "Remove me" verbatim in
       [PrivacyLinks.tsx](../frontend/src/components/layout/PrivacyLinks.tsx)
       and [PrivacyFooter.tsx](../frontend/src/components/layout/PrivacyFooter.tsx).
       Only the *target URL* changes from `/privacy/takedown` to
@@ -542,33 +557,30 @@ releases the `DROP TABLE` line can come out.
       not before (it advertises one of three rights), which is the entire
       naming-discussion compromise. Bump the label *only* if a real user
       reports confusion — not pre-emptively.
-- [ ] **Owner triage UI:** in `PrivacyRequestsPage.tsx` show
+- [x] **Owner triage UI:** in `PrivacyRequestsPage.tsx` show
       `request_type` as a column with a small badge. Three colors are
-      fine; do not invent icons. For `access` rows, render an inline
-      "Open Individual" link if the requester's message text can be
-      mapped to an Individual ID (best-effort regex on `I\d+` or a
-      Sidebar-style search field is overkill — implementer's call).
-      Mark a `request_type` filter in the queue header so the Owner
-      can sort/filter by kind during triage.
-- [ ] **Sidebar:** label "Takedowns" → "Privacy requests" in
+      used; no icons. For `access` rows, an inline "Open Individual"
+      link is rendered if the requester's message contains a GEDCOM-shaped
+      `I\d+` ID. A `request_type` filter in the queue header lets the
+      Owner filter by kind during triage.
+- [x] **Sidebar:** label "Takedowns" → "Privacy requests" in
       [Sidebar.tsx](../frontend/src/components/layout/Sidebar.tsx).
-- [ ] **Public form copy — PRIVACY_ANALYSIS.md §9.8:**
+- [x] **Public form copy — PRIVACY_ANALYSIS.md §9.8:**
       replace §9.5 with a generalized version. Three short paragraphs
       naming the three options to the requester in plain language. Each
       paragraph references the relevant Art. only as a footnote-style
       parenthetical, not in the lead. Default radio = unselected (the
       form rejects submission until one is picked).
-- [ ] **Privacy policy update** ([privacy.md](privacy.md)):
-      the "Your rights" section currently only mentions removal via the
-      form. Update to name access, correction, and removal explicitly,
-      and point all three at the same form URL. Bump
-      `privacy_policy_version`. This is the *legal load-bearing* surface
-      — the GDPR Art. 12-14 transparency obligation is discharged here,
-      not in the footer label.
-- [ ] **Docs sweep:** grep for `takedown` across the whole repo and
+- [x] **Privacy policy update** ([privacy.md](privacy.md)):
+      the "Your rights" section now names access, correction, and removal
+      explicitly, all pointing at the same form URL. `privacy_policy_version`
+      bumped to `1.1`. This is the *legal load-bearing* surface — the GDPR
+      Art. 12-14 transparency obligation is discharged here, not in the
+      footer label.
+- [x] **Docs sweep:** grep for `takedown` across the whole repo and
       update prose references in:
-      [PRIVACY_DESIGN.md](PRIVACY_DESIGN.md) (this file — §2.2 needs a
-      "see §2.7 for the rename" note, status table updated),
+      [PRIVACY_DESIGN.md](PRIVACY_DESIGN.md) (this file — §2.2 carries a
+      "renamed in §2.7" note, status table updated),
       [PRIVACY_ANALYSIS.md](PRIVACY_ANALYSIS.md) (M-04, Phase 4 file
       pointers, "Who files a takedown" → "Who files a privacy request"),
       [docs/notes.txt](../notes.txt) (the "Test" section's
@@ -589,8 +601,9 @@ releases the `DROP TABLE` line can come out.
   trade-off — a stranger who guesses a relative's name is not entitled to
   the JSON, even if they correctly identify the Individual).
 - **It does not change the SLA.** All three request kinds share the
-  30-day GDPR Art. 12(3) SLA encoded in `takedown_sla_days` (config key
-  retains its historical name; see "Keep verbatim" above).
+  30-day GDPR Art. 12(3) SLA encoded in `privacy_request_sla_days` (the
+  config key was renamed at implementation time — see the SLA decision
+  paragraph above).
 - **It does not replace `privacy_contact_email`.** The contact email
   remains the documented channel for everything that does not fit the
   form (regulator inquiries, journalist questions, complex multi-subject
@@ -657,16 +670,17 @@ hygiene.
 
 ### 3.5 Admin CLI (notes.txt L208–213)
 
-A "ticket" here means a row in the `takedown_requests` table created by §2.2.
-It is not a separate ticket-tracker product. "Triage" means the operator
-reviewing rows where `status='open'` and choosing the next action (forward to
-Owner / mark resolved / escalate / hide records).
+A "ticket" here means a row in the `privacy_requests` table created by §2.2
++ §2.7. It is not a separate ticket-tracker product. "Triage" means the
+operator reviewing rows where `status='open'` and choosing the next action
+(forward to Owner / mark resolved / escalate / hide records, or for access
+requests, run the §2.6 export and forward).
 
 - [ ] CLI is the canonical admin path in Mode A. (The in-app admin endpoint
       is intentionally deferred to Mode C — see §4.9 — because in Mode A
       the operator is the only Owner and an in-app endpoint duplicates the
       Owner's own access.) Commands: list owners, manual backup trigger,
-      list and resolve open `takedown_requests` rows, force-delete an
+      list and resolve open `privacy_requests` rows, force-delete an
       Individual on Owner's behalf after the SLA expires.
 
 ### 3.6 Verify GEDCOM importer stamps `created_by`
@@ -701,19 +715,21 @@ Defer if no minors in the tree; do before going public.
 - [ ] Minors not exposed to viewer payload unless Owner explicitly opts in
       per share token.
 
-### 3.9 TreeView selection-mode prefill for takedown (M-04 convenience)
+### 3.9 TreeView selection-mode prefill for privacy requests (M-04 convenience)
 
-Convenience-only enhancement of §2.2 for the viewer requester population.
-**Does not replace** the text-only takedown form — population (b) in
-[PRIVACY_ANALYSIS.md §1](PRIVACY_ANALYSIS.md#who-files-a-takedown--two-populations)
-never reaches the UI.
+Convenience-only enhancement of §2.2/§2.7 for the viewer requester
+population. **Does not replace** the text-only privacy-request form —
+population (b) in
+[PRIVACY_ANALYSIS.md §1](PRIVACY_ANALYSIS.md#who-files-a-privacy-request--two-populations)
+never reaches the UI. Scoped to `request_type='removal'` at first; can be
+extended to access later if ever asked for.
 
 - [ ] TreeView selection mode: multi-check individuals on the tree.
-- [ ] "Send takedown request for selected" CTA navigates to
-      `/privacy/takedown` with `?owner=...&individual_ids=...`.
-- [ ] Takedown page accepts and prefills the comma-separated IDs into the
-      message field (or extends the payload to accept a list — see how it
-      shakes out at implementation time).
+- [ ] "Send privacy request for selected" CTA navigates to
+      `/privacy/request` with `?owner=...&individual_ids=...&request_type=removal`.
+- [ ] PrivacyRequestPage accepts and prefills the comma-separated IDs into
+      the message field (or extends the payload to accept a list — see how
+      it shakes out at implementation time).
 
 ---
 
@@ -762,7 +778,7 @@ and discover the obligations afterwards.
   |---|----------|----------------------------------|
   | 1 | Household exemption defensibility for friends-only mode | |
   | 2 | Owner-as-controller vs joint controllers | |
-  | 3 | Takedown SLA exact days | |
+  | 3 | Privacy-request SLA exact days | |
   | 4 | Children's age threshold | |
   | 5 | DPO required at our scale? | |
   | 6 | International transfer mechanism | |
@@ -791,12 +807,13 @@ roadmap (notes.txt L251).
 
 Right-of-erasure for an Owner who is no longer the operator. Mode-C-only:
 in Mode A and Mode B the operator is still the only Owner and deletes the
-directory by hand. Reuses the takedown infrastructure from §2.2 for the
-cascade machinery.
+directory by hand. Reuses the privacy-request infrastructure from §2.2 +
+§2.7 for the cascade machinery.
 
 - [ ] New table `erasure_log` (timestamp, owner_id, scope = `owner` /
       `individual` / `media`, target_id, requester_kind = `owner` / `subject`,
-      takedown_request_id nullable). Used by takedown and self-unregister.
+      privacy_request_id nullable). Used by removal privacy requests and
+      self-unregister.
 - [ ] `DELETE /users/me` in [backend/api/users.py](../backend/api/users.py) —
       cascades: revoke all share tokens, delete contributors, drop owner's
       `data.sqlite` and media folder, write erasure_log row, clear cookies.
@@ -905,17 +922,17 @@ flow where money or donor PII passes through NovoTree's server or DB.
       retention, receipt/invoice obligations, charity-vs-gift framing in your
       jurisdiction.
 
-### 4.9 Admin takedown triage endpoint and UI (M-04 extension) — Mode C only
+### 4.9 Admin privacy-request triage endpoint and UI (M-04 extension) — Mode C only
 
 In Mode A and Mode B the operator is the only Owner, and an admin endpoint
-for takedowns duplicates the Owner's own access (you can already see your
-own takedowns by reading the notification email, and you triage by editing
-your own data). Once multiple Owners exist on the server, the operator
-needs a way to act over the head of a non-responsive Owner — that is what
-this endpoint is for.
+for privacy requests duplicates the Owner's own access (you can already see
+your own requests by reading the notification email, and you triage by
+editing your own data). Once multiple Owners exist on the server, the
+operator needs a way to act over the head of a non-responsive Owner —
+that is what this endpoint is for.
 
-- [ ] `GET /admin/takedown?status=open` to list rows.
-- [ ] `PATCH /admin/takedown/{id}` accepting
+- [ ] `GET /admin/privacy-requests?status=open` to list rows across all Owners.
+- [ ] `PATCH /admin/privacy-requests/{id}` accepting
       `{status: "acknowledged"|"resolved"|"escalated"}`, stamping
       `resolved_at` for terminal transitions.
 - [ ] Auth gate: a real admin role (not "owner whose email matches
@@ -950,7 +967,7 @@ job of this admin UI.
 - **Live reload.** Re-read settings on every request, or signal workers to
   reload on change? Either way: `PrivacySettings` stops being frozen.
 - **Auto-version-bumping.** Changing legally-relevant fields
-  (`takedown_sla_days`, `controller_name`, `child_age_threshold_years`)
+  (`privacy_request_sla_days`, `controller_name`, `child_age_threshold_years`)
   must auto-bump the matching `*_version` string and re-prompt users for
   acceptance. Today the versions are operator-edited; making them auto-bump
   on UI change means encoding the legal-relevance map somewhere.
@@ -1040,11 +1057,12 @@ class PrivacySettings:
 
     # --- SLA = Service Level Agreement; thresholds ---
 
-    # SLA in days for a "remove me" (takedown) request from a data subject.
-    # After this many days, admin auto-escalates and hides records on the
-    # Owner's behalf. GDPR Art. 12(3) says "without undue delay, and in any
-    # event within one month" — 30 days is the safe default.
-    takedown_sla_days: int = 30
+    # SLA in days for a public privacy request (removal, access, or
+    # correction) from a data subject. After this many days, admin
+    # auto-escalates and (for removal) hides records on the Owner's behalf.
+    # GDPR Art. 12(3) says "without undue delay, and in any event within
+    # one month" — 30 days is the safe default.
+    privacy_request_sla_days: int = 30
 
     # Age below which an Individual is treated as a minor and gets extra
     # protection (parental-consent gate on photo upload and share-link
@@ -1056,7 +1074,7 @@ class PrivacySettings:
 
     # How long backups of owner data.sqlite files are kept before deletion.
     # Bounds the window in which a deleted record can resurface from backup.
-    # Must be >= takedown_sla_days so erasure can propagate.
+    # Must be >= privacy_request_sla_days so erasure can propagate.
     backup_retention_days: int = 30
 
     # Web-server access logs (URL, status, IP). Short window — debugging and
@@ -1067,10 +1085,10 @@ class PrivacySettings:
     # bugs only show up after a user reports them.
     error_log_retention_days: int = 30
 
-    # How long we keep a takedown ticket (name + email + complaint text)
+    # How long we keep a privacy-request ticket (name + email + message text)
     # after it has been resolved. Long enough to prove we responded if a
     # regulator asks; short enough that we are not hoarding PII.
-    takedown_request_retention_months: int = 12
+    privacy_request_retention_months: int = 12
 
     # --- legal-document versioning ---
     # When any of these strings change, users are re-prompted to accept on
@@ -1083,12 +1101,12 @@ class PrivacySettings:
 
     # "Data controller" is the GDPR Art. 4(7) term for the legal entity
     # responsible for deciding why and how personal data is processed. This
-    # name appears in the privacy policy and in takedown responses.
+    # name appears in the privacy policy and in privacy-request responses.
     # Do not confuse with the internal "admin" role.
     controller_name: str = "NovoTree (operator: Igor Novoseltsev)"
 
-    # Where data subjects email privacy questions and takedown follow-ups.
-    # Must be a monitored mailbox.
+    # Where data subjects email privacy questions and privacy-request
+    # follow-ups. Must be a monitored mailbox.
     privacy_contact_email: str = "aktiniya@gmail.com"
 
     # DPO = Data Protection Officer (GDPR Art. 37). MANDATORY only if we do
@@ -1123,7 +1141,7 @@ class PrivacySettings:
 | Reader | Purpose |
 |---|---|
 | `backend/api/auth.py` | Signup gate (allow_*_signup, owner_signup_requires_approval), ToS version comparison |
-| `backend/api/privacy.py` (new in Tier 1) | Takedown SLA timer, retention windows |
+| `backend/api/privacy_requests.py` (Tier 1 §2.2 + §2.7) | Privacy-request SLA timer, retention windows |
 | `backend/api/users.py` | Self-unregister flow |
 | Frontend via `GET /privacy/config` | Banner copy, age threshold display, retention text |
 
@@ -1170,7 +1188,7 @@ the obligation gates the launch of that mode.
 | §4.7 Hetzner DPA + Cloudflare DPA | Required | Required |
 | §4.8 Donate button — link-out (GitHub Sponsors / Ko-fi) | Allowed (mode-agnostic; same as Mode A and the local app) | Allowed |
 | §4.8 Donate button — embedded payment (Stripe / PayPal) | Not allowed | Optional (adds sub-processor + may force consent-style cookie banner) |
-| §4.9 Admin takedown triage endpoint + UI | Not required (operator IS the admin) | Required (multiple Owners; operator must act over Owner's head) |
+| §4.9 Admin privacy-request triage endpoint + UI | Not required (operator IS the admin) | Required (multiple Owners; operator must act over Owner's head) |
 | §4.10 Admin UI for `PrivacySettings` | Not required (env file + `systemctl restart` is fine) | Required (live toggle of signup flags / contact emails without restart) |
 | `allow_owner_signup` flag | `False` | `True` |
 | `owner_signup_requires_approval` flag | (n/a) | `True` (gated) or `False` (open) |
@@ -1201,7 +1219,7 @@ session.
 |---|----------|-------------------|----------|
 | 1 | Household exemption defensibility for friends-only mode | Treat any share link as non-household (CJEU *Lindqvist*). All Tier 1 mitigations apply once a share is created. | ToS text + per-share ack |
 | 2 | Owner-as-controller vs joint controllers | Frame Owner as controller, NovoTree as processor in ToS. | ToS, privacy policy |
-| 3 | Takedown SLA exact days | `takedown_sla_days = 30` | Config |
+| 3 | Privacy-request SLA exact days | `privacy_request_sla_days = 30` | Config |
 | 4 | Children's age threshold | `child_age_threshold_years = 16` (most conservative) | Config |
 | 5 | DPO required at our scale? | `dpo_email = None`. Field exists for future fill-in without code change. | Config |
 | 6 | International transfer mechanism | `hosting_region = "EEA"` to keep this question moot. Cloudflare disclosed under DPF. | Config + privacy policy |

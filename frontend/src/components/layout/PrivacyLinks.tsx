@@ -9,9 +9,12 @@ import { DonateLink } from '../common/DonateButton';
  * fullscreen overlay).
  *
  * Order is "Remove Me" first — the more important affordance for a viewer who
- * recognized themselves on a forwarded share link. "Our Privacy" is the
- * supporting context. In Mode A only, a small pink "Donate" link follows,
- * styled to match the privacy peers so it does not dominate them
+ * recognized themselves on a forwarded share link. The label is intentionally
+ * preserved verbatim from §2.2: it advertises one of three rights (removal,
+ * access, correction) but the brand recognition matters more than the
+ * comprehensiveness — the form itself names all three options. "Our Privacy"
+ * is the supporting context. In Mode A only, a small pink "Donate" link
+ * follows, styled to match the privacy peers so it does not dominate them
  * (docs/legal/PRIVACY_DESIGN.md §4.8 Pattern A). Modes B and C deliberately
  * omit Donate — placement there requires the §4.1 lawyer review first.
  *
@@ -19,15 +22,15 @@ import { DonateLink } from '../common/DonateButton';
  * a second party to address when the user is also the controller. The local
  * app shows DonateButton in its Header instead.
  */
-const TAKEDOWN_BASE_PATH = '/privacy/takedown';
+const PRIVACY_REQUEST_BASE_PATH = '/privacy/request';
 const PRIVACY_POLICY_PATH = '/legal/privacy';
 const SHARE_OWNER_STORAGE_KEY = 'share_owner_id';
 
-export function takedownHref(): string {
+export function privacyRequestHref(): string {
   const shareOwnerId = sessionStorage.getItem(SHARE_OWNER_STORAGE_KEY);
   return shareOwnerId
-    ? `${TAKEDOWN_BASE_PATH}?owner=${encodeURIComponent(shareOwnerId)}`
-    : TAKEDOWN_BASE_PATH;
+    ? `${PRIVACY_REQUEST_BASE_PATH}?owner=${encodeURIComponent(shareOwnerId)}`
+    : PRIVACY_REQUEST_BASE_PATH;
 }
 
 interface PrivacyLinksProps {
@@ -42,7 +45,7 @@ export function PrivacyLinks({ className = '' }: PrivacyLinksProps) {
   return (
     <span className={`inline-flex items-center gap-3 ${className}`}>
       <Link
-        to={takedownHref()}
+        to={privacyRequestHref()}
         className="text-emerald-700 hover:text-emerald-800 underline"
       >
         Remove Me

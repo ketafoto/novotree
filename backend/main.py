@@ -26,7 +26,7 @@ from backend.api import individuals, families, events, media, header, auth, type
 from backend.api import users as users_api
 from backend.api import local as local_api
 from backend.api import privacy as privacy_api
-from backend.api import takedown as takedown_api
+from backend.api import privacy_requests as privacy_requests_api
 from backend.api._client_ip import get_client_ip
 from backend.api.auth import DEFAULT_OWNER_ID, _ALGORITHM
 from backend.config import settings
@@ -74,17 +74,17 @@ async def lifespan(app: FastAPI):
             logger.error(f"Dev mode database initialization failed: {e}")
             raise
 
-    # Takedown SLA sweeper — in-process reminder/escalation loop. Only meaningful
-    # when the public takedown endpoint is exposed (i.e. not the local desktop app).
-    # The standalone scheduled-jobs backstop covers the case where this process is
-    # not running; see tools/ops/scheduled_jobs/.
+    # Privacy-request SLA sweeper — in-process reminder/escalation loop. Only
+    # meaningful when the public privacy-request endpoint is exposed (i.e. not
+    # the local desktop app). The standalone scheduled-jobs backstop covers
+    # the case where this process is not running; see tools/ops/scheduled_jobs/.
     if not settings.is_local:
-        takedown_api.start_in_process_sweeper()
+        privacy_requests_api.start_in_process_sweeper()
 
     yield
 
     if not settings.is_local:
-        await takedown_api.stop_in_process_sweeper()
+        await privacy_requests_api.stop_in_process_sweeper()
     db.reset_engine()
 
 
@@ -125,8 +125,8 @@ AUTH_ONLY_PATHS = {
     "/auth/contributor-signup", "/auth/verify-contributor-email", "/auth/resend-contributor-verification",
     "/privacy/config",
     "/privacy/policy",
-    "/privacy/takedown",
-    "/takedown",
+    "/privacy/request",
+    "/privacy/requests",
     "/health",
 }
 _request_windows: dict[str, deque[float]] = defaultdict(deque)
@@ -281,12 +281,12 @@ app.include_router(tree.full_tree_router)
 app.include_router(local_api.router)
 app.include_router(privacy_api.router)
 if not settings.is_local:
-    # Takedown endpoints are only meaningful in network-reachable deployments.
-    # In the local desktop app the user is also the controller — there is no
-    # second party to file a takedown against, and the Owner's "queue" is empty
-    # by definition.
-    app.include_router(takedown_api.public_router)   # POST /privacy/takedown
-    app.include_router(takedown_api.owner_router)    # GET/PATCH/DELETE /takedown
+    # Privacy-request endpoints are only meaningful in network-reachable
+    # deployments. In the local desktop app the user is also the controller —
+    # there is no second party to file a privacy request against, and the
+    # Owner's "queue" is empty by definition.
+    app.include_router(privacy_requests_api.public_router)   # POST /privacy/request
+    app.include_router(privacy_requests_api.owner_router)    # GET/PATCH/DELETE /privacy/requests
 
 
 # ---------------------------------------------------------------------------

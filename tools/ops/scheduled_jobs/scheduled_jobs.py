@@ -3,7 +3,7 @@
 Backstop runner for scheduled in-backend jobs.
 
 The NovoTree backend runs a few periodic activities in-process (currently:
-the privacy takedown SLA sweep). When the backend is down — planned
+the privacy-request SLA sweep). When the backend is down — planned
 maintenance or unplanned outage — those activities stall.
 
 This script is the safety net. It is invoked periodically by systemd
@@ -35,9 +35,9 @@ import urllib.error
 import urllib.request
 
 # Each job is a callable taking no arguments. Add new jobs here.
-from tools.ops.scheduled_jobs.jobs import takedown_requests_monitor
+from tools.ops.scheduled_jobs.jobs import privacy_requests_monitor
 
-JOBS = [takedown_requests_monitor]
+JOBS = [privacy_requests_monitor]
 
 HEALTH_URL = "http://127.0.0.1:8000/health"
 HEALTH_TIMEOUT_SECONDS = 5

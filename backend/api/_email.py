@@ -1,8 +1,8 @@
 """
 Plain-text SMTP email helper. Used by:
 
-- backend.api.auth         — owner / contributor email verification
-- backend.api.privacy      — takedown notifications, reminders, escalations
+- backend.api.auth             — owner / contributor email verification
+- backend.api.privacy_requests — privacy-request notifications, reminders, escalations
 
 Degrades gracefully: returns False (does not raise) when SMTP is not configured
 or delivery fails, so caller code never has to guard SMTP availability around

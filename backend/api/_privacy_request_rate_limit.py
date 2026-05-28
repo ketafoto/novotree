@@ -1,10 +1,10 @@
 """
-Per-IP rate limiter for the public POST /privacy/takedown endpoint.
+Per-IP rate limiter for the public POST /privacy/request endpoint.
 
 The global limiter in backend/main.py is 60s-windowed and tuned for normal
-traffic. Takedown submissions need a much narrower window (5 per hour per IP)
-to bound abuse of a public, unauthenticated endpoint without blocking
-legitimate retries.
+traffic. Privacy-request submissions need a much narrower window
+(5 per hour per IP) to bound abuse of a public, unauthenticated endpoint
+without blocking legitimate retries.
 
 In-memory state — process-local, resets on restart. Acceptable because the
 endpoint itself is low-volume and abuse beyond restart cadence is bounded
@@ -27,7 +27,7 @@ def _trim_window(window: deque[float], now: float) -> None:
         window.popleft()
 
 
-def check_takedown_rate(client_ip: str) -> bool:
+def check_privacy_request_rate(client_ip: str) -> bool:
     """
     Return True if the request is within the per-IP quota and record it.
     Return False if the IP has exceeded 5 submissions in the last hour.

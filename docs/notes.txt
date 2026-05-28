@@ -193,7 +193,7 @@ Both - Front-back-end tests:
 logs
     journalctl -u novotree.service -f   /  --since '1 minute ago'  - log of backend
     journalctl -u novotree-backend-monitor.service -n 50           - log of scheduled_jobs.py run by dedicated timer daemon
-                                                                     scheduled_jobs.py takes a care of takedown requests when backend is down
+                                                                     scheduled_jobs.py takes a care of privacy requests when backend is down
                                        systemctl list-timers --all - to see novotree-backend-monitor timer
 
     sudo crontab -u novospace -l                                   - to check if cron job is installed
@@ -276,8 +276,8 @@ Next Phase
 
 Test
 -----------------
-1. Takedown - deploy on VM share link, send takedown request
+1. Privacy request - deploy on VM share link, send a privacy request (try each kind: removal, access, correction)
    a. Ensure mail is received
-   b. Check UI - takeaway requests
+   b. Check UI - privacy-requests queue (filter by kind; for access rows verify the "Open Individual" inline link)
    c. Set SLA to 1 minute and ensure mails is received
    d. Set retention to 3 minutes - ensure escalated to admin

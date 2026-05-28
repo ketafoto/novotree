@@ -1,8 +1,10 @@
 import apiClient from './client';
 
+import type { PrivacyRequestType } from './privacy_requests';
+
 /**
  * Public subset of backend PrivacySettings.
- * See docs/PRIVACY_DESIGN.md §2.1 + §6.
+ * See docs/legal/PRIVACY_DESIGN.md §2.1 + §6.
  */
 export interface PrivacyConfig {
   deployment_mode: 'A' | 'B' | 'C';
@@ -10,13 +12,13 @@ export interface PrivacyConfig {
   owner_signup_requires_approval: boolean;
   allow_contributor_signup: boolean;
 
-  takedown_sla_days: number;
+  privacy_request_sla_days: number;
   child_age_threshold_years: number;
 
   backup_retention_days: number;
   access_log_retention_days: number;
   error_log_retention_days: number;
-  takedown_request_retention_months: number;
+  privacy_request_retention_months: number;
 
   tos_version: string;
   privacy_policy_version: string;
@@ -29,7 +31,7 @@ export interface PrivacyConfig {
   analytics_enabled: boolean;
 
   /**
-   * TEST-ONLY. When true, the Owner's takedown queue page renders
+   * TEST-ONLY. When true, the Owner's privacy-requests queue page renders
    * timestamp-override inputs so the SLA reminder / escalation /
    * retention sweep paths can be exercised on a test VM without
    * waiting 30 days. Must remain false in production — see
@@ -38,16 +40,17 @@ export interface PrivacyConfig {
   test_allow_timestamp_override: boolean;
 }
 
-export interface TakedownRequestPayload {
+export interface PrivacyRequestPayload {
   tree_owner_id: string;
   individual_id?: string;
+  request_type: PrivacyRequestType;
   requester_name: string;
   requester_email: string;
   requester_phone?: string;
   message: string;
 }
 
-export interface TakedownRequestAck {
+export interface PrivacyRequestAck {
   ok: boolean;
   id: number;
 }
@@ -62,8 +65,8 @@ export const privacyApi = {
     const res = await apiClient.get<PrivacyConfig>('/privacy/config');
     return res.data;
   },
-  submitTakedown: async (payload: TakedownRequestPayload): Promise<TakedownRequestAck> => {
-    const res = await apiClient.post<TakedownRequestAck>('/privacy/takedown', payload);
+  submitPrivacyRequest: async (payload: PrivacyRequestPayload): Promise<PrivacyRequestAck> => {
+    const res = await apiClient.post<PrivacyRequestAck>('/privacy/request', payload);
     return res.data;
   },
   getPolicy: async (): Promise<PrivacyPolicy> => {

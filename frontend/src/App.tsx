@@ -20,12 +20,12 @@ import { VerifyOwnerEmailPage } from './pages/auth/VerifyEmailPage';
 import { VerifyContributorEmailPage } from './pages/auth/VerifyContributorEmailPage';
 
 // Legal / privacy pages — kept eager: public routes with no heavy dependencies
-import { TakedownPage } from './pages/legal/TakedownPage';
+import { PrivacyRequestPage } from './pages/legal/PrivacyRequestPage';
 import { PrivacyPage } from './pages/legal/PrivacyPage';
 
 // Lazy-load all authenticated pages to keep the initial bundle small
-const TakedownsPage = lazy(() =>
-  import('./pages/legal/TakedownsPage').then((m) => ({ default: m.TakedownsPage }))
+const PrivacyRequestsPage = lazy(() =>
+  import('./pages/legal/PrivacyRequestsPage').then((m) => ({ default: m.PrivacyRequestsPage }))
 );
 const DashboardPage = lazy(() =>
   import('./pages/dashboard/DashboardPage').then((m) => ({ default: m.DashboardPage }))
@@ -133,7 +133,7 @@ function App() {
             <Route path="/verify-contributor-email" element={<VerifyContributorEmailPage />} />
 
             {/* ── Public privacy pages (no auth, no Layout) ── */}
-            <Route path="/privacy/takedown" element={<TakedownPage />} />
+            <Route path="/privacy/request" element={<PrivacyRequestPage />} />
             <Route path="/legal/privacy" element={<PrivacyPage />} />
 
             {/* ── Viewer-accessible tree routes (share token or authenticated) ── */}
@@ -205,12 +205,12 @@ function App() {
                 }
               />
 
-              {/* Privacy — Owner-only takedown triage queue */}
+              {/* Privacy — Owner-only privacy-requests triage queue */}
               <Route
-                path="privacy/takedowns"
+                path="legal/privacy-requests"
                 element={
                   <ProtectedRoute minRole="owner">
-                    <TakedownsPage />
+                    <PrivacyRequestsPage />
                   </ProtectedRoute>
                 }
               />

@@ -205,9 +205,10 @@ class PrivacySettings:
 
     # --- SLA thresholds ---
 
-    # SLA in days for a "remove me" (takedown) request from a data subject.
+    # SLA in days for a public privacy request from a data subject (removal,
+    # access, or correction — see PRIVACY_DESIGN.md §2.7).
     # GDPR Art. 12(3): "without undue delay, and in any event within one month".
-    takedown_sla_days: int
+    privacy_request_sla_days: int
 
     # Age below which an Individual is treated as a minor (parental-consent
     # gate on photo upload and share-link exposure). GDPR Art. 8 allows
@@ -216,7 +217,7 @@ class PrivacySettings:
 
     # --- retention windows ---
     # Bounds the window in which a deleted record can resurface from backup.
-    # Must be >= takedown_sla_days so erasure can propagate.
+    # Must be >= privacy_request_sla_days so erasure can propagate.
     backup_retention_days: int
 
     # Web-server access logs (URL, status, IP) — debugging and abuse detection.
@@ -226,10 +227,10 @@ class PrivacySettings:
     # surface after a user reports them.
     error_log_retention_days: int
 
-    # How long we keep a takedown ticket (name + email + complaint text) after
-    # it has been resolved. Long enough to prove we responded if a regulator
-    # asks; short enough that we are not hoarding PII.
-    takedown_request_retention_months: int
+    # How long we keep a privacy-request ticket (name + email + message text)
+    # after it has been resolved. Long enough to prove we responded if a
+    # regulator asks; short enough that we are not hoarding PII.
+    privacy_request_retention_months: int
 
     # --- legal-document versioning ---
     # When any of these strings change, users are re-prompted to accept on
@@ -242,10 +243,10 @@ class PrivacySettings:
 
     # GDPR Art. 4(7) "data controller" — the legal entity deciding why and
     # how personal data is processed. Appears in the privacy policy and in
-    # takedown responses. Not to be confused with the internal "admin" role.
+    # privacy-request responses. Not to be confused with the internal "admin" role.
     controller_name: str
 
-    # Where data subjects email privacy questions and takedown follow-ups.
+    # Where data subjects email privacy questions and privacy-request follow-ups.
     # Must be a monitored mailbox.
     privacy_contact_email: str
 
@@ -267,8 +268,8 @@ class PrivacySettings:
 
     # --- TEST-ONLY: do NOT enable in production ---
     # When True, Owners can edit `created_at` / `resolved_at` on their own
-    # takedown rows from the queue UI. This exists so the SLA reminder /
-    # escalation / retention sweep paths can be exercised on a test VM
+    # privacy-request rows from the queue UI. This exists so the SLA reminder
+    # / escalation / retention sweep paths can be exercised on a test VM
     # without waiting 30 days for each transition. In production this is
     # a data-integrity risk (an Owner could defeat the SLA by resetting
     # `created_at`), so the default is False and the flag is logged loudly
@@ -297,16 +298,16 @@ def load_privacy_settings() -> PrivacySettings:
         allow_contributor_signup=_as_bool(
             os.getenv("ALLOW_CONTRIBUTOR_SIGNUP"), default=default_allow_contributor
         ),
-        takedown_sla_days=_as_int(os.getenv("TAKEDOWN_SLA_DAYS"), 30, minimum=1),
+        privacy_request_sla_days=_as_int(os.getenv("PRIVACY_REQUEST_SLA_DAYS"), 30, minimum=1),
         child_age_threshold_years=_as_int(os.getenv("CHILD_AGE_THRESHOLD_YEARS"), 16, minimum=13),
         backup_retention_days=_as_int(os.getenv("BACKUP_RETENTION_DAYS"), 30, minimum=1),
         access_log_retention_days=_as_int(os.getenv("ACCESS_LOG_RETENTION_DAYS"), 14, minimum=1),
         error_log_retention_days=_as_int(os.getenv("ERROR_LOG_RETENTION_DAYS"), 30, minimum=1),
-        takedown_request_retention_months=_as_int(
-            os.getenv("TAKEDOWN_REQUEST_RETENTION_MONTHS"), 12, minimum=1
+        privacy_request_retention_months=_as_int(
+            os.getenv("PRIVACY_REQUEST_RETENTION_MONTHS"), 12, minimum=1
         ),
         tos_version=os.getenv("TOS_VERSION", "1.0"),
-        privacy_policy_version=os.getenv("PRIVACY_POLICY_VERSION", "1.0"),
+        privacy_policy_version=os.getenv("PRIVACY_POLICY_VERSION", "1.1"),
         cookie_notice_version=os.getenv("COOKIE_NOTICE_VERSION", "1.0"),
         controller_name=os.getenv(
             "CONTROLLER_NAME", "NovoTree (operator: Igor Novoseltsev)"
@@ -325,7 +326,7 @@ privacy_settings = load_privacy_settings()
 
 if privacy_settings.test_allow_timestamp_override:
     logging.getLogger("novotree.backend").warning(
-        "PRIVACY_ALLOW_TIMESTAMP_OVERRIDE is ON — Owners can edit takedown "
-        "timestamps from the UI. This is a TEST-ONLY flag and must NOT be "
-        "set in production."
+        "PRIVACY_ALLOW_TIMESTAMP_OVERRIDE is ON — Owners can edit privacy-"
+        "request timestamps from the UI. This is a TEST-ONLY flag and must "
+        "NOT be set in production."
     )

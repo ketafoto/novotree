@@ -31,33 +31,36 @@ We address it with a layered model:
    of what they upload. NovoTree is the processor.
 2. **Tiered visibility** — private by default; widening the audience requires an
    explicit acknowledgement each time.
-3. **Subject-initiated takedown** — anyone who appears in any tree can request
-   removal via a public, low-friction flow.
+3. **Subject-initiated privacy requests** — anyone who appears in any tree can
+   request removal, access, or correction of their data via a public,
+   low-friction flow.
 4. **Local-first / private mode** — for users who want full control, the database
    stays on their machine and never reaches our server. This sidesteps controller
    liability for that mode entirely.
 5. **Necessary-only cookies** — we use only authentication cookies. Notice required;
    opt-in consent banner is **not** required.
 
-### Who files a takedown — two populations
+### Who files a privacy request — two populations
 
-The takedown flow (M-04, §2.2 in [PRIVACY_DESIGN.md](PRIVACY_DESIGN.md)) must
-serve two distinct requester populations:
+The privacy-request flow (M-04, §2.2 + §2.7 in
+[PRIVACY_DESIGN.md](PRIVACY_DESIGN.md)) must serve two distinct requester
+populations:
 
 - **(a) Viewer-as-requester.** A relative or acquaintance who opened a share
-  link, recognized themselves on the tree, and wants to be removed. They
-  have seen NovoTree's UI; in principle they could navigate it.
+  link, recognized themselves on the tree, and wants to be removed (or to
+  ask what is held about them, or to correct an error). They have seen
+  NovoTree's UI; in principle they could navigate it.
 - **(b) Off-platform requester.** Someone who has never visited NovoTree but
   heard about the tree via word-of-mouth, a forwarded screenshot, a search
   engine snippet, or a printed PDF a relative gave them. They may not even
   know what NovoTree looks like.
 
-Both populations are equally entitled to file under GDPR Art. 17. The
-implication for design: the takedown form must be **text-only and reachable
-from a single URL**. UI-driven identification (e.g. selecting individuals
-inside the TreeView) cannot be the primary path, because population (b)
-will never reach the UI. UI-assisted prefill for population (a) is a
-convenience feature, not a substitute. See M-04 for the resulting
+Both populations are equally entitled to file under GDPR Art. 15–17. The
+implication for design: the privacy-request form must be **text-only and
+reachable from a single URL**. UI-driven identification (e.g. selecting
+individuals inside the TreeView) cannot be the primary path, because
+population (b) will never reach the UI. UI-assisted prefill for population
+(a) is a convenience feature, not a substitute. See M-04 for the resulting
 constraints on the form.
 
 ---
@@ -197,12 +200,16 @@ its scope, or extends expiry), show a modal:
 
 Log the click with timestamp + IP into the auth DB.
 
-### M-04 — Public takedown / "this is me, remove me" flow (covers C-01, C-05, C-08, C-09)
+### M-04 — Public privacy-request flow (covers C-01, C-05, C-08, C-09)
 
-Every shared view exposes a small, persistent "Privacy / remove me" link. It opens
-a public form: name, email, optional phone, free-text description. Backend creates
-a takedown ticket, emails the Owner with a 30-day SLA, and copies the admin (you).
-If the Owner does not respond, admin can hide the records.
+Every shared view exposes a small, persistent "Remove Me" link. It opens a
+public form (renamed from "takedown" to "privacy request" in §2.7) with
+three options: **removal**, **access** (send me a copy), or **correction**.
+The form captures name, email, optional phone, request kind, and a
+free-text description. Backend creates a privacy-request ticket, emails the
+Owner with a 30-day SLA, and copies the admin (you). If the Owner does not
+respond, admin can act on their behalf — for removal, this means hiding
+the records.
 
 This single flow addresses three of the highest-risk concerns at once and is the
 strongest piece of evidence of "good faith effort" if a complaint reaches a
@@ -212,10 +219,10 @@ regulator.
 identifies two requester populations: (a) viewers who saw the tree, and (b)
 off-platform people who never did. Because population (b) cannot use any
 UI-driven identification flow (they have not opened the share link, may not
-even have one), the takedown form must work entirely from typed input. A
-TreeView selection mode that prefills the form is a fine convenience for
-population (a) but is **never** the only path. The form is the source of
-truth.
+even have one), the privacy-request form must work entirely from typed
+input. A TreeView selection mode that prefills the form is a fine
+convenience for population (a) but is **never** the only path. The form is
+the source of truth.
 
 **Verification is not the form's job.** Per GDPR Art. 12(6), the controller
 (Owner) may request additional information to confirm the requester's
@@ -251,7 +258,7 @@ null:
 
 When an Owner adds a living individual and provides an email for them, offer a
 one-click "let them know they were added" — sends a polite email with a link to
-view their entry and a one-click takedown button.
+view their entry and a one-click "Remove Me" button.
 
 Optional, not mandatory at create time (would discourage tree-building); but
 **mandatory** before that individual's entry can be exposed to a public share token.
@@ -440,16 +447,16 @@ likely to change so it can be picked up and coded directly.
 | 3.2 | "Create share link" button shows acknowledgement modal with text from §9.4. Click logged with timestamp + IP. | [frontend/src/pages/settings/](frontend/src/pages/settings/), [backend/api/auth.py](backend/api/auth.py) |
 | 3.3 | New table `auth_share_consents` (`editor_id`, `tree_id`, `share_token_id`, `accepted_at`, `accepted_ip`, `tos_version`). | [database/system_models.py](database/system_models.py) |
 
-### Phase 4 — Public takedown / "remove me" flow (M-04)
+### Phase 4 — Public privacy-request flow (M-04, §2.7)
 
 | # | Task | Files |
 |---|------|-------|
-| 4.1 | New table `takedown_requests` (id, tree_id, individual_id?, name, email, message, status, created_at, resolved_at). | [database/system_models.py](database/system_models.py) |
-| 4.2 | Public endpoint `POST /privacy/takedown` (rate-limited, no auth). | [backend/api/privacy.py](backend/api/privacy.py) (new) |
-| 4.3 | Admin endpoint `GET/PATCH /admin/takedown` to triage. | [backend/api/admin.py](backend/api/admin.py) (new or extend) |
-| 4.4 | Email Owner on new takedown; reminder at day 14; admin escalation at day 30. | [backend/email.py](backend/email.py) |
-| 4.5 | "Privacy / remove me" link in viewer footer. | [frontend/src/components/Layout.tsx](frontend/src/components/Layout.tsx) |
-| 4.6 | Public takedown form page. | [frontend/src/pages/legal/TakedownPage.tsx](frontend/src/pages/legal/TakedownPage.tsx) (new) |
+| 4.1 | Table `privacy_requests` (id, tree_owner_id, individual_id?, request_type, name, email, message, status, created_at, resolved_at). | [database/system_models.py](database/system_models.py) |
+| 4.2 | Public endpoint `POST /privacy/request` (rate-limited, no auth). | [backend/api/privacy_requests.py](backend/api/privacy_requests.py) |
+| 4.3 | Owner triage endpoints `GET/PATCH/DELETE /privacy/requests/*`. | [backend/api/privacy_requests.py](backend/api/privacy_requests.py) |
+| 4.4 | Email Owner on new request; reminder at day 14; admin escalation at day 30. | [backend/api/_privacy_request_sweep.py](backend/api/_privacy_request_sweep.py) + [backend/api/_email.py](backend/api/_email.py) |
+| 4.5 | "Remove Me / Our Privacy" link in viewer footer. | [frontend/src/components/layout/PrivacyLinks.tsx](frontend/src/components/layout/PrivacyLinks.tsx) |
+| 4.6 | Public privacy-request form page (three options: removal / access / correction). | [frontend/src/pages/legal/PrivacyRequestPage.tsx](frontend/src/pages/legal/PrivacyRequestPage.tsx) |
 
 ### Phase 5 — Contributor & viewer acknowledgements (M-15, M-16)
 
@@ -478,7 +485,7 @@ likely to change so it can be picked up and coded directly.
 | # | Task | Files |
 |---|------|-------|
 | 8.1 | `vm-backup.py` rotates: keep 30 daily; delete older. | external `vm-backup.py` (in [novospace.git/scripts/deployment/](../../novospace.git/scripts/deployment/)) |
-| 8.2 | New `erasure_log` table. Every delete via takedown writes a row. | [database/models.py](database/models.py) |
+| 8.2 | New `erasure_log` table. Every delete in response to a removal privacy request writes a row. | [database/models.py](database/models.py) |
 | 8.3 | Document the 30-day backup window in the privacy policy. | [docs/PRIVACY_ANALYSIS.md](docs/PRIVACY_ANALYSIS.md), the rendered policy |
 
 ### Phase 9 — Local-first / desktop mode (M-08; large; corresponds to notes.txt line 248)
@@ -584,22 +591,47 @@ Plain-language form is intentional — easier to read and harder to dispute.
 >
 > [Cancel]   [Create share link]
 
-### 9.5 Public Takedown Form (no auth required)
+### 9.5 Public Privacy-Request Form (no auth required)
 
-> **Privacy — remove me from a tree**
+This is the canonical copy for the three-option intake form introduced in
+[PRIVACY_DESIGN.md §2.7](PRIVACY_DESIGN.md). The frontend
+([PrivacyRequestPage.tsx](../../frontend/src/pages/legal/PrivacyRequestPage.tsx))
+sources its strings from this section — keep them in sync.
+
+> **Privacy request — remove, access, or correct your data**
 >
-> If your information appears on NovoTree and you want it removed, fill in the
-> form below. We will forward your request to the Tree Owner; if they do not
-> respond within 30 days, NovoTree will hide the records on your behalf.
+> Use this form to ask the owner of this family tree to remove, send you a
+> copy of, or correct information they hold about you. Pick one and describe
+> your request below. We will email the owner; you should hear back within
+> 30 days.
 >
+> **What would you like the tree owner to do?** *(required — pick one; no default)*
+>
+> - ○ Remove my data from this family tree. *(GDPR Art. 17)*
+> - ○ Send me a copy of the data this tree holds about me. *(GDPR Art. 15)*
+> - ○ Correct something this tree gets wrong about me. *(GDPR Art. 16)*
+>
+> - Tree owner (username) or tree URL: _______________________________________
 > - Your name (as it appears on the tree, if you know): _______________________
 > - Your email (so we can confirm receipt): __________________________________
-> - Tree URL or owner name (if known): _______________________________________
-> - Brief description of what to remove: _____________________________________
+> - Your phone (optional): ___________________________________________________
+> - Individual ID (optional, if you know it): ________________________________
+> - Describe your request: ___________________________________________________
 >
 > [Submit]
 >
 > *We will store this request only as long as needed to act on it (max 12 months).*
+
+**Notes on copy.**
+
+- GDPR article references are parenthetical, not in the lead — plain language
+  first, legal citation second. The legal text lives in
+  [privacy.md](privacy.md) §9 "Your rights".
+- No pre-selected radio. The form rejects submission until one option is
+  picked; this matches the backend Pydantic schema, which requires
+  `request_type` with no default.
+- Page title and intro paragraph stay identical to the JSX. Changing either
+  side without updating the other will produce a confusing mismatch.
 
 ### 9.6 Cookie Notice Banner (first visit)
 
@@ -627,8 +659,9 @@ The privacy policy lives at `/legal/privacy` and covers:
 8. **How long we keep it** — until account deletion + 30 days for backups; logs
    14 / 30 days.
 9. **Your rights** — access, rectification, erasure, portability, complaint to
-   a supervisory authority. How to exercise them: takedown form for non-users;
-   account settings for Owners and Contributors.
+   a supervisory authority. How to exercise them: privacy-request form
+   (removal / access / correction, §9.5) for non-users; account settings for
+   Owners and Contributors.
 10. **Changes** — versioned; users re-asked to accept on change.
 
 ---
@@ -642,8 +675,8 @@ Items above explicitly flagged for the lawyer:
    *Lindqvist* suggests we should.)
 2. Is "Owner-as-controller, NovoTree-as-processor" the right framing, or are we
    joint controllers under Art. 26?
-3. Is the 30-day takedown SLA reasonable in the operating jurisdiction? Some
-   regulators expect "without undue delay" interpreted as ~ 1 month.
+3. Is the 30-day privacy-request SLA reasonable in the operating jurisdiction?
+   Some regulators expect "without undue delay" interpreted as ~ 1 month.
 4. Children's data thresholds vary (13 / 14 / 15 / 16 across EU). Pick one
    conservative threshold (16) or detect by user country.
 5. Do we need a dedicated DPO (Data Protection Officer)? Likely no for current

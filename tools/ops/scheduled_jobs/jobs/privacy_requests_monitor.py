@@ -1,20 +1,20 @@
 """
-Backstop wrapper for the takedown SLA sweep.
+Backstop wrapper for the privacy-request SLA sweep.
 
-The real sweep lives in backend.api._takedown_sweep.sweep_once — this file
-exists so the scheduled_jobs runner can dispatch to it by import. Do not
+The real sweep lives in backend.api._privacy_request_sweep.sweep_once — this
+file exists so the scheduled_jobs runner can dispatch to it by import. Do not
 duplicate sweep logic here.
 """
 
 import asyncio
 import logging
 
-from backend.api._takedown_sweep import sweep_once
+from backend.api._privacy_request_sweep import sweep_once
 from database.system_db import get_system_session, init_system_db
 
 logger = logging.getLogger("novotree.privacy")
 
-JOB_NAME = "takedown_requests_monitor"
+JOB_NAME = "privacy_requests_monitor"
 
 
 async def _run_async() -> dict[str, int]:

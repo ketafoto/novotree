@@ -114,7 +114,7 @@ If any of the above fails, see
 |---|---|
 | Auth model (Owner / Contributor / Viewer), JWT, share tokens, signup flows | [AUTH_SCHEMA_PROPOSAL.md](AUTH_SCHEMA_PROPOSAL.md) |
 | Contributor permissions, lifecycle states, email notifications, auto-cleanup | [CONTRIBUTOR_FEATURE.md](CONTRIBUTOR_FEATURE.md) |
-| Privacy concerns and mitigations (GDPR/ePrivacy posture, takedown flow, etc.) | [PRIVACY_ANALYSIS.md](PRIVACY_ANALYSIS.md) |
+| Privacy concerns and mitigations (GDPR/ePrivacy posture, privacy-request flow, etc.) | [PRIVACY_ANALYSIS.md](PRIVACY_ANALYSIS.md) |
 | Privacy implementation plan (tiered checklist, central config, status) | [PRIVACY_DESIGN.md](PRIVACY_DESIGN.md) |
 | Tree visualization design | [TREE_VISUALIZATION_DESIGN.md](TREE_VISUALIZATION_DESIGN.md) |
 | Frontend architecture | [FRONTEND_DESIGN.md](FRONTEND_DESIGN.md) |

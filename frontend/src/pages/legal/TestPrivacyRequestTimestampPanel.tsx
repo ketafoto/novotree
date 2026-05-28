@@ -1,7 +1,7 @@
 /**
- * TEST-ONLY component — shifts created_at / resolved_at on a takedown row so
- * the SLA reminder / escalation / retention sweep paths can be exercised on
- * a test VM without waiting 30 days.
+ * TEST-ONLY component — shifts created_at / resolved_at on a privacy-request
+ * row so the SLA reminder / escalation / retention sweep paths can be
+ * exercised on a test VM without waiting 30 days.
  *
  * Gated by `PrivacyConfig.test_allow_timestamp_override`. The backend rejects
  * the underlying endpoint when the flag is off, so the parent component is
@@ -16,17 +16,17 @@ import { Beaker } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import { Button } from '../../components/common/Button';
-import { takedownApi, type TakedownRow } from '../../api/takedown';
+import { privacyRequestsApi, type PrivacyRequestRow } from '../../api/privacy_requests';
 
-interface TestTakedownTimestampPanelProps {
-  row: TakedownRow;
-  onUpdated: (updated: TakedownRow) => void;
+interface TestPrivacyRequestTimestampPanelProps {
+  row: PrivacyRequestRow;
+  onUpdated: (updated: PrivacyRequestRow) => void;
 }
 
 // Presets keyed to the sweeper thresholds:
 //   - reminder fires at day 14, so -15d puts an open row past the threshold
-//   - escalation fires at day takedown_sla_days (default 30), so -31d trips it
-//   - retention deletion fires at takedown_request_retention_months (default 12),
+//   - escalation fires at day privacy_request_sla_days (default 30), so -31d trips it
+//   - retention deletion fires at privacy_request_retention_months (default 12),
 //     so -13mo on a resolved/escalated row makes it eligible for cleanup
 const test_PRESETS: ReadonlyArray<{ label: string; days: number; hint: string }> = [
   { label: '-15 days', days: -15, hint: 'past reminder threshold' },
@@ -56,7 +56,7 @@ function test_fromLocalInputValue(localValue: string): string {
   return new Date(localValue).toISOString();
 }
 
-export function TestTakedownTimestampPanel({ row, onUpdated }: TestTakedownTimestampPanelProps) {
+export function TestPrivacyRequestTimestampPanel({ row, onUpdated }: TestPrivacyRequestTimestampPanelProps) {
   const [open, setOpen] = useState(false);
   const [createdAt, setCreatedAt] = useState(test_toLocalInputValue(row.created_at));
   const [resolvedAt, setResolvedAt] = useState(
@@ -78,7 +78,7 @@ export function TestTakedownTimestampPanel({ row, onUpdated }: TestTakedownTimes
       const payload: { test_created_at?: string; test_resolved_at?: string } = {};
       if (createdAt) payload.test_created_at = test_fromLocalInputValue(createdAt);
       if (resolvedAt) payload.test_resolved_at = test_fromLocalInputValue(resolvedAt);
-      const updated = await takedownApi.test_overrideTimestamps(row.id, payload);
+      const updated = await privacyRequestsApi.test_overrideTimestamps(row.id, payload);
       onUpdated(updated);
       toast.success('Timestamps overridden (TEST)');
     } catch {

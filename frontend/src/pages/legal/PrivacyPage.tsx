@@ -12,7 +12,7 @@ import { PolicyToc } from './PolicyToc';
  * Tier 1 §2.3 of docs/PRIVACY_DESIGN.md.
  *
  * Sits outside Layout — anyone (including share-link viewers and unauthenticated
- * visitors who followed the footer link from the takedown form) can read it.
+ * visitors who followed the footer link from the privacy-request form) can read it.
  *
  * The TOC layout is currently behind a UI toggle so we can compare the two
  * shapes in production traffic before settling on one. Remove the toggle once

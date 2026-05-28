@@ -1,6 +1,6 @@
 # NovoTree Privacy Policy
 
-_Last updated: 2026-05-23 (version 1.0)_
+_Last updated: 2026-05-28 (version 1.1)_
 
 This policy explains what information NovoTree holds about you, why, and how
 to exercise your rights. It is written in plain language so a non-lawyer can
@@ -12,8 +12,9 @@ NovoTree is a small, non-commercial family-tree service operated by
 **Igor Novoseltsev** as the data controller.
 
 - **Privacy contact:** [aktiniya@gmail.com](mailto:aktiniya@gmail.com)
-- **Where to send removal requests:** the [Privacy — remove me](/privacy/takedown)
-  form. The contact email above is for follow-up questions.
+- **Where to send privacy requests** (removal, access, or correction): the
+  [Privacy request](/privacy/request) form. The contact email above is for
+  follow-up questions.
 
 There is no dedicated Data Protection Officer (GDPR Art. 37) — NovoTree does
 not operate at the scale that requires one.
@@ -42,7 +43,7 @@ if the Owner does not respond within the SLA below.
 | Tree contents | names, dates, places, relationships, photos, life events, notes | The service is a family-tree editor; this is the data you came here to record |
 | Sensitive fields | religion, ethnicity, cause of death, health-related events | Treated as GDPR Art. 9 special-category data — hidden behind a "show sensitive" toggle and excluded from share links by default |
 | Operational | server logs (URL, status, IP), error logs | Debugging and abuse detection |
-| Takedown requests | name, email, message, optional phone | To act on the request and to prove we did, if a regulator asks |
+| Privacy requests | name, email, message, optional phone, request kind (removal / access / correction) | To act on the request and to prove we did, if a regulator asks |
 
 NovoTree does **not** use analytics that set cookies, does **not** show
 advertising, and does **not** sell data to anyone.
@@ -54,7 +55,7 @@ advertising, and does **not** sell data to anyone.
 | Account data | (b) Contract — needed to provide the service |
 | Tree contents | (f) Legitimate interest, as processor acting on the Owner's instructions. The Owner bears the (a) consent / (f) legitimate-interest determination for each individual they record |
 | Operational logs | (f) Legitimate interest — running and securing the service |
-| Takedown requests | (c) Legal obligation — fulfilling rights under GDPR Art. 12–17 |
+| Privacy requests | (c) Legal obligation — fulfilling rights under GDPR Art. 12–17 |
 
 ## 5. Cookies and client-side storage
 
@@ -106,7 +107,7 @@ and do not anticipate, government data requests.
 | Backups | 30 days |
 | Web access logs | 14 days |
 | Application error logs | 30 days |
-| Resolved takedown requests | 12 months |
+| Resolved privacy requests | 12 months |
 
 Backups can briefly retain data that has been deleted from the live
 database. The 30-day window bounds how long a deleted record can resurface
@@ -127,9 +128,11 @@ an account — you have the right to:
 ### How to exercise these rights
 
 - **You are not a NovoTree account holder.** Use the
-  [Privacy — remove me](/privacy/takedown) form. We forward the request to
-  the relevant Tree Owner, who has **30 days** to respond. If they do not,
-  NovoTree will hide the records on your behalf.
+  [Privacy request](/privacy/request) form to ask the Tree Owner to **remove**,
+  **send you a copy of**, or **correct** the data they hold about you. We
+  forward the request to the relevant Tree Owner, who has **30 days** to
+  respond. If they do not, NovoTree will act on your behalf — for removal
+  requests, this means hiding the records.
 - **You are an Owner or Contributor.** Use the in-app settings, or write to
   the privacy contact above.
 
@@ -145,7 +148,7 @@ minors are not exposed via share links unless the Owner explicitly opts in
 per share link.
 
 If you believe a minor's data appears on NovoTree without proper consent,
-use the takedown form above — these requests are prioritised.
+use the privacy-request form above — these requests are prioritised.
 
 ## 11. Changes to this policy
 

@@ -94,8 +94,9 @@ transaction.
 
 In the **Mode A** web build a lightweight pink "Donate" link is added to
 the privacy-link cluster (*Remove Me / Our Privacy / Donate*), so it appears
-in the global footer and in the Tree pages' top bar alongside the takedown
-link. It opens the same modal as the local-app heart button. In Modes B
+in the global footer and in the Tree pages' top bar alongside the
+"Remove Me" privacy-request link. It opens the same modal as the local-app
+heart button. In Modes B
 and C the Donate link is deliberately omitted — placement there requires
 the §4.1 lawyer review (see
 [docs/legal/PRIVACY_DESIGN.md §4.8](../legal/PRIVACY_DESIGN.md) Pattern A

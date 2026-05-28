@@ -131,14 +131,14 @@ export function Sidebar() {
           />
         )}
 
-        {/* Privacy: Owner-only triage queue for "remove me" takedown requests.
-            Hidden in local mode — local app has no public surface to file
-            takedowns against. */}
+        {/* Privacy: Owner-only triage queue for privacy requests
+            (removal, access, correction). Hidden in local mode — local app
+            has no public surface to file privacy requests against. */}
         {isOwner && !isLocalApp && (
           <NavItem
-            to="/privacy/takedowns"
+            to="/legal/privacy-requests"
             icon={<Shield className="w-5 h-5" />}
-            label="Privacy"
+            label="Privacy requests"
           />
         )}
 
