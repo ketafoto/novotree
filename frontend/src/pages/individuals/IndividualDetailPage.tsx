@@ -147,7 +147,8 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['individuals'] });
       toast.success('Individual deleted');
-      navigate('/individuals');
+      if (window.history.length > 1) navigate(-1);
+      else navigate('/individuals');
     },
     onError: (err) => {
       toast.error(apiErrorMessage(err, 'Failed to delete individual'));
@@ -315,7 +316,7 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => navigate(readOnly ? '/tree' : '/individuals')}
+            onClick={() => window.history.length > 1 ? navigate(-1) : navigate(readOnly ? '/tree' : '/individuals')}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
           >
             <ArrowLeft className="w-5 h-5 text-gray-600" />
