@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ReactFlowProvider } from '@xyflow/react';
@@ -31,6 +31,7 @@ export function TreeOverviewPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileSheetPersonId, setMobileSheetPersonId] = useState<number | null>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // For authenticated editors, owner_id comes from the session; for viewers, from the share token
   const ownerOwnerId = editor?.owner_id ?? viewerOwnerId ?? '';
@@ -54,7 +55,10 @@ export function TreeOverviewPage() {
         setMobileSheetPersonId(clickedId);
         return;
       }
-      navigate(`/individuals/${clickedId}/tree`);
+      if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = setTimeout(() => {
+        navigate(`/individuals/${clickedId}/tree`);
+      }, 250);
     },
     [navigate, isMobileViewport],
   );
@@ -62,10 +66,18 @@ export function TreeOverviewPage() {
   const handlePersonDoubleClick = useCallback(
     (clickedId: number) => {
       if (isMobileViewport) return;
+      if (clickTimerRef.current) {
+        clearTimeout(clickTimerRef.current);
+        clickTimerRef.current = null;
+      }
       navigate(`/individuals/${clickedId}`);
     },
     [navigate, isMobileViewport],
   );
+
+  useEffect(() => () => {
+    if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
+  }, []);
 
   const getExportElement = useCallback(() => {
     if (!viewportRef.current) return null;
@@ -260,6 +272,7 @@ export function TreeOverviewPage() {
               viewportRef={viewportRef}
               onPersonClick={handlePersonClick}
               onPersonDoubleClick={handlePersonDoubleClick}
+              isFullTree
             />
           </ReactFlowProvider>
         )}

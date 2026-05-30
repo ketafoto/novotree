@@ -1,10 +1,12 @@
 import { createPortal } from 'react-dom';
 import { sortEventsChronologically } from '../../utils/eventSort';
+import { useAuth } from '../../contexts/AuthContext';
 import type { TreeNode, TreeNodeName } from '../../types/models';
 
 interface PersonTooltipProps {
   data: TreeNode;
   position: { x: number; y: number };
+  isFullTree?: boolean;
 }
 
 const NAME_TYPE_LABELS: Record<string, string> = {
@@ -29,7 +31,8 @@ function getNameTypeLabel(nameType?: string): string {
  * Floating tooltip showing a person's summary: names, birth, death, life events, notes.
  * Rendered via portal so it's not clipped by React Flow's viewport.
  */
-export function PersonTooltip({ data, position }: PersonTooltipProps) {
+export function PersonTooltip({ data, position, isFullTree = false }: PersonTooltipProps) {
+  const { isViewer } = useAuth();
   const tooltipWidth = 300;
   const tooltipMaxHeight = 380;
   const offsetX = 16;
@@ -73,10 +76,16 @@ export function PersonTooltip({ data, position }: PersonTooltipProps) {
         className="bg-white rounded-lg shadow-xl border border-gray-200 p-3 max-h-80 overflow-y-auto"
         style={{ width: tooltipWidth }}
       >
-        {/* Double-click hint */}
-        <div className="mb-2 pb-1.5 border-b border-emerald-100 text-center">
-          <p className="text-[10px] text-emerald-600 font-medium tracking-wide">Double-click photo to edit</p>
-        </div>
+        {/* Interaction hint */}
+        {!isViewer && (
+          <div className="mb-2 pb-1.5 border-b border-emerald-100 text-center">
+            <p className="text-[10px] text-emerald-600 font-medium tracking-wide">
+              {isFullTree
+                ? 'Click to focus · Double-click to edit'
+                : 'Double-click to edit'}
+            </p>
+          </div>
+        )}
 
         {/* Header */}
         <div className={hasAnyContent ? "mb-2 pb-2 border-b border-gray-100" : ""}>

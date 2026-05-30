@@ -27,6 +27,8 @@ interface TreeCanvasProps {
   onPersonClick?: (individualId: number) => void;
   /** Callback when a person node is double-clicked (open detail page) */
   onPersonDoubleClick?: (individualId: number) => void;
+  /** Whether this canvas is showing the full tree (affects tooltip hints) */
+  isFullTree?: boolean;
 }
 
 const nodeTypes: NodeTypes = {
@@ -42,6 +44,7 @@ function TreeCanvasInner({
   viewportRef,
   onPersonClick,
   onPersonDoubleClick,
+  isFullTree = false,
 }: TreeCanvasProps) {
   const { fitView } = useReactFlow();
   const isMobileViewport = useIsMobileViewport();
@@ -55,6 +58,7 @@ function TreeCanvasInner({
               data: {
                 ...(node.data as Record<string, unknown>),
                 carouselIntervalMs: (photoIntervalMs ?? 3000),
+                isFullTree,
               },
             }
           : node,

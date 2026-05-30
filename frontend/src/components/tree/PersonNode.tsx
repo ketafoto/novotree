@@ -10,6 +10,7 @@ import { useIsMobileViewport } from '../../hooks/useIsMobileViewport';
 interface PersonNodeData extends TreeNode {
   isFocus: boolean;
   carouselIntervalMs?: number;
+  isFullTree?: boolean;
 }
 
 /**
@@ -135,6 +136,7 @@ export const PersonNode = memo(function PersonNode({
         <PersonTooltip
           data={data}
           position={tooltipPos}
+          isFullTree={data.isFullTree}
         />
       )}
     </>
