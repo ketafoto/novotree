@@ -105,10 +105,12 @@ export function TestPrivacyRequestTimestampPanel({ row, onUpdated }: TestPrivacy
       {open && (
         <div className="mt-3 space-y-3">
           <p className="text-xs text-fuchsia-900">
-            Shift this row's timestamps to test the sweeper. The in-process scheduler runs hourly;
-            on the test VM you can force a sweep with{' '}
-            <code className="bg-fuchsia-100 px-1 rounded">sudo systemctl restart novotree</code>{' '}
-            or{' '}
+            Shift this row's timestamps to test the sweeper. The sweep runs every hour while
+            the daemon is alive, or every 15 minutes via the backstop timer when the daemon is
+            down. After applying an override, wait up to 60 minutes for the next automatic tick,
+            or force one immediately with{' '}
+            <code className="bg-fuchsia-100 px-1 rounded">sudo systemctl restart novotree</code>
+            {' '}or{' '}
             <code className="bg-fuchsia-100 px-1 rounded">
               sudo systemctl start novotree-backend-monitor.service
             </code>

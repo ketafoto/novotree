@@ -145,14 +145,22 @@ async def sweep_once(db: Session) -> dict[str, int]:
             continue
         to = _owner_email(db, req.tree_owner_id) or admin_to
         if not to:
-            logger.warning(f"privacy request #{req.id}: no owner email and no admin fallback; skipping reminder")
+            logger.warning(
+                "privacy request #%d: no owner email and no admin fallback; skipping reminder",
+                req.id,
+            )
             continue
         kind = _kind_label(req.request_type)
-        await send_email(
+        sent = await send_email(
             to=to,
             subject=f"Reminder: {kind.lower()} request still open (day {REMINDER_DAYS} of {sla_days})",
             body=_reminder_body(req, sla_days),
         )
+        if not sent:
+            logger.warning(
+                "privacy request #%d: reminder claimed but email delivery failed (to=%s)",
+                req.id, to,
+            )
         counts["reminders_sent"] += 1
 
     # --- SLA-day escalations ---------------------------------------------
@@ -186,14 +194,21 @@ async def sweep_once(db: Session) -> dict[str, int]:
         if claimed == 0:
             continue
         if not admin_to:
-            logger.warning(f"privacy request #{req.id}: no admin email; escalation emails not sent")
+            logger.warning(
+                "privacy request #%d: no admin email; escalation emails not sent", req.id,
+            )
             continue
         kind = _kind_label(req.request_type)
-        await send_email(
+        sent = await send_email(
             to=admin_to,
             subject=f"AUTO-ESCALATED: {kind.lower()} request #{req.id} exceeded {sla_days}-day SLA",
             body=_escalation_body(req, sla_days),
         )
+        if not sent:
+            logger.warning(
+                "privacy request #%d: escalation claimed but email delivery failed (to=%s)",
+                req.id, admin_to,
+            )
         counts["escalations_sent"] += 1
 
     # --- Retention deletion -----------------------------------------------

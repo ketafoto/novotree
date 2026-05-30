@@ -396,11 +396,15 @@ def test_override_privacy_request_timestamps(
     if payload.test_created_at is not None:
         new_created = _test_parse_iso(payload.test_created_at, "test_created_at")
         row.created_at = new_created.isoformat()
-        # Reset the sweeper claim columns so a backdated row goes back into
-        # eligibility — otherwise the reminder/escalation has already been
-        # "claimed" and the sweeper would skip it.
+        # Reset all sweeper state so the row is fully eligible again.
+        # status and resolved_at must be included: the escalation sweep filters
+        # on status IN ('open','acknowledged'), so a row previously escalated
+        # (status='escalated', resolved_at set) would be skipped even with
+        # escalated_at nulled out.
         row.reminder_sent_at = None
         row.escalated_at = None
+        row.resolved_at = None
+        row.status = "open"
 
     if payload.test_resolved_at is not None:
         new_resolved = _test_parse_iso(payload.test_resolved_at, "test_resolved_at")
