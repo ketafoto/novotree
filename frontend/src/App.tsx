@@ -164,7 +164,9 @@ function App() {
                 path="/individuals/:id"
                 element={
                   <ProtectedRoute allowViewer>
-                    <IndividualDetailRoute />
+                    <div className="p-6">
+                      <IndividualDetailRoute />
+                    </div>
                   </ProtectedRoute>
                 }
               />
