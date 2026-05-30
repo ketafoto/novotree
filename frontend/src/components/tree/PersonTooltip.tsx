@@ -1,4 +1,5 @@
 import { createPortal } from 'react-dom';
+import { useRef, useState, useLayoutEffect } from 'react';
 import { sortEventsChronologically } from '../../utils/eventSort';
 import { useAuth } from '../../contexts/AuthContext';
 import type { TreeNode, TreeNodeName } from '../../types/models';
@@ -34,19 +35,33 @@ function getNameTypeLabel(nameType?: string): string {
 export function PersonTooltip({ data, position, isFullTree = false }: PersonTooltipProps) {
   const { isViewer } = useAuth();
   const tooltipWidth = 300;
-  const tooltipMaxHeight = 380;
   const offsetX = 16;
   const offsetY = 16;
 
-  let left = position.x + offsetX;
-  let top = position.y + offsetY;
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [style, setStyle] = useState<{ left: number; top: number }>({
+    left: position.x + offsetX,
+    top: position.y + offsetY,
+  });
 
-  if (left + tooltipWidth > window.innerWidth - 20) {
-    left = position.x - tooltipWidth - offsetX;
-  }
-  if (top + tooltipMaxHeight > window.innerHeight - 20) {
-    top = position.y - tooltipMaxHeight - offsetY;
-  }
+  useLayoutEffect(() => {
+    const actualHeight = boxRef.current?.offsetHeight ?? 380;
+
+    let left = position.x + offsetX;
+    let top = position.y + offsetY;
+
+    if (left + tooltipWidth > window.innerWidth - 20) {
+      left = position.x - tooltipWidth - offsetX;
+    }
+    if (top + actualHeight > window.innerHeight - 20) {
+      top = position.y - actualHeight - offsetY;
+    }
+
+    left = Math.max(10, Math.min(left, window.innerWidth - tooltipWidth - 10));
+    top = Math.max(10, Math.min(top, window.innerHeight - actualHeight - 10));
+
+    setStyle({ left, top });
+  }, [position.x, position.y]);
 
   const formatDate = (exactDate?: string, approxDate?: string): string => {
     if (exactDate) return exactDate;
@@ -70,9 +85,10 @@ export function PersonTooltip({ data, position, isFullTree = false }: PersonTool
   return createPortal(
     <div
       className="fixed z-[9999] pointer-events-none"
-      style={{ left, top }}
+      style={style}
     >
       <div
+        ref={boxRef}
         className="bg-white rounded-lg shadow-xl border border-gray-200 p-3 max-h-80 overflow-y-auto"
         style={{ width: tooltipWidth }}
       >

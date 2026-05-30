@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useEffect } from 'react';
+import { useCallback, useMemo, useEffect, useRef } from 'react';
 import {
   ReactFlow,
   Controls,
@@ -48,6 +48,7 @@ function TreeCanvasInner({
 }: TreeCanvasProps) {
   const { fitView } = useReactFlow();
   const isMobileViewport = useIsMobileViewport();
+  const containerRef = useRef<HTMLDivElement>(null);
   const layout = useMemo(() => computeTreeLayout(data), [data]);
   const nodesWithCarouselInterval = useMemo(
     () =>
@@ -77,6 +78,19 @@ function TreeCanvasInner({
     return () => clearTimeout(timer);
   }, [nodesWithCarouselInterval, layout.edges, setNodes, setEdges, fitView]);
 
+  // Re-fit whenever the canvas container is resized (window maximize/restore, sidebar, etc.)
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    let timer: ReturnType<typeof setTimeout>;
+    const observer = new ResizeObserver(() => {
+      clearTimeout(timer);
+      timer = setTimeout(() => fitView({ padding: 0.15, duration: 300 }), 150);
+    });
+    observer.observe(el);
+    return () => { clearTimeout(timer); observer.disconnect(); };
+  }, [fitView]);
+
   const handleNodeClick: NodeMouseHandler = useCallback(
     (_event, node) => {
       onPersonClick?.(Number(node.id));
@@ -92,7 +106,7 @@ function TreeCanvasInner({
   );
 
   return (
-    <div ref={viewportRef} className="w-full h-full">
+    <div ref={(el) => { containerRef.current = el; if (viewportRef) viewportRef.current = el; }} className="w-full h-full">
       <ReactFlow
         nodes={nodes}
         edges={edges}
