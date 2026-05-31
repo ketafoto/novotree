@@ -23,7 +23,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from backend.api._email import send_email
-from backend.config import settings
+from backend.config import privacy_settings, settings
 from database.owner_info import DEFAULT_OWNER_ID
 from database.system_db import get_system_db
 from database.system_models import AuthEditor, AuthEditorTree, AuthPendingContributor, AuthPendingOwner, AuthSetPasswordToken
@@ -97,7 +97,7 @@ class ContributorSignupRequest(BaseModel):
 
 
 class PublicConfig(BaseModel):
-    admin_email: Optional[str] = None
+    contact_email: Optional[str] = None
     signup_enabled: bool = True
 
 
@@ -196,6 +196,21 @@ def _require_smtp_or_dev() -> None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Account registration is currently unavailable — SMTP not configured.",
+        )
+
+
+def _require_signup_enabled(allowed: bool, kind: str) -> None:
+    """Raise 403 when the privacy-config flag disables this signup kind.
+
+    Enforces PrivacySettings.allow_{owner,contributor}_signup (PRIVACY_DESIGN.md
+    §3.1). Mode-agnostic: a False flag rejects the endpoint regardless of
+    deployment mode. Distinct from the SMTP-availability gate in
+    _require_smtp_or_dev() — this is the legal-mode gate and must sit above it.
+    """
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"{kind} signup is disabled on this deployment.",
         )
 
 
@@ -620,6 +635,7 @@ async def owner_signup(
     a verification link.  The account is not created until the user clicks the link.
     Returns 202 whether or not the email was sent (to avoid user enumeration).
     """
+    _require_signup_enabled(privacy_settings.allow_owner_signup, "Owner")
     _require_smtp_or_dev()
     _validate_signup_credentials(db, body.password, body.email)
 
@@ -803,6 +819,7 @@ async def contributor_signup(
     and emails a verification link.  The account is not created until the user clicks
     the link (step 2).  Returns 202 regardless to prevent user enumeration.
     """
+    _require_signup_enabled(privacy_settings.allow_contributor_signup, "Contributor")
     _require_smtp_or_dev()
 
     owner = db.query(AuthEditor).filter(
@@ -933,8 +950,8 @@ def get_share_info(
 def get_public_config():
     """Return public configuration for the frontend (no auth required)."""
     return PublicConfig(
-        admin_email=settings.admin_email,
-        signup_enabled=settings.allow_registration,
+        contact_email=privacy_settings.privacy_contact_email,
+        signup_enabled=settings.allow_registration and privacy_settings.allow_owner_signup,
     )
 
 

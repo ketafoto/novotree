@@ -1,5 +1,5 @@
 /**
- * Regression test for the "Wanna contribute to this tree?" button on TreeOverviewPage.
+ * Regression tests for the "Wanna contribute to this tree?" button on TreeOverviewPage.
  *
  * Bug: when a viewer opens the tree via a share link (?share=<token>), the contribute
  * button never appeared.  Root cause: AuthContext.useEffect checks isDevMode first and
@@ -11,6 +11,11 @@
  * Fix: add  env: { VITE_NOVOTREE_APP_MODE: 'public' }  to vitest.config.ts so that
  * tests run in the same auth mode as production.  This ensures the viewer branch
  * (getShareInfo → viewerOwnerId) is exercised and the button appears.
+ *
+ * §3.1 gate: the button is additionally gated on the deployment's
+ * allow_contributor_signup flag (PRIVACY_DESIGN.md §3.1) — it shows only when
+ * contributor signup is enabled and stays hidden in the default 'private' mode.
+ * usePrivacyConfig is mocked per-test to flip the flag.
  */
 
 import React from 'react';
@@ -40,6 +45,18 @@ vi.mock('../../src/api/tree', () => ({
   treeApi: {
     getFullTree: vi.fn().mockResolvedValue({ nodes: [], edges: [] }),
   },
+}));
+
+// usePrivacyConfig is mocked so each test controls allow_contributor_signup
+// (the §3.1 gate) without touching the hook's module-level fetch cache.
+// `allowContributorSignup` is reassigned per test via beforeEach.
+let allowContributorSignup = true;
+vi.mock('../../src/hooks/usePrivacyConfig', () => ({
+  usePrivacyConfig: () => ({
+    config: { allow_contributor_signup: allowContributorSignup },
+    loading: false,
+    error: null,
+  }),
 }));
 
 // ── Component mocks (jsdom-incompatible deps) ────────────────────────────────
@@ -78,6 +95,7 @@ function renderPage() {
 }
 
 beforeEach(() => {
+  allowContributorSignup = true;  // default; individual tests override before render
   // Simulate the browser URL that a share link points to.
   window.history.pushState({}, '', '/tree?share=test-token');
 });
@@ -90,16 +108,29 @@ afterEach(() => {
 // ── Tests ────────────────────────────────────────────────────────────────────
 
 describe('TreeOverviewPage – viewer via share link', () => {
-  it('shows "Wanna contribute to this tree?" button for share-token viewers', async () => {
+  it('shows the contribute button when contributor signup is enabled', async () => {
+    allowContributorSignup = true;
     renderPage();
 
-    // The button is gated on isViewer && ownerOwnerId.  Both are truthy only
-    // after AuthContext resolves the share token via getShareInfo() — which
-    // requires VITE_NOVOTREE_APP_MODE !== 'admin' (i.e. isDevMode = false).
+    // The button is gated on isViewer && ownerOwnerId && allow_contributor_signup.
+    // isViewer/ownerOwnerId are truthy only after AuthContext resolves the share
+    // token via getShareInfo() — which requires VITE_NOVOTREE_APP_MODE !== 'admin'.
     await waitFor(() =>
       expect(
         screen.getByRole('button', { name: /wanna contribute to this tree/i }),
       ).toBeInTheDocument(),
     );
+  });
+
+  it('hides the contribute button when contributor signup is disabled (§3.1, "private" mode)', async () => {
+    allowContributorSignup = false;
+    renderPage();
+
+    // Wait for the viewer flow to settle (the share token resolves and the tree
+    // query finishes), then assert the button is absent because the flag is off.
+    await waitFor(() => expect(screen.getByText(/photo/i)).toBeInTheDocument());
+    expect(
+      screen.queryByRole('button', { name: /contribute to this tree/i }),
+    ).not.toBeInTheDocument();
   });
 });

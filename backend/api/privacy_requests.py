@@ -206,10 +206,9 @@ async def _notify_owner_of_privacy_request(req_id: int) -> None:
             return
         owner = db.query(AuthEditor).filter(AuthEditor.editor_id == req.tree_owner_id).first()
         owner_email = owner.email if owner else None
-        admin_email = settings.admin_email
-        recipients = [e for e in (owner_email, admin_email) if e]
+        recipients = [e for e in (owner_email, privacy_settings.privacy_contact_email) if e]
         if not recipients:
-            logger.warning(f"privacy request #{req_id}: no owner email and no admin email; intake notification skipped")
+            logger.warning(f"privacy request #{req_id}: no owner email and no privacy contact email; intake notification skipped")
             return
         subject = _intake_subject(req)
         body = _intake_body(req)

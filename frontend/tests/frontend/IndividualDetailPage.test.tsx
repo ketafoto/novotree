@@ -73,6 +73,14 @@ vi.mock('react-hot-toast', () => ({
   default: { success: vi.fn(), error: vi.fn() },
 }));
 
+// IndividualDetailPage calls useAuth() for `isOwner`. This test renders the
+// page without an AuthProvider, so mock the hook directly — the photo-dialog
+// layering under test does not depend on the real auth flow. Owner = full
+// edit affordances (the Media card's double-click → upload path).
+vi.mock('../../src/contexts/AuthContext', () => ({
+  useAuth: () => ({ isOwner: true }),
+}));
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function renderPage() {

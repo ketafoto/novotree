@@ -2,14 +2,14 @@ import { useEffect, useState } from 'react';
 import { authApi } from '../api/auth';
 
 interface PublicConfigState {
-  adminEmail: string | null;
+  contactEmail: string | null;
   signupEnabled: boolean;
   loading: boolean;
 }
 
 export function usePublicConfig(): PublicConfigState {
   const [state, setState] = useState<PublicConfigState>({
-    adminEmail: null,
+    contactEmail: null,
     signupEnabled: true,  // optimistic — form stays visible until we know otherwise
     loading: true,
   });
@@ -17,7 +17,7 @@ export function usePublicConfig(): PublicConfigState {
   useEffect(() => {
     authApi.getPublicConfig()
       .then((cfg) => setState({
-        adminEmail: cfg.admin_email,
+        contactEmail: cfg.contact_email,
         signupEnabled: cfg.signup_enabled,
         loading: false,
       }))

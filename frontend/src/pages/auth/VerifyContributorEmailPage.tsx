@@ -13,7 +13,7 @@ const ERROR_MESSAGES: Record<string, string> = {
 
 export function VerifyContributorEmailPage() {
   const [searchParams] = useSearchParams();
-  const { adminEmail } = usePublicConfig();
+  const { contactEmail } = usePublicConfig();
   const [state, setState] = useState<State>('verifying');
   const [errorMsg, setErrorMsg] = useState('Verification failed. The link may be invalid or expired.');
   // The token is single-use; React Strict Mode mounts effects twice in dev, so without
@@ -77,10 +77,10 @@ export function VerifyContributorEmailPage() {
           <>
             <h1 className="text-xl font-bold text-gray-900 mb-2">Verification failed</h1>
             <p className="text-gray-600 text-sm mb-4">{errorMsg}</p>
-            {adminEmail && (
+            {contactEmail && (
               <p className="text-xs text-gray-400 mt-4">
                 Having trouble?{' '}
-                <a href={`mailto:${adminEmail}`} className="text-emerald-600 hover:underline">
+                <a href={`mailto:${contactEmail}`} className="text-emerald-600 hover:underline">
                   Contact the administrator
                 </a>
               </p>

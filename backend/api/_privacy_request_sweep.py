@@ -28,7 +28,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from backend.api._email import send_email
-from backend.config import privacy_settings, settings
+from backend.config import privacy_settings
 from database.system_models import AuthEditor, PrivacyRequest
 
 logger = logging.getLogger("novotree.privacy")
@@ -116,7 +116,7 @@ async def sweep_once(db: Session) -> dict[str, int]:
     # already has a month-grain config. The "real" calendar offset would just
     # delete a handful of rows a day or two earlier/later — irrelevant.
     retention_threshold = (now - timedelta(days=retention_months * 30)).isoformat()
-    admin_to = settings.admin_email or privacy_settings.privacy_contact_email
+    admin_to = privacy_settings.privacy_contact_email
 
     # --- Day-14 reminders -------------------------------------------------
     # Candidates: open and unreminded and older than 14 days.

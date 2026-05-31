@@ -205,7 +205,7 @@ export interface SignupResponse {
 }
 
 export interface PublicConfig {
-  admin_email: string | null;
+  contact_email: string | null;
   signup_enabled: boolean;
 }
 

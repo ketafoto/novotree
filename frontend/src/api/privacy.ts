@@ -7,7 +7,7 @@ import type { PrivacyRequestType } from './privacy_requests';
  * See docs/legal/PRIVACY_DESIGN.md §2.1 + §6.
  */
 export interface PrivacyConfig {
-  deployment_mode: 'A' | 'B' | 'C';
+  deployment_mode: 'private' | 'contributors' | 'public';
   allow_owner_signup: boolean;
   owner_signup_requires_approval: boolean;
   allow_contributor_signup: boolean;

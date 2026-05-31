@@ -56,9 +56,6 @@ class Settings:
     smtp_password: str | None
     smtp_from: str | None
 
-    # Support contact shown on auth pages (optional)
-    admin_email: str | None
-
     # Whether to set Secure flag on auth cookies.
     # Defaults True in public mode (production uses HTTPS via Caddy).
     # Set COOKIE_SECURE=false to test public mode over plain HTTP on a dev VM.
@@ -153,7 +150,6 @@ def load_settings() -> Settings:
         smtp_user=os.getenv("SMTP_USER") or None,
         smtp_password=os.getenv("SMTP_PASSWORD") or None,
         smtp_from=os.getenv("SMTP_FROM") or None,
-        admin_email=os.getenv("ADMIN_EMAIL") or None,
         cookie_secure=_as_bool(os.getenv("COOKIE_SECURE"), default=not is_dev),
         allow_registration=_as_bool(os.getenv("ALLOW_SIGNUP_WITHOUT_SMTP"), default=is_dev or bool(os.getenv("SMTP_HOST"))),
         frontend_base_url=(os.getenv("FRONTEND_BASE_URL") or "").rstrip("/") or None,
@@ -183,24 +179,26 @@ settings = load_settings()
 @dataclass(frozen=True)
 class PrivacySettings:
     # --- deployment mode ---
-    # "A" = single owner (operator), no signups.
-    # "B" = contributors-only (operator is sole Owner; relatives sign up as
-    #       Contributors who edit the operator's tree).
-    # "C" = public SaaS (open or admin-gated owner signup).
+    # "private"      (Mode A) = single owner (operator), no signups.
+    # "contributors" (Mode B) = contributors-only (operator is sole Owner;
+    #                 relatives sign up as Contributors who edit the
+    #                 operator's tree).
+    # "public"       (Mode C) = public SaaS (open or admin-gated owner signup).
+    # The "Mode A/B/C" aliases are the legal-doc shorthand (PRIVACY_DESIGN.md §1).
     deployment_mode: str
 
-    # Whether NEW owners can self-register. Off in Mode A and Mode B;
-    # on in Mode C (with or without approval gating).
+    # Whether NEW owners can self-register. Off in private and contributors
+    # modes; on in public mode (with or without approval gating).
     allow_owner_signup: bool
 
     # If allow_owner_signup is True, controls whether new owner signups
     # land in a pending state until an admin approves them. See
     # docs/PRIVACY_DESIGN.md §6.5 — gating is an abuse mitigation; it does
-    # NOT downgrade the legal mode below Mode C.
+    # NOT downgrade the legal mode below public (Mode C).
     owner_signup_requires_approval: bool
 
     # Whether owners can invite Contributors who can edit the tree.
-    # Off in Mode A; on in Mode B and Mode C.
+    # Off in private mode; on in contributors and public modes.
     allow_contributor_signup: bool
 
     # --- SLA thresholds ---
@@ -279,15 +277,35 @@ class PrivacySettings:
     test_allow_timestamp_override: bool
 
 
+# Deployment-mode values. The legal docs (PRIVACY_DESIGN.md §1) call these
+# Mode A / B / C; the env var and code use the self-describing slugs below.
+DEPLOYMENT_MODE_PRIVATE = "private"            # Mode A: single owner, no signups
+DEPLOYMENT_MODE_CONTRIBUTORS = "contributors"  # Mode B: contributor signup only
+DEPLOYMENT_MODE_PUBLIC = "public"              # Mode C: owner signup (gated or open)
+_DEPLOYMENT_MODES = {
+    DEPLOYMENT_MODE_PRIVATE,
+    DEPLOYMENT_MODE_CONTRIBUTORS,
+    DEPLOYMENT_MODE_PUBLIC,
+}
+# Back-compat: accept the historical single-letter values so an operator who
+# still has NOVOTREE_DEPLOYMENT_MODE=A set does not silently fall to default.
+_LEGACY_MODE_ALIASES = {
+    "A": DEPLOYMENT_MODE_PRIVATE,
+    "B": DEPLOYMENT_MODE_CONTRIBUTORS,
+    "C": DEPLOYMENT_MODE_PUBLIC,
+}
+
+
 def load_privacy_settings() -> PrivacySettings:
-    mode = os.getenv("NOVOTREE_DEPLOYMENT_MODE", "A").strip().upper() or "A"
-    if mode not in {"A", "B", "C"}:
-        mode = "A"
+    raw_mode = os.getenv("NOVOTREE_DEPLOYMENT_MODE", "").strip()
+    mode = _LEGACY_MODE_ALIASES.get(raw_mode.upper(), raw_mode.lower())
+    if mode not in _DEPLOYMENT_MODES:
+        mode = DEPLOYMENT_MODE_PRIVATE
 
     # Defaults derived from mode so that the dataclass is internally
     # consistent without requiring every env var to be set.
-    default_allow_owner = mode == "C"
-    default_allow_contributor = mode in {"B", "C"}
+    default_allow_owner = mode == DEPLOYMENT_MODE_PUBLIC
+    default_allow_contributor = mode in {DEPLOYMENT_MODE_CONTRIBUTORS, DEPLOYMENT_MODE_PUBLIC}
 
     return PrivacySettings(
         deployment_mode=mode,

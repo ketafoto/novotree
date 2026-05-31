@@ -40,7 +40,7 @@ interface PrivacyLinksProps {
 
 export function PrivacyLinks({ className = '' }: PrivacyLinksProps) {
   const { config } = usePrivacyConfig();
-  const showDonate = config?.deployment_mode === 'A' && !config.analytics_enabled;
+  const showDonate = config?.deployment_mode === 'private' && !config.analytics_enabled;
 
   return (
     <span className={`inline-flex items-center gap-3 ${className}`}>

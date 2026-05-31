@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Eye, EyeOff, TreeDeciduous } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { usePublicConfig } from '../../hooks/usePublicConfig';
 import { Input } from '../../components/common/Input';
 import { Button } from '../../components/common/Button';
 import toast from 'react-hot-toast';
@@ -25,6 +26,7 @@ const ROLE_BADGE: Record<string, string> = {
 export function LoginPage() {
   const navigate = useNavigate();
   const { login } = useAuth();
+  const { signupEnabled, loading: configLoading } = usePublicConfig();
   const [showPassword, setShowPassword] = useState(false);
 
   // Step 2: multi-tree selection
@@ -59,8 +61,16 @@ export function LoginPage() {
         } else {
           toast.error(detail || 'Access denied');
         }
-      } else {
+      } else if (status === undefined) {
+        // No HTTP response at all → the request never reached the server
+        // (backend down, network error, CORS). Distinct from a 401 so the
+        // user isn't misled into retrying passwords against a dead server.
+        toast.error("Can't reach the server — check your connection and try again");
+      } else if (status === 401) {
         toast.error('Invalid email or password');
+      } else {
+        // Any other server response (5xx, unexpected) — not a credentials issue.
+        toast.error('Something went wrong — please try again');
       }
     }
   };
@@ -154,12 +164,24 @@ export function LoginPage() {
           )}
         </div>
 
-        <p className="text-center text-sm text-gray-500 mt-6">
-          Wanna build your own tree?{' '}
-          <Link to="/owner-signup" className="text-emerald-600 hover:underline font-medium">
-            Create an account
-          </Link>
-        </p>
+        {/* Owner signup affordance (§3.1): when signup is enabled, offer the
+            link; when disabled ('private' deployment), show a quiet by-design
+            note instead of a link so users don't go hunting for a signup that
+            isn't there. Nothing shown until the public config has loaded. */}
+        {!configLoading && (
+          signupEnabled ? (
+            <p className="text-center text-sm text-gray-500 mt-6">
+              Wanna build your own tree?{' '}
+              <Link to="/owner-signup" className="text-emerald-600 hover:underline font-medium">
+                Create an account
+              </Link>
+            </p>
+          ) : (
+            <p className="text-center text-xs text-gray-400 mt-6">
+              This is a private deployment — no new accounts allowed.
+            </p>
+          )
+        )}
       </div>
     </div>
   );

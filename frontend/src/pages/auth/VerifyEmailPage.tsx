@@ -16,7 +16,7 @@ export function VerifyOwnerEmailPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { refresh } = useAuth();
-  const { adminEmail } = usePublicConfig();
+  const { contactEmail } = usePublicConfig();
   const [state, setState] = useState<State>('verifying');
   const [errorMsg, setErrorMsg] = useState('Verification failed. The link may be invalid or expired.');
   // The token is single-use; React Strict Mode mounts effects twice in dev, so without
@@ -75,10 +75,10 @@ export function VerifyOwnerEmailPage() {
             <Link to="/owner-signup" className="text-emerald-600 hover:underline text-sm">
               Sign up again
             </Link>
-            {adminEmail && (
+            {contactEmail && (
               <p className="text-xs text-gray-400 mt-4">
                 Having trouble?{' '}
-                <a href={`mailto:${adminEmail}`} className="text-emerald-600 hover:underline">
+                <a href={`mailto:${contactEmail}`} className="text-emerald-600 hover:underline">
                   Contact the administrator
                 </a>
               </p>

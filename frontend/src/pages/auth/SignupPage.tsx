@@ -30,7 +30,7 @@ export function OwnerSignupPage() {
   const [resending, setResending] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-  const { adminEmail, signupEnabled, loading: configLoading } = usePublicConfig();
+  const { contactEmail, signupEnabled, loading: configLoading } = usePublicConfig();
 
   const {
     register,
@@ -82,10 +82,10 @@ export function OwnerSignupPage() {
           <Button variant="secondary" onClick={handleResend} isLoading={resending} className="w-full mb-4">
             Resend verification email
           </Button>
-          {adminEmail && (
+          {contactEmail && (
             <p className="text-xs text-gray-400 mt-2">
               Having trouble?{' '}
-              <a href={`mailto:${adminEmail}`} className="text-emerald-600 hover:underline">
+              <a href={`mailto:${contactEmail}`} className="text-emerald-600 hover:underline">
                 Contact the administrator
               </a>
             </p>
@@ -113,18 +113,8 @@ export function OwnerSignupPage() {
 
         {!configLoading && !signupEnabled ? (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center space-y-3">
-            <p className="text-gray-700 font-medium">Account registration is currently unavailable.</p>
-            {adminEmail ? (
-              <p className="text-sm text-gray-500">
-                Please{' '}
-                <a href={`mailto:${adminEmail}`} className="text-emerald-600 hover:underline">
-                  contact the administrator
-                </a>{' '}
-                to request an account.
-              </p>
-            ) : (
-              <p className="text-sm text-gray-500">Please contact the site administrator.</p>
-            )}
+            <p className="text-gray-700 font-medium">This is a private NovoTree deployment.</p>
+            <p className="text-sm text-gray-500">No new accounts allowed.</p>
           </div>
         ) : (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">

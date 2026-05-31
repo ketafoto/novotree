@@ -77,9 +77,19 @@ app behaves correctly before sharing the URL.
 
 ### Owner / contributor flow
 
-1. Open `https://novospace.cz/novotree/signup` and create the first owner
-   account. Confirm the verification email arrives and the link resolves to a
-   logged-in dashboard.
+1. Create the first owner account. Owner signup is disabled by default
+   (`NOVOTREE_DEPLOYMENT_MODE=private` — see PRIVACY_DESIGN.md §3.1), so the
+   `/signup` form is closed on a fresh deploy. Bootstrap your account by
+   temporarily enabling owner signup:
+     a. In `/etc/novotree.env` add `ALLOW_OWNER_SIGNUP=true`, then
+        `sudo systemctl restart novotree`.
+     b. Open `https://novospace.cz/novotree/signup` and create the owner
+        account. Confirm the verification email arrives and the link resolves
+        to a logged-in dashboard.
+     c. Remove `ALLOW_OWNER_SIGNUP=true` (or set it to `false`) and
+        `sudo systemctl restart novotree` again. Signup is now closed; your
+        account persists. Reload `/login` and confirm the "Create an account"
+        link is gone.
 2. Add one Individual record. Confirm `created_by` is the owner's `editor_id`.
 3. Log out. Log back in. Confirm the JWT cookies are reset and `/auth/me`
    returns the owner identity.

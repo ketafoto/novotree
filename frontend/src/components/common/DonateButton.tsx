@@ -19,10 +19,10 @@ import { Modal } from './Modal';
  * `public/donate/` so opening the modal does not leak a referer to ko-fi.com.
  *
  * Gated at call sites:
- *   - Local desktop app: rendered in Header.tsx via `isLocalApp`.
- *   - Mode A web build:  rendered inside PrivacyLinks via deployment_mode.
- * Modes B and C deliberately do NOT show it — placement requires the §4.1
- * lawyer review first.
+ *   - Local desktop app:    rendered in Header.tsx via `isLocalApp`.
+ *   - 'private' web build:  rendered inside PrivacyLinks via deployment_mode.
+ * The 'contributors' and 'public' modes deliberately do NOT show it —
+ * placement requires the §4.1 lawyer review first.
  */
 
 interface DonateModalProps {

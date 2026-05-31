@@ -13,14 +13,15 @@
 > [PRIVACY_ANALYSIS.md](PRIVACY_ANALYSIS.md) first to understand the problem
 > space, then this file to see what is built, in progress, or queued.
 
-**Status overall: TIER 1 COMPLETE.** All of §2.1–§2.7 are shipped:
-§2.1 (central privacy config), §2.2 (public privacy-request flow, originally
-"takedown"), §2.3 (privacy policy page + footer link), §2.4 (viewer notice
-on first share-link load), §2.5 (per-share acknowledgement), §2.6
-(right-of-access export per Individual), §2.7 (public privacy-request
+**Status overall: TIER 1 SHIPPED, TIER 2 STARTED.** All of §2.1–§2.7 are
+shipped: §2.1 (central privacy config), §2.2 (public privacy-request flow,
+originally "takedown"), §2.3 (privacy policy page + footer link), §2.4
+(viewer notice on first share-link load), §2.5 (per-share acknowledgement),
+§2.6 (right-of-access export per Individual), §2.7 (public privacy-request
 intake — the §2.2 form generalized to removal, access, and correction
 under GDPR Art. 15-17). Mode A is defensible. Tier 2 (operational
-hardening) is next.
+hardening) is underway: §3.1 (enforce signup flags + consolidate the
+contact-email config) is shipped; §3.2–§3.9 remain.
 
 ---
 
@@ -641,13 +642,35 @@ releases the `DROP TABLE` line can come out.
 After Tier 1, Mode A is defensible. Tier 2 is hardening and operational
 hygiene.
 
-### 3.1 Disable signups in Mode A
+### 3.1 Enforce signup flags
 
-- [ ] Reject `POST /auth/owner-signup` with HTTP 403 if
-      `PrivacySettings.allow_owner_signup` is False.
-- [ ] Reject `POST /auth/contributor-signup` with HTTP 403 if
-      `PrivacySettings.allow_contributor_signup` is False.
-- [ ] Hide signup links from frontend when disabled.
+The behavior is mode-agnostic — a False flag must reject the corresponding
+endpoint regardless of deployment mode. The framing "disable signups in
+Mode A" is just the motivating case: the flag defaults
+(`allow_owner_signup=False` and `allow_contributor_signup=False` in Mode A;
+contributor True in Mode B; both True in Mode C) already encode the
+per-mode rule. This task is the runtime enforcement.
+
+- [x] Reject `POST /auth/owner-signup` with HTTP 403 if
+      `PrivacySettings.allow_owner_signup` is False. Gate is the first line
+      of the handler (`_require_signup_enabled`), above the SMTP gate.
+- [x] Reject `POST /auth/contributor-signup` with HTTP 403 if
+      `PrivacySettings.allow_contributor_signup` is False. Same helper.
+- [x] Hide signup links from frontend when disabled. Wired by ANDing
+      `settings.allow_registration` with `privacy_settings.allow_owner_signup`
+      in the `/auth/public-config` handler so the existing `signup_enabled`
+      field flips automatically; SignupPage already consumes it (zero
+      frontend change for the gate itself).
+- [x] Consolidate `Settings.admin_email` (env var `ADMIN_EMAIL`) and
+      `PrivacySettings.privacy_contact_email` (env var
+      `PRIVACY_CONTACT_EMAIL`) — same mailbox, two homes, two env vars.
+      `privacy_contact_email` chosen as the single source of truth;
+      `Settings.admin_email` and the `ADMIN_EMAIL` env var deleted. Every
+      consumer migrated: `/auth/public-config` (API field renamed
+      `admin_email`→`contact_email`, frontend `adminEmail`→`contactEmail`
+      across the hook + three auth pages), the privacy-request intake
+      notification, and the sweep escalation fallback. `.env.public.example`
+      renamed; no `ADMIN_EMAIL` existed in the deployment scripts.
 
 ### 3.2 Backup retention enforcement (M-10)
 
@@ -936,7 +959,8 @@ that is what this endpoint is for.
       `{status: "acknowledged"|"resolved"|"escalated"}`, stamping
       `resolved_at` for terminal transitions.
 - [ ] Auth gate: a real admin role (not "owner whose email matches
-      `settings.admin_email`") — Mode C will need this distinction anyway.
+      `privacy_settings.privacy_contact_email`") — Mode C will need this
+      distinction anyway.
 - [ ] Admin UI page (minimum: list + status-change buttons). The Tier-2
       §3.5 admin CLI ships first; this is the web-UI version.
 

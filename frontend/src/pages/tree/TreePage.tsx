@@ -15,6 +15,7 @@ import { ContributeDialog } from '../../components/common/ContributeDialog';
 import { MobilePersonSheet } from '../../components/tree/MobilePersonSheet';
 import { PrivacyLinks } from '../../components/layout/PrivacyLinks';
 import { useAuth } from '../../contexts/AuthContext';
+import { useCanContribute } from '../../hooks/useCanContribute';
 import { isPublicApp, isLocalApp } from '../../config/appMode';
 import { formatIndividualName, getLatestName } from '../../utils/nameUtils';
 import { slugifyForFilename } from '../../utils/exportFilename';
@@ -28,7 +29,7 @@ import { useIsMobileViewport } from '../../hooks/useIsMobileViewport';
 export function TreePage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { isViewer, editor, viewerOwnerId } = useAuth();
+  const { editor, viewerOwnerId } = useAuth();
   const individualId = Number(id);
   const isMobileViewport = useIsMobileViewport();
 
@@ -42,6 +43,10 @@ export function TreePage() {
   const viewportRef = useRef<HTMLDivElement | null>(null);
 
   const ownerOwnerId = editor?.owner_id ?? viewerOwnerId ?? '';
+
+  // Whether to offer the viewer the "contribute" CTA — gated on the
+  // deployment's allow_contributor_signup flag (§3.1). See useCanContribute.
+  const canContribute = useCanContribute();
 
   // Reset depths when navigating to a different person's tree
   useEffect(() => {
@@ -186,9 +191,10 @@ export function TreePage() {
             />
           </div>
 
-          {/* Contribute button — visible to viewers (share token) only.
-              Kept as its own emphasis pill (blue) so it remains the call-to-action. */}
-          {isViewer && ownerOwnerId && (
+          {/* Contribute button — viewers only, and only when contributor
+              signup is enabled (see canContribute / §3.1). Kept as its own
+              emphasis pill (blue) so it remains the call-to-action. */}
+          {canContribute && (
             <button
               onClick={() => setShowContribute(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-full hover:bg-blue-700 transition-colors"
@@ -281,7 +287,7 @@ export function TreePage() {
             />
           </div>
 
-          {isViewer && ownerOwnerId && (
+          {canContribute && (
             <button
               onClick={() => {
                 setShowContribute(true);

@@ -202,6 +202,16 @@ logs
             Each run creates a dated directory: /srv/backups/novotree/YYYYMMDD/ containing all three files. Directories older than 30 days are deleted.
 
 
+[BOOTSTRAP] Creating your own (first) owner account in 'private' mode:
+owner signup is gated off by default, so the /signup form is closed on a
+fresh deploy. To mint your account, temporarily flip the override:
+  1. /etc/novotree.env: add ALLOW_OWNER_SIGNUP=true; sudo systemctl restart novotree
+  2. open /novotree/signup, create the account, verify via email link
+  3. remove ALLOW_OWNER_SIGNUP (or =false); sudo systemctl restart novotree
+Your account persists; signup is closed again. (No admin CLI yet — that is
+the Tier-2 §3.5 work. This temp-flag dance is the documented bootstrap until
+then.) Same steps in DEPLOYMENT.md post-deploy smoke test.
+
 
 Next
 =======================
@@ -213,26 +223,6 @@ Go private
 -----------------------------
 *. Legals for private usage (mode A tiers 1 & 2 from docs\PRIVACY_DESIGN.md)
 *. Add link to downloadable application, so friends could build their tree privately
-
-*.
-As we have mode A, B and C of project usage according the @novotree/docs/legal/PRIVACY_DESIGN.md , and some B/C features are already in, and we go with the mode A at the first place, I want to add configuration that puts backend into porper mode and cause it:
-1. To rejects requests for flows that are not supported be the current mode.
-For example, clicking on "Wanna contirbute" should bring kind of "This feature is blocked due to legal. Consider to use local applicatoin instead: <https://github.com/ketafoto/novotree/releases/tag/v1.0.1 >"  the will hide features fro UI that are not related to the current mode.
-2. To implement router for the mode, so the fronend could load correspondent UI elements.
-For example, when reviewer double-clicks on person photo on person tree, the "Back to tree" page should propose to become contributor, if mode B/C is supported. It should show a message like "To edit you have to become Contributor" and attaching link for contirbutor signup page to the "Contributor".
-
-In general - in mode A the OVC feature should be rejected - no owner/contributor signup, no editting. Only owner which is admin should be able to signup and should have full owner (and admin) abilities.
-In mode B - no owner signup and editting, only contirbutions should be supported.
-Let's give names to modes A/B/C to be used in source code. E,g,:
-A - viewer mode
-B - contributor mode
-C - full mode
-
-export interface PrivacyConfig {
-  deployment_mode: 'A' | 'B' | 'C';
-  allow_owner_signup: boolean;
-  owner_signup_requires_approval: boolean;
-  allow_contributor_signup: boolean;
 
 Go contributors (mode B - payed consultation with lawyer & tier 2)
 -----------------------------

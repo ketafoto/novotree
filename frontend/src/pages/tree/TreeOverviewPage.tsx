@@ -15,6 +15,7 @@ import { PrivacyLinks } from '../../components/layout/PrivacyLinks';
 import { isLocalApp } from '../../config/appMode';
 import { useAuth } from '../../contexts/AuthContext';
 import { useIsMobileViewport } from '../../hooks/useIsMobileViewport';
+import { useCanContribute } from '../../hooks/useCanContribute';
 
 /**
  * Full tree overview page.
@@ -23,7 +24,7 @@ import { useIsMobileViewport } from '../../hooks/useIsMobileViewport';
  */
 export function TreeOverviewPage() {
   const navigate = useNavigate();
-  const { isViewer, editor, viewerOwnerId } = useAuth();
+  const { editor, viewerOwnerId } = useAuth();
   const isMobileViewport = useIsMobileViewport();
   const [photoIntervalSec, setPhotoIntervalSec] = useState(3);
   const [showExport, setShowExport] = useState(false);
@@ -35,6 +36,10 @@ export function TreeOverviewPage() {
 
   // For authenticated editors, owner_id comes from the session; for viewers, from the share token
   const ownerOwnerId = editor?.owner_id ?? viewerOwnerId ?? '';
+
+  // Whether to offer the viewer the "contribute" CTA — gated on the
+  // deployment's allow_contributor_signup flag (§3.1). See useCanContribute.
+  const canContribute = useCanContribute();
 
   const { data: treeData, isLoading, isError } = useQuery({
     queryKey: ['tree', 'full'],
@@ -133,8 +138,9 @@ export function TreeOverviewPage() {
             />
           </div>
 
-          {/* Contribute button — visible to viewers (share token) only */}
-          {isViewer && ownerOwnerId && (
+          {/* Contribute button — viewers only, and only when contributor
+              signup is enabled for this deployment (see canContribute). */}
+          {canContribute && (
             <button
               onClick={() => setShowContribute(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 transition-colors"
@@ -208,7 +214,7 @@ export function TreeOverviewPage() {
             />
           </div>
 
-          {isViewer && ownerOwnerId && (
+          {canContribute && (
             <button
               onClick={() => {
                 setShowContribute(true);
