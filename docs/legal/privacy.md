@@ -1,6 +1,6 @@
 # NovoTree Privacy Policy
 
-_Last updated: 2026-05-28 (version 1.1)_
+_Last updated: 2026-06-05 (version 1.1)_
 
 This policy explains what information NovoTree holds about you, why, and how
 to exercise your rights. It is written in plain language so a non-lawyer can
@@ -105,8 +105,8 @@ and do not anticipate, government data requests.
 | Account data | Until you ask us to delete it |
 | Tree contents | Until you (or the Tree Owner) delete it |
 | Backups | 30 days |
-| Web access logs | 14 days |
-| Application error logs | 30 days |
+| Web access logs | at least 14 days |
+| Application error logs | at least 30 days |
 | Resolved privacy requests | 12 months |
 
 Backups can briefly retain data that has been deleted from the live
@@ -114,6 +114,14 @@ database. The retention window — 30 days by default, and the value this
 deployment is configured with — bounds how long a deleted record can
 resurface from backup; we never restore individual records from backup
 unless we are recovering from a service incident.
+
+Server logs are stored as a single system journal, so we keep all of them
+for the longer of the two windows above. The figures are therefore stated as
+a minimum ("at least"): access logs are kept for at least 14 days and error
+logs for at least 30 days, which in practice means both are retained for the
+configured maximum — 30 days by default, and the value this deployment is
+configured with. We do not log the contents of your requests, only the URL,
+HTTP status, and connecting IP address.
 
 ## 9. Your rights
 

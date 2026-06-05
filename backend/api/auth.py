@@ -661,7 +661,11 @@ async def owner_signup(
     db.commit()
 
     verify_url = _build_verify_url(request, raw_token, "/verify-owner-email")
-    logger.info(f"Owner signup pending email verification: {editor_id} <{body.email}>")
+    # Log the editor_id only — the email is PII (Personal Identifiable
+    # Information) and the access/error logs are journald-retained for up to
+    # 30 days (PRIVACY_DESIGN.md §3.3). editor_id is the stable handle ops
+    # needs; the email adds no diagnostic value.
+    logger.info(f"Owner signup pending email verification: {editor_id}")
 
     emailed = await _send_verification_email(body.email, display_name, verify_url)
     if not emailed:
@@ -856,7 +860,9 @@ async def contributor_signup(
     db.commit()
 
     verify_url = _build_verify_url(request, raw_token, "/verify-contributor-email")
-    logger.info(f"Contributor signup pending email verification: {editor_id} <{body.email}> for owner {body.owner_id}")
+    # editor_id + owner_id only — the email is PII (Personal Identifiable
+    # Information) (see owner_signup above).
+    logger.info(f"Contributor signup pending email verification: {editor_id} for owner {body.owner_id}")
 
     emailed = await _send_verification_email(
         body.email, display_name, verify_url,

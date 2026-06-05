@@ -701,11 +701,44 @@ per-mode rule. This task is the runtime enforcement.
 
 ### 3.3 Log scrubbing + retention (M-14)
 
-- [ ] Disable request-body logging in production
+- [x] Disable request-body logging in production
       ([backend/main.py](../backend/main.py),
       [backend/logging.py](../backend/logging.py)).
-- [ ] Document log retention (14 / 30 days for access / error) in the privacy
+      Done: **verify-and-scrub**, not "remove a body logger" — none exists.
+      The per-request middleware ([main.py](../backend/main.py) `owner_db_router`)
+      emits a single access line of IP / method / path / HTTP-version / status
+      via `access_logger.info`; it never logs the request body, and no other
+      hot-path log line does either. The two PII-bearing spots were the signup
+      logs in [auth.py](../backend/api/auth.py) (`owner_signup` /
+      `contributor_signup`), which logged `{editor_id} <{email}>` at INFO —
+      the email is now dropped, leaving `editor_id` (+ `owner_id` for
+      contributors), the stable handle ops needs. The local-desktop save-as
+      log in [local.py](../backend/api/local.py) records a byte count only
+      (no content) and is left as-is.
+- [x] Document log retention (14 / 30 days for access / error) in the privacy
       policy and in [novospace.git/docs/deployment.md](../../novospace.git/docs/deployment.md).
+      Done. **Architectural note:** the backend funnels access logs and error
+      logs into one stdout/journald stream under one unit (`novotree.service`),
+      and journald retention is per-journal, not per-log-level. Per the chosen
+      approach (option (a)), the VM applies a **single** journald window sized
+      to `max(access, error) = 30d`, and the two config knobs
+      (`access_log_retention_days` / `error_log_retention_days`) are
+      reinterpreted/documented as **minimums** ("kept for at least N days").
+      VM wiring lives in novospace `vm-setup.py`: `novotree.service` gains
+      `LogNamespace=novotree`, and `/etc/systemd/journald@novotree.conf` sets
+      `MaxRetentionSec` to the max of the two values **sourced from
+      `/etc/novotree.env`** (the same single source of truth the backend reads
+      — mirrors the §3.2 backup-retention pattern; no new hardcoded knob).
+      The namespace scopes retention to novotree alone, leaving the host
+      journal (Caddy, system units) untouched. `ACCESS_LOG_RETENTION_DAYS` /
+      `ERROR_LOG_RETENTION_DAYS` added to `backend/.env.public.example` so a
+      fresh deploy carries them explicitly. [privacy.md](privacy.md) §8 now
+      states the windows as "at least 14/30 days" with a note that they track
+      the configured value (mirroring §3.2); a "Log retention" section was
+      added to novospace `docs/deployment.md`. `privacy_policy_version` bumped
+      to **1.3** (note: §3.2 recorded a bump to 1.2, but both privacy.md and
+      the config default were still 1.1 — only the §8 backup prose had landed;
+      this change corrects that drift while bumping for the §8 log-retention edit).
 
 ### 3.4 Ops emails (notes.txt L221)
 
