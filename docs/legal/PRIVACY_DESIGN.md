@@ -674,9 +674,30 @@ per-mode rule. This task is the runtime enforcement.
 
 ### 3.2 Backup retention enforcement (M-10)
 
-- [ ] Update `vm-backup.py` (in `novospace.git/scripts/deployment/`) to
+- [x] Update `vm-backup.py` (in `novospace.git/scripts/deployment/`) to
       delete backups older than `backup_retention_days` (default 30).
-- [ ] Document the 30-day window in the rendered privacy policy.
+      Done: `vm-backup.py` reads `BACKUP_RETENTION_DAYS` (env, default 30,
+      min 1 — the same value the backend reads from `/etc/novotree.env`)
+      instead of the old hardcoded `KEEP_DAYS=30`; `--keep-days` overrides
+      for manual runs. The backup cron (`vm-setup.py`) was moved to root's
+      crontab so it can source the `root:root 600` `/etc/novotree.env` and
+      pass the var through to the `novospace`-run script. Single source of
+      truth; the dev wrapper inherits it via its subprocess call.
+      `BACKUP_RETENTION_DAYS` added to `backend/.env.public.example` so a
+      fresh deployment carries the value explicitly.
+      A missing `/etc/novotree.env` at cron time is treated as
+      **exceptional** (it should never happen in production — `vm-setup.py`
+      step 6 writes it): the cron line logs an `ERROR` to
+      `/var/log/novotree-backup.log` and `vm-backup.py --require-env` raises
+      an ops alert via `notify_ops()`, then both fall back to 30 days so
+      backups never silently stop. Emailing that alert to the operator is
+      deferred to §3.4 (the `notify_ops()` seam is where it lands).
+- [x] Document the 30-day window in the rendered privacy policy.
+      Done: [privacy.md](privacy.md) already stated "30 days" (§6, §8 table,
+      §8 prose); the §8 prose now notes the window is "30 days by default, and
+      the value this deployment is configured with" so the static text does
+      not silently drift if `backup_retention_days` is overridden.
+      `privacy_policy_version` bumped 1.1 → 1.2.
 
 ### 3.3 Log scrubbing + retention (M-14)
 
@@ -689,7 +710,9 @@ per-mode rule. This task is the runtime enforcement.
 ### 3.4 Ops emails (notes.txt L221)
 
 - [ ] Email errors from logs + backup logs to admin. Operational, not strictly
-      privacy work, but pairs with log scrubbing.
+      privacy work, but pairs with log scrubbing. Note: §3.2 already added a
+      `notify_ops()` seam in `vm-backup.py` (currently logs to stderr only) —
+      wire it to email the privacy/support mailbox here.
 
 ### 3.5 Admin CLI (notes.txt L208–213)
 

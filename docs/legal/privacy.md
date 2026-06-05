@@ -110,9 +110,10 @@ and do not anticipate, government data requests.
 | Resolved privacy requests | 12 months |
 
 Backups can briefly retain data that has been deleted from the live
-database. The 30-day window bounds how long a deleted record can resurface
-from backup; we never restore individual records from backup unless we are
-recovering from a service incident.
+database. The retention window — 30 days by default, and the value this
+deployment is configured with — bounds how long a deleted record can
+resurface from backup; we never restore individual records from backup
+unless we are recovering from a service incident.
 
 ## 9. Your rights
 
