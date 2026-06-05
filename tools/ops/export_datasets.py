@@ -74,6 +74,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Export owner dataset archive.")
     parser.add_argument(
         "--repo-root",
+        dest="repo_root",
         type=Path,
         default=Path(__file__).resolve().parents[2],
         help="Repository root directory.",
@@ -85,12 +86,14 @@ def main() -> None:
     )
     parser.add_argument(
         "--output-dir",
+        dest="output_dir",
         type=Path,
         default=Path(__file__).resolve().parents[2] / "dist" / "dataset-exports",
         help="Directory where archive will be written.",
     )
     parser.add_argument(
         "--copy-latest-to",
+        dest="copy_latest_to",
         type=Path,
         default=None,
         help="Optional path to copy the generated archive for upload convenience.",

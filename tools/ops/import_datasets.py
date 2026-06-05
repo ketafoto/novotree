@@ -72,12 +72,14 @@ def main() -> None:
     parser.add_argument("--archive", type=Path, required=True, help="Path to dataset zip archive.")
     parser.add_argument(
         "--target-root",
+        dest="target_root",
         type=Path,
         default=Path("/srv/gedcom-public/data"),
         help="Root directory for current/releases/backups.",
     )
     parser.add_argument(
         "--keep-backups",
+        dest="keep_backups",
         type=int,
         default=5,
         help="Number of backup generations to keep.",
