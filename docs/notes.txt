@@ -255,9 +255,6 @@ Go public
    (found either under ../novospace.git/scripts/deployment/vm-backup.py. or under deployment folder installed by 
    ../novospace.git/scripts/deployment/vm-setup.py)
 
-*. send emails for error in logs + backup logs
-
-
 Next Phase
 =======================
 *. speech-to-text + AI for CRUD operation by voice

@@ -8,6 +8,15 @@
 - **No hardcoded string duplication.** If a string literal (username, path prefix, domain, etc.) appears more than once in a file, extract it into a named constant at the top before finishing the edit. Apply this proactively — do not wait to be asked.
 - **No logic duplication.** If two functions share the same sequence of operations, extract a helper immediately — do not wait to be asked. Symmetric operations (backup/restore, encode/decode, pack/unpack) are a strong signal.
 - **Explicit `dest=` on hyphenated argparse flags.** Any `add_argument("--foo-bar", ...)` whose long flag contains a hyphen must pass `dest="foo_bar"` explicitly, so the CLI-flag→attribute mapping is spelled out at the call site (argparse converts `-`→`_` silently otherwise). Keep the flag itself hyphenated (Unix convention); only the `dest` is added. Flags with no hyphen (`--restore`, `--owner`) and positionals don't need it.
+- **Blank comment line before code after a multi-line comment.** When an in-code comment block spans more than one line and immediately precedes the code it describes, insert an empty comment line (a bare `#` at the comment's indentation — not a blank source line) between the prose and that code, so the comment block is visually separated from the statement. Single-line comments need no separator. Example:
+  ```python
+  # First-ever run: establish the cursor without emailing a backlog (an
+  # unbounded "everything since boot" digest would be the first thing the
+  # operator sees). Subsequent runs cover [cursor, now].
+  #
+  if cursor is None:
+  ```
+- **ASCII-only in comments.** Keep in-code comments to plain ASCII characters. Do not use non-ASCII glyphs (e.g. the arrow `→`, en/em dashes `–`/`—`, smart quotes, `§`) inside comments — some editors and terminals render them wrongly. Write `->` for an arrow, `-` for a dash, straight quotes, and spell out "section" instead of `§`. (This applies to code comments; Markdown docs and user-facing strings may use full Unicode.)
 
 ## Git
 

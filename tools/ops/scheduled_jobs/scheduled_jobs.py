@@ -3,19 +3,25 @@
 Backstop runner for scheduled in-backend jobs.
 
 The NovoTree backend runs a few periodic activities in-process (currently:
-the privacy-request SLA sweep). When the backend is down — planned
-maintenance or unplanned outage — those activities stall.
+the privacy-request SLA sweep). When the backend is down - planned
+maintenance or unplanned outage - those activities stall.
 
 This script is the safety net. It is invoked periodically by systemd
 (novotree-backend-monitor.timer fires novotree-backend-monitor.service every
 15 min, which calls this script). On each run it:
 
-  1. Probes the backend's /health endpoint.
-  2. If the backend is healthy → exits 0 cleanly. The backend is doing the work.
-  3. If the backend is unreachable → runs each registered job and exits 0.
+  1. Runs UNCONDITIONAL_JOBS - jobs that must run regardless of backend health
+     (currently the error-log digest, PRIVACY_DESIGN.md section 3.4). These
+     self-throttle to their own cadence, so the 15-min tick mostly no-ops them.
+  2. Probes the backend's /health endpoint.
+  3. If the backend is healthy -> skips BACKSTOP_JOBS. The backend is doing
+     that work in-process.
+  4. If the backend is unreachable -> runs each BACKSTOP_JOBS entry.
 
-Jobs are idempotent (DB-level claim via UPDATE … WHERE … IS NULL) so a brief
-overlap with the in-process scheduler cannot cause double-sends.
+Always exits 0 on job-level problems (see main()).
+
+Backstop jobs are idempotent (DB-level claim via UPDATE ... WHERE ... IS NULL)
+so a brief overlap with the in-process scheduler cannot cause double-sends.
 
 Logs to stdout; systemd captures and routes to journalctl. Use:
 
@@ -34,10 +40,18 @@ import sys
 import urllib.error
 import urllib.request
 
-# Each job is a callable taking no arguments. Add new jobs here.
-from tools.ops.scheduled_jobs.jobs import privacy_requests_monitor
+# Each job is a module exposing run() (and optionally JOB_NAME).
+from tools.ops.scheduled_jobs.jobs import error_log_digest, privacy_requests_monitor
 
-JOBS = [privacy_requests_monitor]
+# Run on every tick, before the health gate - these report on the running
+# system (error-log digest) and self-throttle to their own cadence.
+#
+UNCONDITIONAL_JOBS = [error_log_digest]
+
+# Backstop jobs: run only when the backend is down (the in-process scheduler
+# handles these while it is up). Idempotent at the DB layer.
+#
+BACKSTOP_JOBS = [privacy_requests_monitor]
 
 HEALTH_URL = "http://127.0.0.1:8000/health"
 HEALTH_TIMEOUT_SECONDS = 5
@@ -62,10 +76,10 @@ def _backend_is_healthy() -> bool:
         return False
 
 
-def _run_jobs() -> int:
+def _run_jobs(jobs) -> int:
     log = logging.getLogger("novotree.scheduled_jobs")
     failures = 0
-    for job in JOBS:
+    for job in jobs:
         name = getattr(job, "JOB_NAME", job.__name__)
         try:
             job.run()
@@ -87,12 +101,18 @@ def main() -> int:
     _setup_logging()
     log = logging.getLogger("novotree.scheduled_jobs")
 
+    # Always-run phase - independent of backend health (self-throttling jobs).
+    failures = _run_jobs(UNCONDITIONAL_JOBS)
+
     if not args.force and _backend_is_healthy():
-        log.info("backend healthy at %s — skipping", HEALTH_URL)
+        log.info("backend healthy at %s - skipping backstop jobs", HEALTH_URL)
+        if failures:
+            log.warning("%d unconditional job(s) failed; check log above", failures)
         return 0
 
-    log.info("backend not reachable at %s — running %d job(s)", HEALTH_URL, len(JOBS))
-    failures = _run_jobs()
+    log.info("backend not reachable at %s - running %d backstop job(s)",
+             HEALTH_URL, len(BACKSTOP_JOBS))
+    failures += _run_jobs(BACKSTOP_JOBS)
     if failures:
         log.warning("%d job(s) failed; check log above", failures)
     # Exit 0 even on job failure: systemd's "service failed" status is for

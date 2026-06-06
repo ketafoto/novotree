@@ -740,12 +740,64 @@ per-mode rule. This task is the runtime enforcement.
       the config default were still 1.1 — only the §8 backup prose had landed;
       this change corrects that drift while bumping for the §8 log-retention edit).
 
-### 3.4 Ops emails (notes.txt L221)
+### 3.4 Ops emails (notes.txt L258)
 
-- [ ] Email errors from logs + backup logs to admin. Operational, not strictly
-      privacy work, but pairs with log scrubbing. Note: §3.2 already added a
-      `notify_ops()` seam in `vm-backup.py` (currently logs to stderr only) —
-      wire it to email the privacy/support mailbox here.
+- [x] Email errors from logs + backup logs to admin. Operational, not strictly
+      privacy work, but pairs with log scrubbing. Both halves email the
+      consolidated ops mailbox `privacy_contact_email` (§3.1) — no new recipient
+      env var was added.
+
+  **Backup-log half (novospace `vm-backup.py`).** The §3.2 `notify_ops()` seam
+  now emails as well as logging to stderr. A standalone sync SMTP sender
+  (`_send_ops_email`) sources `SMTP_HOST/PORT/USER/PASSWORD/FROM` +
+  `PRIVACY_CONTACT_EMAIL` from the environment — the script still can't import
+  the backend, so it reads the same env the backend does (mirrors the §3.2
+  `BACKUP_RETENTION_DAYS` pattern). It mirrors [_email.py](../../backend/api/_email.py)'s
+  posture: returns False, never raises, so a failed alert can't break a backup;
+  unset SMTP/recipient (dev, manual runs) falls back to the stderr line only.
+  `notify_ops()` now fires for **backup failures** too (the `__main__` block
+  wraps `do_backup()`), not just the §3.2 missing-`BACKUP_RETENTION_DAYS` case.
+  **VM wiring:** the §3.2 backup cron sourced `/etc/novotree.env` but only
+  forwarded `BACKUP_RETENTION_DAYS` across the `sudo -u novospace` boundary
+  (`--preserve-env=`); novospace `vm-setup.py` now forwards the SMTP_* +
+  `PRIVACY_CONTACT_EMAIL` vars too (single `BACKUP_CRON_PRESERVE_ENV_VARS` list)
+  so the alert email actually has creds + a recipient on the production path.
+
+  **Errors-from-logs half (backend-side, novotree).** A new scheduled job
+  [error_log_digest.py](../../tools/ops/scheduled_jobs/jobs/error_log_digest.py)
+  scans the `novotree` journald namespace (§3.3) for ERROR entries
+  (`journalctl --namespace novotree -u novotree -p err --since <cursor>`) and
+  emails a digest to `privacy_contact_email`, reusing the async
+  [_email.py](../../backend/api/_email.py) `send_email` (no SMTP-logic dup). It
+  is dispatched by the existing `novotree-backend-monitor` timer, but via a new
+  `UNCONDITIONAL_JOBS` phase in
+  [scheduled_jobs.py](../../tools/ops/scheduled_jobs/scheduled_jobs.py) that runs
+  **before** the health gate — the SLA-sweep `BACKSTOP_JOBS` only run when the
+  backend is *down*, but the digest must run while it is *up* (that is when
+  errors occur). Dedup/firehose control is a self-throttle: a cursor file under
+  `datasets/` records the last send; the job only emails once
+  `ERROR_DIGEST_INTERVAL_HOURS` (env, default 3h) has elapsed, covering
+  `[cursor, now]` so no window is skipped or double-reported. The first run just
+  seeds the cursor (no boot-backlog email). No new systemd units.
+
+  **Config knobs.** Two new env vars carried in `backend/.env.public.example`
+  (→ `/etc/novotree.env` via vm-setup.py step 6): `ERROR_DIGEST_INTERVAL_HOURS`
+  (default 3) and `JOURNAL_NAMESPACE` (default `novotree`). The namespace is
+  *owned* by novospace `vm-setup.py` (it builds `LogNamespace=` and the
+  `journald@<ns>` paths) and merely *published* into the env file so the digest
+  job reads the same value instead of re-hardcoding it — mirrors the §3.2/§3.3
+  "single source of truth in `/etc/novotree.env`" pattern. Neither is a privacy
+  knob, so neither is disclosed in `privacy.md`.
+
+> **Note — `privacy_policy_version`.** §3.4 is ops-only and changes no
+> user-facing privacy prose, so the version is **not** bumped. This also
+> corrects a stale claim above: the §3.3 entry narrates a bump "to 1.3", but
+> neither [config.py](../../backend/config.py) (`PRIVACY_POLICY_VERSION` default)
+> nor [privacy.md](privacy.md) (header) ever moved off **1.1** — only §3.3's §8
+> *prose* edits (retention minimums) landed; the version label was never
+> changed in code. Both files agree at 1.1 today. Per the operator's decision,
+> the version stays at 1.1 until the project is actually deployed; do not bump
+> it for §3.3's prose retroactively.
 
 ### 3.5 Admin CLI (notes.txt L208–213)
 
