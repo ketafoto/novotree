@@ -39,7 +39,7 @@ class TestImportExportGedcom:
 
         # Step 1: Import
         log_test_step("Step 1: Importing GEDCOM")
-        success1 = import_gedcom(test_owner.gedcom_file, test_owner.db_file)
+        success1 = import_gedcom(test_owner.gedcom_file, test_owner.db_file, test_owner.owner_id)
 
         # Check for unsupported tags (they print WARNING to stdout)
         log_debug("Import completed, checking for warnings...")
@@ -79,7 +79,7 @@ class TestImportExportGedcom:
         database.db.reset_engine()  # Reset engine to release file lock before deletion
         test_owner.db_file.unlink()
 
-        success3 = import_gedcom(export_file1, test_owner.db_file)
+        success3 = import_gedcom(export_file1, test_owner.db_file, test_owner.owner_id)
         assert success3, "Second import failed"
         log_test_step("Import 2 successful")
 
@@ -201,7 +201,7 @@ class TestLookupTablesAfterImport:
         ged_file = write_minimal_gedcom(test_temp_dir)
 
         log_test_step("Running import_gedcom into fresh database")
-        success = import_gedcom(ged_file, db_file)
+        success = import_gedcom(ged_file, db_file, owner.owner_id)
         assert success, "import_gedcom failed"
 
         log_test_step("Verifying lookup tables exist and are populated")
@@ -214,7 +214,7 @@ class TestLookupTablesAfterImport:
         owner = OwnerInfo(base_dir=test_temp_dir)
         ged_file = write_minimal_gedcom(test_temp_dir)
 
-        success = import_gedcom(ged_file, owner.db_file)
+        success = import_gedcom(ged_file, owner.db_file, owner.owner_id)
         assert success
 
         log_test_step("Simulating post-import engine reset + reinit")
@@ -225,3 +225,60 @@ class TestLookupTablesAfterImport:
         self._assert_lookup_tables(owner.db_file, log_test_step)
 
         database.db.reset_engine()
+
+
+class TestImportStampsContributorAttribution:
+    """Regression for PRIVACY_DESIGN.md section 3.6.
+
+    The importer used to leave created_by / created_at NULL on every imported
+    row, losing the attribution to the Owner that Mode B/C relies on. Every
+    Individual, Family, Event, Media, and IndividualName row must now carry
+    created_by = owner_id and a non-NULL created_at.
+    """
+
+    # The five row types that own created_by / created_at columns. FamilyMember
+    # / FamilyChild are join rows with no attribution columns (the parent
+    # Family's created_by is the proxy - see section 2.6), so they are excluded.
+    STAMPED_TABLES = (
+        "main_individuals",
+        "main_individual_names",
+        "main_families",
+        "main_events",
+        "main_media",
+    )
+
+    def test_imported_rows_are_stamped(self, test_temp_dir, log_test_step):
+        """Import the minimal fixture for an owner; assert no NULL attribution."""
+        owner_id = "test_owner_3_6"
+        log_test_step(f"Importing minimal GEDCOM for owner '{owner_id}'")
+
+        database.db.reset_engine()
+        owner = OwnerInfo(owner_id=owner_id, base_dir=test_temp_dir)
+        ged_file = write_minimal_gedcom(test_temp_dir)
+
+        success = import_gedcom(ged_file, owner.db_file, owner.owner_id)
+        assert success, "import_gedcom failed"
+
+        conn = sqlite3.connect(str(owner.db_file))
+        cursor = conn.cursor()
+        try:
+            for table in self.STAMPED_TABLES:
+                cursor.execute(f"SELECT COUNT(*) FROM {table}")
+                total = cursor.fetchone()[0]
+                assert total > 0, f"{table}: fixture produced no rows to check"
+
+                cursor.execute(
+                    f"SELECT COUNT(*) FROM {table} "
+                    f"WHERE created_by IS NULL OR created_at IS NULL"
+                )
+                unstamped = cursor.fetchone()[0]
+                assert unstamped == 0, f"{table}: {unstamped}/{total} rows have NULL created_by/created_at"
+
+                cursor.execute(f"SELECT DISTINCT created_by FROM {table}")
+                owners = {row[0] for row in cursor.fetchall()}
+                assert owners == {owner_id}, f"{table}: created_by values {owners} != {{'{owner_id}'}}"
+
+                log_test_step(f"  {table}: {total} rows all stamped created_by='{owner_id}'")
+        finally:
+            conn.close()
+            database.db.reset_engine()

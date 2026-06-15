@@ -208,9 +208,10 @@ fresh deploy. To mint your account, temporarily flip the override:
   1. /etc/novotree.env: add ALLOW_OWNER_SIGNUP=true; sudo systemctl restart novotree
   2. open /novotree/signup, create the account, verify via email link
   3. remove ALLOW_OWNER_SIGNUP (or =false); sudo systemctl restart novotree
-Your account persists; signup is closed again. (No admin CLI yet — that is
-the Tier-2 §3.5 work. This temp-flag dance is the documented bootstrap until
-then.) Same steps in DEPLOYMENT.md post-deploy smoke test.
+Your account persists; signup is closed again. (The §3.5 admin CLI was
+dropped — triage ships as the Owner UI instead (PRIVACY_DESIGN.md §3.5), but
+that UI does not create accounts, so this temp-flag dance stays the documented
+bootstrap.) Same steps in DEPLOYMENT.md post-deploy smoke test.
 
 
 Next
@@ -221,7 +222,6 @@ Bugs
 
 Go private
 -----------------------------
-*. Legals for private usage (mode A tiers 1 & 2 from docs\PRIVACY_DESIGN.md)
 *. Add link to downloadable application, so friends could build their tree privately
 
 Go contributors (mode B - payed consultation with lawyer & tier 2)
@@ -248,11 +248,14 @@ Go public
 -----------------------------
 *. Legals (mode C - payed consultation with lawyer & tier 3)
 
-*. We probably need a separate "admin" page - to be accessible by admin (me) only - or better to use CLI ???
+*. We probably need a separate "admin" page - to be accessible by admin (me) only.
+   (CLI-vs-UI question resolved: UI, not CLI - see PRIVACY_DESIGN.md §3.5. The
+   Mode-A privacy-request triage already ships as the Owner queue; what remains
+   below is Mode-C-only admin surface, still open.)
    On this page UI should:
    1. Manage users - both contributors and owners (invite, add, delete)
    2. Run manually backup script using the vm-backup.py script
-   (found either under ../novospace.git/scripts/deployment/vm-backup.py. or under deployment folder installed by 
+   (found either under ../novospace.git/scripts/deployment/vm-backup.py. or under deployment folder installed by
    ../novospace.git/scripts/deployment/vm-setup.py)
 
 Next Phase

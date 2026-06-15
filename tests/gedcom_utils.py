@@ -7,7 +7,10 @@ from pathlib import Path
 
 # Minimal but representative GEDCOM for tests that need importable data.
 # Covers: header, submitter, two individuals (M/F), one family with a child,
-# birth/death events, marriage, and a media reference.
+# birth/death events, a standalone individual event (OCCU -> main_events row),
+# marriage, and a media reference. The OCCU event ensures the main_events
+# table is exercised (BIRT/DEAT/MARR land in individual/family date columns,
+# not main_events).
 MINIMAL_GEDCOM = """\
 0 HEAD
 1 SOUR TEST
@@ -29,6 +32,9 @@ MINIMAL_GEDCOM = """\
 1 DEAT
 2 DATE 15 MAR 2020
 2 PLAC Shelbyville
+1 OCCU Blacksmith
+2 DATE ABT 1985
+2 PLAC Springfield
 1 OBJE
 2 FILE media/john_35.jpg
 2 FORM photo

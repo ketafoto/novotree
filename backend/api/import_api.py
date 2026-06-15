@@ -113,7 +113,7 @@ async def import_gedcom_endpoint(
             media_count = sum(1 for f in owner.media_dir.rglob('*') if f.is_file())
 
         try:
-            success = import_gedcom(gedcom_path, owner.db_file)
+            success = import_gedcom(gedcom_path, owner.db_file, owner.owner_id)
             if not success:
                 raise HTTPException(status_code=500, detail="Import failed — check server logs for details")
         except HTTPException:

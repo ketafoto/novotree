@@ -26,6 +26,7 @@ from typing import Dict, List, Optional, Tuple
 
 import database.db
 from backend import schemas
+from database import models
 from database.models import (
     Individual, IndividualName, Family, FamilyMember, FamilyChild,
     Event, Media, Header
@@ -69,9 +70,23 @@ def _extract_age_from_filename(file_path: str) -> Optional[int]:
 
 # ==================== ORM Helper Functions ====================
 
-def _create_individual(individual_data, db: Session) -> Individual:
+def _stamp(row, owner_id: str, created_at: str):
+    """Stamp contributor attribution onto an imported row.
+
+    Every imported Individual / Family / Event / Media / IndividualName must
+    carry created_by = owner_id and created_at, so that switching out of the
+    single-owner Mode A later (Mode B/C, multi-editor) does not lose the
+    historical attribution to the Owner who imported the tree. See
+    PRIVACY_DESIGN.md section 3.6.
+    """
+    row.created_by = owner_id
+    row.created_at = created_at
+    return row
+
+
+def _create_individual(individual_data, owner_id: str, created_at: str, db: Session) -> Individual:
     """Create an individual with associated names."""
-    db_individual = Individual(
+    db_individual = _stamp(Individual(
         gedcom_id=individual_data.gedcom_id,
         sex_code=individual_data.sex_code,
         birth_date=individual_data.birth_date,
@@ -81,16 +96,16 @@ def _create_individual(individual_data, db: Session) -> Individual:
         death_date_approx=individual_data.death_date_approx,
         death_place=individual_data.death_place,
         notes=individual_data.notes,
-    )
+    ), owner_id, created_at)
 
     for name_in in individual_data.names:
-        db_name = IndividualName(
+        db_name = _stamp(IndividualName(
             given_name=name_in.given_name,
             family_name=name_in.family_name,
             name_type=name_in.name_type,
             name_order=name_in.name_order,
             individual=db_individual,
-        )
+        ), owner_id, created_at)
         db.add(db_name)
 
     db.add(db_individual)
@@ -98,9 +113,9 @@ def _create_individual(individual_data, db: Session) -> Individual:
     return db_individual
 
 
-def _create_family(family_data, db: Session) -> Family:
+def _create_family(family_data, owner_id: str, created_at: str, db: Session) -> Family:
     """Create a family with associated members and children."""
-    db_family = Family(
+    db_family = _stamp(Family(
         gedcom_id=family_data.gedcom_id,
         marriage_date=family_data.marriage_date,
         marriage_date_approx=family_data.marriage_date_approx,
@@ -109,7 +124,7 @@ def _create_family(family_data, db: Session) -> Family:
         divorce_date_approx=family_data.divorce_date_approx,
         family_type=family_data.family_type or "marriage",
         notes=family_data.notes,
-    )
+    ), owner_id, created_at)
 
     for member_in in family_data.members:
         db_member = FamilyMember(
@@ -511,8 +526,13 @@ def parse_gedcom_file(gedcom_file: Path) -> Tuple[Dict, Dict, Dict, List[str]]:
 
     return header, individuals, families, unsupported_tags
 
-def import_gedcom(gedcom_file: Path, db_file: Path) -> bool:
-    """Import GEDCOM file into database using backend models."""
+def import_gedcom(gedcom_file: Path, db_file: Path, owner_id: str) -> bool:
+    """Import GEDCOM file into database using backend models.
+
+    Every imported row is stamped with created_by = owner_id and a single
+    created_at timestamp (shared across the whole import for consistency); see
+    _stamp and PRIVACY_DESIGN.md section 3.6.
+    """
 
     # Validation
     if not gedcom_file.exists() or gedcom_file.stat().st_size == 0:
@@ -539,6 +559,9 @@ def import_gedcom(gedcom_file: Path, db_file: Path) -> bool:
         if len(unsupported_tags) > 5:
             print(f"  ... and {len(unsupported_tags) - 5} more")
         print()
+
+    # One timestamp for the whole import, so every stamped row shares it.
+    created_at = models._now_iso()
 
     try:
         db_engine = database.db.engine_from_url(f"sqlite:///{db_file}")
@@ -615,32 +638,32 @@ def import_gedcom(gedcom_file: Path, db_file: Path) -> bool:
                         name_order=idx
                     ))
 
-                db_ind = _create_individual(ind_create, db)
+                db_ind = _create_individual(ind_create, owner_id, created_at, db)
                 gedcom_to_db_id[gedcom_id] = db_ind.id
 
                 # Add events for this individual (with raw GEDCOM dates)
                 for event_data in ind_data.get("events", []):
-                    db_event = Event(
+                    db_event = _stamp(Event(
                         individual_id=db_ind.id,
                         event_type_code=event_data["type"],
                         event_date=event_data.get("date"),
                         event_date_approx=event_data.get("date_approx"),
                         event_place=event_data.get("place"),
                         description=event_data.get("description")
-                    )
+                    ), owner_id, created_at)
                     db.add(db_event)
                     event_count += 1
 
                 # Add media for this individual
                 for media_data in ind_data.get("media", []):
                     if media_data.get("file"):
-                        db_media = Media(
+                        db_media = _stamp(Media(
                             individual_id=db_ind.id,
                             file_path=media_data["file"],
                             media_type_code=media_data.get("type"),
                             description=media_data.get("title"),
                             age_on_photo=_extract_age_from_filename(media_data["file"]),
-                        )
+                        ), owner_id, created_at)
                         db.add(db_media)
                         media_count += 1
 
@@ -679,32 +702,32 @@ def import_gedcom(gedcom_file: Path, db_file: Path) -> bool:
                             child_id=gedcom_to_db_id[child_id]
                         ))
 
-                db_fam = _create_family(fam_create, db)
+                db_fam = _create_family(fam_create, owner_id, created_at, db)
                 family_to_db_id[gedcom_id] = db_fam.id
 
                 # Add events for this family (with raw GEDCOM dates)
                 for event_data in fam_data.get("events", []):
-                    db_event = Event(
+                    db_event = _stamp(Event(
                         family_id=db_fam.id,
                         event_type_code=event_data["type"],
                         event_date=event_data.get("date"),
                         event_date_approx=event_data.get("date_approx"),
                         event_place=event_data.get("place"),
                         description=event_data.get("description")
-                    )
+                    ), owner_id, created_at)
                     db.add(db_event)
                     event_count += 1
 
                 # Add media for this family
                 for media_data in fam_data.get("media", []):
                     if media_data.get("file"):
-                        db_media = Media(
+                        db_media = _stamp(Media(
                             family_id=db_fam.id,
                             file_path=media_data["file"],
                             media_type_code=media_data.get("type"),
                             description=media_data.get("title"),
                             age_on_photo=_extract_age_from_filename(media_data["file"]),
-                        )
+                        ), owner_id, created_at)
                         db.add(db_media)
                         media_count += 1
 
@@ -744,8 +767,13 @@ def import_for_owner(owner_id: Optional[str] = None, gedcom_file: Optional[str] 
     print(f"   GEDCOM file: {owner_info.gedcom_file}")
     print(f"   Database: {owner_info.db_file}")
 
-    # owner_info.gedcom_file and db_file are always Path after __post_init__
-    return import_gedcom(Path(owner_info.gedcom_file), Path(owner_info.db_file))  # type: ignore[arg-type]
+    # owner_info.gedcom_file / db_file are Path and owner_id is resolved to
+    # DEFAULT_OWNER_ID (never None) after __post_init__.
+    return import_gedcom(
+        Path(owner_info.gedcom_file),  # type: ignore[arg-type]
+        Path(owner_info.db_file),      # type: ignore[arg-type]
+        owner_info.owner_id,           # type: ignore[arg-type]
+    )
 
 
 if __name__ == "__main__":

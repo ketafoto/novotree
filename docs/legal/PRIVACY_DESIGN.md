@@ -799,7 +799,7 @@ per-mode rule. This task is the runtime enforcement.
 > the version stays at 1.1 until the project is actually deployed; do not bump
 > it for §3.3's prose retroactively.
 
-### 3.5 Admin CLI (notes.txt L208–213)
+### 3.5 Admin triage — delivered via the Owner UI, not a CLI (notes.txt L211–212, L251)
 
 A "ticket" here means a row in the `privacy_requests` table created by §2.2
 + §2.7. It is not a separate ticket-tracker product. "Triage" means the
@@ -807,12 +807,46 @@ operator reviewing rows where `status='open'` and choosing the next action
 (forward to Owner / mark resolved / escalate / hide records, or for access
 requests, run the §2.6 export and forward).
 
-- [ ] CLI is the canonical admin path in Mode A. (The in-app admin endpoint
-      is intentionally deferred to Mode C — see §4.9 — because in Mode A
-      the operator is the only Owner and an in-app endpoint duplicates the
-      Owner's own access.) Commands: list owners, manual backup trigger,
-      list and resolve open `privacy_requests` rows, force-delete an
-      Individual on Owner's behalf after the SLA expires.
+- [x] **Triage shipped as the Owner-facing privacy-request queue, superseding
+      the originally-scoped admin CLI.** The item was first written as "a CLI is
+      the canonical admin path in Mode A, because the in-app admin endpoint is
+      deferred to Mode C (§4.9)". That premise was overtaken: the Owner-gated
+      queue was built and it serves Mode A directly — in Mode A the operator
+      *is* the only Owner, so the Owner UI is the operator's admin path; no
+      separate CLI is needed.
+
+  **Where it lives.** [PrivacyRequestsPage.tsx](../../frontend/src/pages/legal/PrivacyRequestsPage.tsx)
+  (route `legal/privacy-requests`, in the sidebar) backed by `owner_router` in
+  [privacy_requests.py](../../backend/api/privacy_requests.py), all gated by
+  `Depends(require_owner)`:
+    - **list open tickets** — `GET /privacy/requests` (returns open + escalated
+      by default; `include_resolved` for the audit view);
+    - **resolve a ticket** — `PATCH /privacy/requests/{id}` (`open → resolved`,
+      `escalated → resolved`);
+    - **force-delete on the Owner's behalf** — `DELETE /individuals/{id}`
+      ([individuals.py](../../backend/api/individuals.py)) for the record, and
+      `DELETE /privacy/requests/{id}` to close the ticket. SLA timing is the
+      §2.7 / §3 sweep's concern (`_privacy_request_sweep.sweep_once`); the
+      operator acts once a request is open/escalated.
+    - For **access** requests, the §2.6 export
+      (`GET /individuals/{id}/data-export`) produces the payload to forward.
+
+  **The two items the UI does not cover, and why they are not CLI work:**
+    - *list owners* — degenerate in Mode A (a single owner, `DEFAULT_OWNER_ID`).
+      Enumerating owners only matters under Mode C, which has its own admin path
+      (§4.9). Not a Mode-A gap.
+    - *manual backup trigger* — an ops action, not an app feature: backups run
+      from novospace `vm-backup.py` (daily cron installed by the deployer; a
+      manual run is `sudo -u novospace … vm-backup.py`). Out of scope for an
+      in-app admin surface.
+
+  > **Note — bootstrap.** `notes.txt` (L211–212) still describes the
+  > temp-`ALLOW_OWNER_SIGNUP` dance as the bootstrap "until the §3.5 admin CLI."
+  > That CLI is not coming; the bootstrap flag-flip remains the documented way
+  > to mint the first Owner account in `private` mode (it is account creation,
+  > which the triage UI does not and should not do). The L251 musing
+  > ("separate admin page, or better a CLI?") is resolved in favor of the
+  > Owner UI.
 
 ### 3.6 Verify GEDCOM importer stamps `created_by`
 
@@ -820,10 +854,26 @@ Light future-proofing for Mode B / Mode C: if the importer leaves rows with
 `created_by IS NULL`, switching out of Mode A later loses the historical
 attribution to the Owner.
 
-- [ ] One-time verification in [database/gedcom_import.py](../database/gedcom_import.py) —
-      every imported `Individual`, `Family`, `Event`, `Media`, `IndividualName`
-      row sets `created_by = owner_id` and `created_at = now`. Add a regression
-      test if missing.
+- [x] **Was a bug, not just a verify — now fixed.** The importer was leaving
+      `created_by` / `created_at` NULL on *every* imported row (the exact
+      attribution loss this item warns about). `owner_id` was not threaded
+      below `import_for_owner` either. Fixed in
+      [database/gedcom_import.py](../database/gedcom_import.py): `owner_id` is
+      now threaded `import_for_owner -> import_gedcom -> _create_*` and the
+      `Event` / `Media` build sites; a single `_stamp(row, owner_id, created_at)`
+      helper stamps every imported `Individual`, `Family`, `Event`, `Media`,
+      `IndividualName` row with `created_by = owner_id` and one shared
+      `created_at` (reusing `database.models._now_iso()`, no duplicated format
+      string). `FamilyMember` / `FamilyChild` are join rows with no attribution
+      columns, so the parent `Family`'s `created_by` is the proxy (see section 2.6).
+      The export never emits these internal columns into GEDCOM, so the
+      round-trip stays lossless. Covered by the new regression test
+      `TestImportStampsContributorAttribution` in
+      [tests/database/test_database.py](../tests/database/test_database.py),
+      which asserts no NULL `created_by` / `created_at` on any of the five row
+      types and that `created_by == owner_id`. **Out of scope:** existing NULL
+      rows from past imports are not back-filled (no migration), and column
+      nullability is unchanged.
 
 ### 3.7 Special-category gating (M-05, Phase 6.1–6.2)
 

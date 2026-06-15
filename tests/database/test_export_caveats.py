@@ -47,7 +47,7 @@ class TestExportCaveats:
 
         # Step 1: Import input GEDCOM
         log_test_step("Importing input GEDCOM")
-        success = import_gedcom(input_ged, test_owner.db_file)
+        success = import_gedcom(input_ged, test_owner.db_file, test_owner.owner_id)
         assert success, "Import failed"
 
         # Step 2: Find individual by GEDCOM ID
