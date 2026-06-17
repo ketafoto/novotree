@@ -72,17 +72,13 @@ def export_datasets(repo_root: Path, owner: str, output_dir: Path) -> Path:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Export owner dataset archive.")
+    # Arguments alphabetical by long flag (CLAUDE.md).
     parser.add_argument(
-        "--repo-root",
-        dest="repo_root",
+        "--copy-latest-to",
+        dest="copy_latest_to",
         type=Path,
-        default=Path(__file__).resolve().parents[2],
-        help="Repository root directory.",
-    )
-    parser.add_argument(
-        "--owner",
-        required=True,
-        help="Owner folder under datasets/ that contains data.sqlite and media/.",
+        default=None,
+        help="Optional path to copy the generated archive for upload convenience.",
     )
     parser.add_argument(
         "--output-dir",
@@ -92,11 +88,16 @@ def main() -> None:
         help="Directory where archive will be written.",
     )
     parser.add_argument(
-        "--copy-latest-to",
-        dest="copy_latest_to",
+        "--owner",
+        required=True,
+        help="Owner folder under datasets/ that contains data.sqlite and media/.",
+    )
+    parser.add_argument(
+        "--repo-root",
+        dest="repo_root",
         type=Path,
-        default=None,
-        help="Optional path to copy the generated archive for upload convenience.",
+        default=Path(__file__).resolve().parents[2],
+        help="Repository root directory.",
     )
     args = parser.parse_args()
 
