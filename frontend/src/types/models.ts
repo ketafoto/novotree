@@ -34,6 +34,7 @@ export interface Individual {
   notes?: string;
   is_sensitive?: boolean;       // GDPR Art. 9: hide whole person from share-link viewers
   notes_sensitive?: boolean;    // GDPR Art. 9: hide only the notes
+  parental_consent?: boolean;   // GDPR Art. 8: Owner asserts consent to store this minor's data
   names: IndividualName[];
   created_by?: string;
   created_by_display_name?: string;
@@ -52,6 +53,7 @@ export interface IndividualCreate {
   notes?: string;
   is_sensitive?: boolean;
   notes_sensitive?: boolean;
+  parental_consent?: boolean;   // GDPR Art. 8: Owner asserts consent to store this minor's data
   names: IndividualNameCreate[];
 }
 
@@ -244,6 +246,7 @@ export interface ShareToken {
   label?: string;
   is_active: boolean;
   expose_sensitive: boolean;  // GDPR Art. 9: whether this link exposes sensitive data
+  expose_minors: boolean;     // GDPR Art. 8: whether this link exposes minors
   created_at?: string;
   last_used_at?: string;
   expires_after_days: number;
@@ -254,6 +257,7 @@ export interface ShareTokenCreate {
   description?: string;  // alias accepted by backend
   expires_after_days?: number;
   expose_sensitive?: boolean;  // per-share §3.7 flag; default false (sensitive data excluded)
+  expose_minors?: boolean;     // per-share §3.8 flag; default false (minors excluded)
   acknowledgement: boolean;  // per-share §9.4 modal; backend rejects when false
 }
 
@@ -333,6 +337,8 @@ export interface TreeNode {
   notes?: string;
   is_sensitive?: boolean;
   notes_sensitive?: boolean;
+  is_minor?: boolean;          // GDPR Art. 8: living minor (drives the consent upload gate + viewer exclusion)
+  parental_consent?: boolean;  // GDPR Art. 8: Owner has asserted consent
   photo_url?: string;
   photos: TreeNodePhoto[];
   generation: number;

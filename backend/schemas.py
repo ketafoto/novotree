@@ -38,6 +38,7 @@ class IndividualBase(BaseModel):
     notes: Optional[str] = None
     is_sensitive: Optional[bool] = None       # GDPR Art. 9: hide whole person from share-link viewers
     notes_sensitive: Optional[bool] = None    # GDPR Art. 9: hide only the notes
+    parental_consent: Optional[bool] = None   # GDPR Art. 8: Owner asserts they may store this minor's data
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -258,6 +259,8 @@ class TreeNode(BaseModel):
     notes: Optional[str] = None
     is_sensitive: bool = False     # special-category (GDPR Art. 9): whole-person flag, drives the Owner's tree-view hide
     notes_sensitive: bool = False  # special-category (GDPR Art. 9): drives the Owner's tree-view hide toggle
+    is_minor: bool = False         # GDPR Art. 8: living minor; drives the parental-consent upload gate + viewer exclusion
+    parental_consent: bool = False # GDPR Art. 8: Owner has asserted consent; clears the upload gate
     photo_url: Optional[str] = None
     photos: List[TreeNodePhoto] = []
     generation: int

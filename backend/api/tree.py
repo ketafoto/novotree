@@ -9,6 +9,7 @@ from typing import Dict, List, Optional, Set, Tuple
 
 from .. import schemas
 import database.models as models
+from backend.config import privacy_settings
 from .auth import ViewerContext, get_viewer_context, get_viewer_tree_db
 
 router = APIRouter(prefix="/individuals", tags=["tree"])
@@ -131,6 +132,10 @@ def _build_node(
     with no trace: sensitive events are omitted from the events list and
     notes_sensitive notes are blanked. Whole-person exclusion (is_sensitive) is
     handled by the caller, which drops the node and its edges entirely.
+
+    is_minor (GDPR Art. 8) is stamped for the Owner so the frontend can drive
+    the parental-consent upload gate and a marker; whole-minor exclusion for
+    share viewers is handled by the caller alongside is_sensitive.
     """
     events = []
     for evt in sorted(
@@ -177,6 +182,8 @@ def _build_node(
         notes=None if (exclude_sensitive and individual.notes_sensitive) else individual.notes,
         is_sensitive=bool(individual.is_sensitive),
         notes_sensitive=bool(individual.notes_sensitive),
+        is_minor=models.individual_is_minor(individual, privacy_settings.child_age_threshold_years),
+        parental_consent=bool(individual.parental_consent),
         photo_url=_get_photo_url(individual),
         photos=_get_all_photos(individual),
         generation=generation,
@@ -285,6 +292,8 @@ def get_individual_tree(
     and couples (partner pairs) up to the requested ancestor/descendant depth.
     """
     exclude_sensitive = ctx.is_share_viewer and not ctx.expose_sensitive
+    exclude_minors = ctx.is_share_viewer and not ctx.expose_minors
+    threshold = privacy_settings.child_age_threshold_years
     # Verify the focus individual exists
     focus = (
         db.query(models.Individual)
@@ -495,7 +504,15 @@ def get_individual_tree(
     for ind_id in collected_ids:
         ind = individual_map.get(ind_id)
         if ind:
+            # Minor exclusion preserves the focus person so a minor's own
+            # per-individual tree is not blank (matches the §3.7 frontend
+            # focus-kept rule); is_sensitive exclusion keeps its original §3.7
+            # behavior of dropping even the focus when whole-person sensitive.
+            #
             if exclude_sensitive and ind.is_sensitive:
+                excluded_ids.add(ind_id)
+                continue
+            if exclude_minors and ind_id != individual_id and models.individual_is_minor(ind, threshold):
                 excluded_ids.add(ind_id)
                 continue
             gen = individual_generation.get(ind_id, 0)
@@ -535,6 +552,8 @@ def get_full_tree(
     arbitrary root so that the layout algorithm can position them correctly.
     """
     exclude_sensitive = ctx.is_share_viewer and not ctx.expose_sensitive
+    exclude_minors = ctx.is_share_viewer and not ctx.expose_minors
+    threshold = privacy_settings.child_age_threshold_years
 
     from sqlalchemy import text as sql_text
 
@@ -682,7 +701,9 @@ def get_full_tree(
     nodes: List[schemas.TreeNode] = []
     excluded_ids: Set[int] = set()
     for ind in all_individuals:
-        if exclude_sensitive and ind.is_sensitive:
+        if (exclude_sensitive and ind.is_sensitive) or (
+            exclude_minors and models.individual_is_minor(ind, threshold)
+        ):
             excluded_ids.add(ind.id)
             continue
         gen = generation.get(ind.id, 0)

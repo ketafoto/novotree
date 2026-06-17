@@ -14,21 +14,30 @@ import { useEffect, useState } from 'react';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import { Modal } from './common/Modal';
 import { SensitiveCheckbox } from './common/SensitiveCheckbox';
+import { usePrivacyConfig } from '../hooks/usePrivacyConfig';
+import { minorDataExplanation } from '../constants/sensitiveData';
 
 interface ShareConsentModalProps {
   open: boolean;
   onCancel: () => void;
-  onConfirm: (exposeSensitive: boolean) => void;
+  onConfirm: (exposeSensitive: boolean, exposeMinors: boolean) => void;
   isSubmitting?: boolean;
 }
 
 export function ShareConsentModal({ open, onCancel, onConfirm, isSubmitting }: ShareConsentModalProps) {
-  // Default off: sensitive data is excluded from the link unless the Owner opts in.
+  // Default off: sensitive data and minors are excluded from the link unless the
+  // Owner opts in. The two are independent per-link choices (GDPR Art. 9 / 8).
   const [exposeSensitive, setExposeSensitive] = useState(false);
+  const [exposeMinors, setExposeMinors] = useState(false);
+  const { config } = usePrivacyConfig();
+  const threshold = config?.child_age_threshold_years ?? 16;
 
-  // Reset the opt-in each time the modal opens, so it never carries over silently.
+  // Reset the opt-ins each time the modal opens, so they never carry over silently.
   useEffect(() => {
-    if (open) setExposeSensitive(false);
+    if (open) {
+      setExposeSensitive(false);
+      setExposeMinors(false);
+    }
   }, [open]);
 
   return (
@@ -54,6 +63,12 @@ export function ShareConsentModal({ open, onCancel, onConfirm, isSubmitting }: S
           label="Include sensitive data in this link"
           description="Off by default: sensitive events, notes, people and photos are excluded entirely from this link. Tick only if the viewers are entitled to see special-category data."
         />
+        <SensitiveCheckbox
+          checked={exposeMinors}
+          onChange={setExposeMinors}
+          label="Include minors in this link"
+          description={`Off by default: living people under ${threshold} (their record, connections and photos) are excluded entirely from this link. ${minorDataExplanation(threshold)}`}
+        />
         <div className="flex justify-end gap-2 pt-2">
           <button
             type="button"
@@ -65,7 +80,7 @@ export function ShareConsentModal({ open, onCancel, onConfirm, isSubmitting }: S
           </button>
           <button
             type="button"
-            onClick={() => onConfirm(exposeSensitive)}
+            onClick={() => onConfirm(exposeSensitive, exposeMinors)}
             disabled={isSubmitting}
             className="inline-flex items-center px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
           >

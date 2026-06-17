@@ -429,15 +429,23 @@ class ViewerContext:
     """Resolved read-only (viewer) access context.
 
     Distinguishes an authenticated editor (owner/contributor) from an anonymous
-    share-token viewer, and carries the share link's `expose_sensitive` flag so
-    payload endpoints can gate special-category (GDPR Art. 9) data. For an
-    editor (or dev bypass) `is_share_viewer` is False — the Owner always sees
-    everything and no filtering applies.
+    share-token viewer, and carries the share link's `expose_sensitive` (GDPR
+    Art. 9) and `expose_minors` (GDPR Art. 8) flags so payload endpoints can
+    gate special-category data and minors independently. For an editor (or dev
+    bypass) `is_share_viewer` is False -- the Owner always sees everything and
+    no filtering applies.
     """
-    def __init__(self, owner_id: str, is_share_viewer: bool, expose_sensitive: bool):
+    def __init__(
+        self,
+        owner_id: str,
+        is_share_viewer: bool,
+        expose_sensitive: bool,
+        expose_minors: bool,
+    ):
         self.owner_id = owner_id
         self.is_share_viewer = is_share_viewer
         self.expose_sensitive = expose_sensitive
+        self.expose_minors = expose_minors
 
 
 def _resolve_valid_share_token(db: Session, share: str):
@@ -474,13 +482,17 @@ def get_viewer_context(
     Accepts either an authenticated editor session or a valid share token.
     """
     if settings.is_dev:
-        return ViewerContext(DEFAULT_OWNER_ID, is_share_viewer=False, expose_sensitive=True)
+        return ViewerContext(
+            DEFAULT_OWNER_ID, is_share_viewer=False, expose_sensitive=True, expose_minors=True
+        )
 
     # Try authenticated session first — reuse get_current_editor to enforce freeze checks
     if access_token:
         try:
             session = get_current_editor(access_token=access_token, db=db)
-            return ViewerContext(session.owner_id, is_share_viewer=False, expose_sensitive=True)
+            return ViewerContext(
+                session.owner_id, is_share_viewer=False, expose_sensitive=True, expose_minors=True
+            )
         except HTTPException:
             pass
 
@@ -491,6 +503,7 @@ def get_viewer_context(
                 token_row.owner_id,
                 is_share_viewer=True,
                 expose_sensitive=bool(token_row.expose_sensitive),
+                expose_minors=bool(token_row.expose_minors),
             )
 
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")

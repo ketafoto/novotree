@@ -38,6 +38,32 @@ def event_is_sensitive(event) -> bool:
     return bool(event.is_sensitive) or event.event_type_code in SENSITIVE_EVENT_CODES
 
 
+def individual_is_minor(individual, threshold_years: int) -> bool:
+    """True if an Individual is a living minor under GDPR Art. 8: born within
+    threshold_years of today AND not recorded as deceased.
+
+    Only the exact birth_date (the parsed Date column) is considered. An
+    individual with only birth_date_approx (e.g. "ABT 1980") is treated as NOT
+    a known minor: we cannot prove age from an approximate string, and
+    auto-hiding every undated person would gut the tree. Genuinely
+    unknown-age people who must be protected are covered by the manual
+    is_sensitive path instead. See PRIVACY_DESIGN.md 3.8.
+    """
+    if individual.birth_date is None or individual.death_date is not None:
+        return False
+    today = datetime.now(timezone.utc).date()
+    # The threshold birthday: a person is a minor while strictly younger than
+    # threshold_years. They cross on the birthday threshold_years after birth.
+    #
+    born = individual.birth_date
+    try:
+        threshold_birthday = born.replace(year=born.year + threshold_years)
+    except ValueError:
+        # Feb 29 birth in a non-leap target year -> treat the crossing as Mar 1.
+        threshold_birthday = born.replace(year=born.year + threshold_years, day=1, month=3)
+    return today < threshold_birthday
+
+
 Base = declarative_base()
 
 class Individual(Base):
@@ -59,6 +85,14 @@ class Individual(Base):
 	#
     is_sensitive = Column(Boolean, nullable=True)
     notes_sensitive = Column(Boolean, nullable=True)
+    # GDPR Art. 8 (children). parental_consent: the Owner asserts they may store a
+    # minor's data; the photo-upload gate requires it for a living minor (see
+    # backend/api/media.py). consent_reminder_sent_at is job-state for the
+    # 16th-birthday re-confirm reminder so it emails once per crossing (see
+    # tools/ops/scheduled_jobs/jobs/minor_consent_reminder.py). NULL = not set.
+    #
+    parental_consent = Column(Boolean, nullable=True)
+    consent_reminder_sent_at = Column(String, nullable=True)
     created_by = Column(String, nullable=True)
     created_at = Column(String, nullable=True)
 

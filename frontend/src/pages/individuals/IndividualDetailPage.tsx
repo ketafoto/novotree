@@ -13,6 +13,7 @@ import {
   Star,
   Music,
   Film,
+  Info,
 } from 'lucide-react';
 import { individualsApi } from '../../api/individuals';
 import { familiesApi } from '../../api/families';
@@ -42,7 +43,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { SensitiveInfo } from '../../components/common/SensitiveInfo';
 import { SensitiveCheckbox } from '../../components/common/SensitiveCheckbox';
 import { SensitiveViewToggle } from '../../components/common/SensitiveViewToggle';
-import { eventIsSensitive } from '../../constants/sensitiveData';
+import { eventIsSensitive, individualIsMinor, minorDataExplanation } from '../../constants/sensitiveData';
+import { usePrivacyConfig } from '../../hooks/usePrivacyConfig';
 import type { Event, Media } from '../../types/models';
 
 type SectionModal = 'basic' | 'names' | 'birth' | 'death' | 'notes' | 'events' | 'photos' | 'families' | null;
@@ -86,6 +88,15 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
     queryFn: () => mediaApi.list({ individual_id: Number(id) }),
     enabled: !!id,
   });
+
+  const { config: privacyConfig } = usePrivacyConfig();
+  const childThreshold = privacyConfig?.child_age_threshold_years ?? 16;
+  // GDPR Art. 8: a living minor needs the Owner's parental-consent confirmation
+  // before their photos can be uploaded. The server is the real gate (media.py);
+  // this drives the in-dialog checkbox and the detail-page consent control.
+  //
+  const isMinor = individual ? individualIsMinor(individual, childThreshold) : false;
+  const needsParentalConsent = isMinor && !individual?.parental_consent;
 
   const [showPhotoDialog, setShowPhotoDialog] = useState(false);
   const [editingPhoto, setEditingPhoto] = useState<Media | null>(null);
@@ -175,6 +186,17 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
       toast.success(value ? 'Marked person sensitive' : 'Unmarked person');
     },
     onError: (err) => toast.error(apiErrorMessage(err, 'Failed to update sensitivity')),
+  });
+
+  const setParentalConsentMutation = useMutation({
+    mutationFn: (value: boolean) => individualsApi.update(Number(id), { parental_consent: value }),
+    onSuccess: (_, value) => {
+      queryClient.invalidateQueries({ queryKey: ['individuals', id] });
+      queryClient.invalidateQueries({ queryKey: ['individuals'] });
+      queryClient.invalidateQueries({ queryKey: ['tree'] });
+      toast.success(value ? 'Recorded parental consent' : 'Cleared parental consent');
+    },
+    onError: (err) => toast.error(apiErrorMessage(err, 'Failed to update parental consent')),
   });
 
   const deleteMediaMutation = useMutation({
@@ -422,6 +444,24 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
                 />
               </div>
             )}
+            {/* Parental consent (GDPR Art. 8): only relevant for a living minor.
+                Persists immediately; clears the photo-upload gate when ticked. */}
+            {!readOnly && isOwner && isMinor && (
+              <div className="mt-3 flex gap-3 p-3 rounded-lg border border-sky-200 bg-sky-50">
+                <Info className="w-5 h-5 flex-shrink-0 mt-0.5 text-sky-600" aria-hidden />
+                <div className="space-y-1">
+                  <label className="flex items-center gap-2 text-sm font-semibold text-sky-900">
+                    <input
+                      type="checkbox"
+                      checked={!!individual.parental_consent}
+                      onChange={(e) => setParentalConsentMutation.mutate(e.target.checked)}
+                    />
+                    I have parental consent to store this minor's data
+                  </label>
+                  <p className="text-xs text-sky-800">{minorDataExplanation(childThreshold)}</p>
+                </div>
+              </div>
+            )}
           </Card>
 
           {/* Birth & Death on same row */}
@@ -653,6 +693,9 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
           }
           initialAge={editingPhoto?.age_on_photo}
           initialIsDefault={editingPhoto?.is_default}
+          requiresConsent={needsParentalConsent}
+          consentExplanation={minorDataExplanation(childThreshold)}
+          onParentalConsent={(granted) => setParentalConsentMutation.mutate(granted)}
           onUpload={handlePhotoUpload}
           onClose={() => {
             setShowPhotoDialog(false);

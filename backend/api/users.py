@@ -50,6 +50,7 @@ class ShareTokenResponse(BaseModel):
     is_active: bool
     expires_after_days: int
     expose_sensitive: bool = False
+    expose_minors: bool = False
     created_at: Optional[str] = None
     last_used_at: Optional[str] = None
 
@@ -65,6 +66,11 @@ class ShareTokenCreate(BaseModel):
     # excluded entirely from this link's viewer payload. The Owner opts in.
 	#
     expose_sensitive: bool = False
+    # Per-share minor (GDPR Art. 8) exposure (Privacy §3.8, M-06), independent of
+    # expose_sensitive. Default False: living minors (node, edges, media) are
+    # excluded entirely from this link's viewer payload. The Owner opts in.
+	#
+    expose_minors: bool = False
     # Per-share acknowledgement (Privacy §2.5, M-03). Must be True; the modal
     # in the UI sets it on submit. Backend rejects creation without it so the
     # consent row in auth_share_consents is the authoritative record that the
@@ -268,6 +274,7 @@ def create_share_token(
         is_active=True,
         expires_after_days=max(1, body.expires_after_days),
         expose_sensitive=body.expose_sensitive,
+        expose_minors=body.expose_minors,
         created_at=now,
     )
     db.add(row)

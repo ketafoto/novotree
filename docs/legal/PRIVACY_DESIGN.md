@@ -961,14 +961,92 @@ row.
 
 ### 3.8 Children data handling (M-06, Phase 6.3)
 
-Defer if no minors in the tree; do before going public.
+**Status: SHIPPED.** Like §3.7's viewer half, this was Mode-A-relevant *today* --
+[privacy.md](privacy.md) (section 10, "Children's data") already promised all
+three behaviors as in-force commitments ("minors are not exposed via share links
+unless the Owner explicitly opts in per share link"), so this closed an unkept
+live promise. All three bullets landed in one pass, plus the M-06 16th-birthday
+re-confirm reminder.
 
-- [ ] Detect `birth_date` < `child_age_threshold_years` years ago AND
-      `death_date` IS NULL.
-- [ ] Photo upload disabled for minors unless Owner checks "I have parental
-      consent."
-- [ ] Minors not exposed to viewer payload unless Owner explicitly opts in
-      per share token.
+- [x] **Detect minor + alive -- one shared helper.** `individual_is_minor(ind,
+      threshold_years)` in [database/models.py](../database/models.py): exact
+      `birth_date` within `child_age_threshold_years` of today AND `death_date`
+      IS NULL. The threshold reads from
+      `PrivacySettings.child_age_threshold_years` (default 16, already in
+      [config.py](../backend/config.py) and published via `GET /privacy/config`).
+      A frontend mirror `individualIsMinor()` lives in
+      [sensitiveData.ts](../frontend/src/constants/sensitiveData.ts) (drives the
+      upload-gate hint only; the server is the real gate). **Approx-only dates
+      are NOT auto-detected** (we cannot prove age from "ABT 2015"; auto-hiding
+      every undated person would gut the tree -- such cases use the manual
+      `is_sensitive` path instead). The backend also stamps `is_minor` /
+      `parental_consent` on each `TreeNode` so the frontend can mark + gate.
+- [x] **Parental-consent photo-upload gate.** New nullable `Boolean`
+      `Individual.parental_consent` (the Owner asserts they may store a minor's
+      data). The authoritative gate is server-side: `_require_parental_consent`
+      in [backend/api/media.py](../backend/api/media.py) rejects `POST
+      /media/upload` and `/media/upload-file` with **403** for a living minor
+      until consent is recorded. The frontend
+      ([PhotoUploadDialog.tsx](../frontend/src/components/photo/PhotoUploadDialog.tsx))
+      shows an "I have parental consent" checkbox that disables OK until ticked
+      and persists `parental_consent`; the
+      [IndividualDetailPage](../frontend/src/pages/individuals/IndividualDetailPage.tsx)
+      also carries a standalone consent control (shown only `isOwner && isMinor`)
+      next to the §3.7 "Mark sensitive" control.
+- [x] **Per-share-token `expose_minors` flag** (default False) on
+      `AuthShareToken` ([database/system_models.py](../database/system_models.py)),
+      **independent of `expose_sensitive`** (a link can expose one category but
+      not the other). When False, living minors are excluded **entirely** from
+      the viewer payload -- their node, every edge/couple referencing them
+      (reusing the existing `_filter_excluded_individuals` machinery in
+      [tree.py](../backend/api/tree.py)), and their media
+      ([media.py](../backend/api/media.py) `_media_hidden_from_viewer`, now ctx-
+      driven and considering both categories). Set by the Owner in
+      [ShareConsentModal.tsx](../frontend/src/components/ShareConsentModal.tsx)
+      (second "Include minors" checkbox, default off); surfaced on each link via
+      a `ShareMinorBadge` next to the sensitive badge. The Owner (non-share
+      session) always sees minors -- there is no minor-hiding toggle for the
+      Owner (unlike §3.7's show-sensitive toggle); minors are purely a
+      share/viewer concern.
+
+**16th-birthday re-confirm reminder (M-06 bullet 3).** New unconditional
+scheduled job
+[minor_consent_reminder.py](../tools/ops/scheduled_jobs/jobs/minor_consent_reminder.py)
+(modeled on the §3.4 error-log digest): scans every owner tree via
+`owner_info.list_owners()`, finds individuals who crossed the threshold (consent
+recorded, `consent_reminder_sent_at` NULL, no longer a minor), emails the Owner
+once to re-confirm, and stamps `consent_reminder_sent_at` for per-row
+idempotency. Self-throttled by a cursor file to `MINOR_REMINDER_INTERVAL_HOURS`
+(env, default 24); first run seeds the cursor (no boot backlog); SMTP-off
+deployments skip cheaply.
+
+**Explanatory affordance.** Reuses the §3.7 pattern: a `minorDataExplanation(N)`
+helper in [sensitiveData.ts](../frontend/src/constants/sensitiveData.ts)
+interpolates the threshold (never hardcodes 16) and is reconciled with
+privacy.md section 10 and M-06 -- surfaced at the consent checkbox, the detail-
+page consent control, and the share-link modal.
+
+**Migration / back-fill posture (mirrors §3.6 / §3.7).** No migration code
+(pre-production). New columns (`parental_consent`, `consent_reminder_sent_at` on
+Individual; `expose_minors` on AuthShareToken) ride `Base.metadata.create_all`
+on fresh DBs; the operator recreates existing dev/VM DBs. Existing rows are NULL
+= not-consented / not-reminded; no back-fill. **`privacy_policy_version` is NOT
+bumped** (stays 1.1 per §3.4's standing decision); privacy.md section 10 already
+matches the shipped behavior, so no wording change was needed.
+
+**Tests.**
+[tests/backend/test_minor_gating.py](../tests/backend/test_minor_gating.py)
+asserts the two `expose_*` flags are independent, that a living minor (node,
+edges, media) is excluded when `expose_minors` is False and included when True,
+that the Owner always sees minors, and that the upload gate returns 403 without
+consent and clears with it; plus `individual_is_minor()` boundary unit tests
+(exact-threshold, alive/dead, approx-only).
+
+**Deferred (out of scope this pass).** `parental_consent` is NOT reset to NULL
+when a person crosses the threshold (resetting would silently re-block uploads;
+emailing once and recording it is lighter and reversible). The `re-crop`
+endpoint is not gated (it replaces already-stored, already-consented content).
+Approx-date individuals are not auto-detected as minors (see bullet 1).
 
 ### 3.9 TreeView selection-mode prefill for privacy requests (M-04 convenience)
 

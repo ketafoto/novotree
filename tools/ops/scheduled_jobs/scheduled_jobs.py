@@ -41,12 +41,18 @@ import urllib.error
 import urllib.request
 
 # Each job is a module exposing run() (and optionally JOB_NAME).
-from tools.ops.scheduled_jobs.jobs import error_log_digest, privacy_requests_monitor
+from tools.ops.scheduled_jobs.jobs import (
+    error_log_digest,
+    minor_consent_reminder,
+    privacy_requests_monitor,
+)
 
 # Run on every tick, before the health gate - these report on the running
-# system (error-log digest) and self-throttle to their own cadence.
+# system (error-log digest, minor-consent reminder) and self-throttle to their
+# own cadence. The minor-consent reminder must run while the backend is HEALTHY
+# (it scans live owner trees), so it belongs here, not in the down-only backstop.
 #
-UNCONDITIONAL_JOBS = [error_log_digest]
+UNCONDITIONAL_JOBS = [error_log_digest, minor_consent_reminder]
 
 # Backstop jobs: run only when the backend is down (the in-process scheduler
 # handles these while it is up). Idempotent at the DB layer.

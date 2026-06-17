@@ -93,6 +93,13 @@ class AuthShareToken(SystemBase):
 	#
     expose_sensitive = Column(Boolean, nullable=False, default=False)
 
+    # Per-link minor (GDPR Art. 8) exposure, independent of expose_sensitive.
+    # Default False: living minors are excluded entirely from this link's viewer
+    # payload (their node, edges, and media). The Owner opts in per link. See
+    # PRIVACY_DESIGN.md 3.8; enforced server-side in backend/api/tree.py + media.py.
+	#
+    expose_minors = Column(Boolean, nullable=False, default=False)
+
     created_at = Column(String, nullable=True)       # ISO-8601 UTC
     last_used_at = Column(String, nullable=True)     # ISO-8601 UTC (rolling anchor)
 

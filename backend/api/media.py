@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 
 from .. import schemas
 import database.models
+from backend.config import privacy_settings
 from database.owner_info import OwnerInfo
 from database.system_db import get_system_db
 from .auth import (
@@ -36,20 +37,52 @@ def _check_edit_permission(session: EditorSession, record_created_by: str | None
         raise HTTPException(status_code=403, detail="Contributors can only edit their own records")
 
 
-def _media_hidden_from_viewer(db: Session, media: database.models.Media) -> bool:
-    """True if a share-link viewer (not exposing sensitive data) must not see this
-    media: the file is manually flagged, or it belongs to a fully-sensitive
-    Individual (GDPR Art. 9). See PRIVACY_DESIGN.md 3.7."""
-    if media.is_sensitive:
-        return True
-    if media.individual_id is not None:
-        ind = (
-            db.query(database.models.Individual.is_sensitive)
-            .filter(database.models.Individual.id == media.individual_id)
-            .first()
+def _require_parental_consent(individual: database.models.Individual) -> None:
+    """Block media upload for a living minor (GDPR Art. 8) until the Owner has
+    asserted parental_consent. The authoritative server-side gate; the frontend
+    consent checkbox is UX only. See PRIVACY_DESIGN.md 3.8."""
+    is_minor = database.models.individual_is_minor(
+        individual, privacy_settings.child_age_threshold_years
+    )
+    if is_minor and not individual.parental_consent:
+        raise HTTPException(
+            status_code=403,
+            detail="Parental consent required before uploading media for a minor",
         )
-        if ind and ind[0]:
-            return True
+
+
+def _media_hidden_from_viewer(
+    db: Session, media: database.models.Media, ctx: "ViewerContext"
+) -> bool:
+    """True if this share-link viewer must not see this media. Two independent
+    per-token gates: special-category (GDPR Art. 9) when the token does not
+    expose sensitive data -- the file is manually flagged or belongs to a
+    fully-sensitive Individual; and minors (GDPR Art. 8) when the token does not
+    expose minors -- the file belongs to a living minor. An editor/Owner
+    (is_share_viewer False) is never gated. See PRIVACY_DESIGN.md 3.7 / 3.8."""
+    if not ctx.is_share_viewer:
+        return False
+
+    exclude_sensitive = not ctx.expose_sensitive
+    exclude_minors = not ctx.expose_minors
+    if exclude_sensitive and media.is_sensitive:
+        return True
+
+    if media.individual_id is None:
+        return False
+    ind = (
+        db.query(database.models.Individual)
+        .filter(database.models.Individual.id == media.individual_id)
+        .first()
+    )
+    if ind is None:
+        return False
+    if exclude_sensitive and ind.is_sensitive:
+        return True
+    if exclude_minors and database.models.individual_is_minor(
+        ind, privacy_settings.child_age_threshold_years
+    ):
+        return True
     return False
 
 logger = logging.getLogger("novotree.backend")
@@ -97,6 +130,8 @@ async def upload_photo(
     )
     if not individual:
         raise HTTPException(status_code=404, detail="Individual not found")
+
+    _require_parental_consent(individual)
 
     content_type = (file.content_type or "").lower()
     if content_type not in ALLOWED_MIME_TYPES:
@@ -156,9 +191,9 @@ def serve_media_file(
     if not media or not media.file_path:
         raise HTTPException(status_code=404, detail="Media file not found")
 
-    # Sensitive media (or media of a fully-sensitive Individual) is indistinguishable
-    # from "not found" for a share-link viewer that does not expose sensitive data.
-    if ctx.is_share_viewer and not ctx.expose_sensitive and _media_hidden_from_viewer(db, media):
+    # Media hidden from this viewer (sensitive, or belonging to a sensitive/minor
+    # Individual the token does not expose) is indistinguishable from "not found".
+    if _media_hidden_from_viewer(db, media, ctx):
         raise HTTPException(status_code=404, detail="Media file not found")
 
     file_path = Path(owner.media_dir) / media.file_path
@@ -271,6 +306,8 @@ async def upload_media_file(
     if not individual:
         raise HTTPException(status_code=404, detail="Individual not found")
 
+    _require_parental_consent(individual)
+
     data = await file.read()
     if len(data) > MAX_MEDIA_FILE_SIZE:
         raise HTTPException(status_code=400, detail="File exceeds 200 MB limit")
@@ -351,8 +388,7 @@ def read_media(
     if family_id:
         query = query.filter(database.models.Media.family_id == family_id)
     db_rows = query.offset(skip).limit(limit).all()
-    if ctx.is_share_viewer and not ctx.expose_sensitive:
-        db_rows = [m for m in db_rows if not _media_hidden_from_viewer(db, m)]
+    db_rows = [m for m in db_rows if not _media_hidden_from_viewer(db, m, ctx)]
     name_map = fetch_display_names({m.created_by for m in db_rows if m.created_by}, db_sys)
     return [enrich_created_by(schemas.Media.model_validate(m), name_map) for m in db_rows]
 
@@ -372,7 +408,7 @@ def read_media_by_id(
     )
     if media is None:
         raise HTTPException(status_code=404, detail="Media not found")
-    if ctx.is_share_viewer and not ctx.expose_sensitive and _media_hidden_from_viewer(db, media):
+    if _media_hidden_from_viewer(db, media, ctx):
         raise HTTPException(status_code=404, detail="Media not found")
     name_map = fetch_display_names({media.created_by} if media.created_by else set(), db_sys)
     return enrich_created_by(schemas.Media.model_validate(media), name_map)

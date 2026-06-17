@@ -13,6 +13,21 @@ export const SENSITIVE_DATA_EXPLANATION =
   '"show sensitive" toggle and are excluded from share links by default.';
 
 /**
+ * Explanation of how minors (GDPR Art. 8) are handled. The threshold is
+ * interpolated from PrivacyConfig.child_age_threshold_years so the copy never
+ * hardcodes the age. Reconciled with docs/legal/privacy.md ("Children's data")
+ * and PRIVACY_ANALYSIS.md M-06 -- do not reword in one place only.
+ * See PRIVACY_DESIGN.md 3.8.
+ */
+export function minorDataExplanation(thresholdYears: number): string {
+  return (
+    `Anyone under ${thresholdYears} is treated as a minor (GDPR Art. 8). ` +
+    'Uploading their photos needs your confirmation that you have parental consent, ' +
+    'and minors are excluded from share links unless you opt in per link.'
+  );
+}
+
+/**
  * GEDCOM event codes that inherently reveal religion and so are always treated
  * as sensitive, regardless of any manual flag. Mirrors the backend
  * database.models.SENSITIVE_EVENT_CODES; the server is the real gate for
@@ -25,6 +40,25 @@ export const SENSITIVE_EVENT_CODES = new Set<string>([
 /** True if an event is special-category: an inherently-religious type OR manually flagged. */
 export function eventIsSensitive(event: { event_type_code: string; is_sensitive?: boolean }): boolean {
   return !!event.is_sensitive || SENSITIVE_EVENT_CODES.has(event.event_type_code);
+}
+
+/**
+ * Client-side mirror of the backend database.models.individual_is_minor: a
+ * living person born within thresholdYears of today. Drives the parental-consent
+ * upload gate hint only; the server is the real gate. Like the backend, only an
+ * exact birth_date counts -- an approximate-only date is treated as not a known
+ * minor. A node already carrying is_minor from the backend should prefer that.
+ */
+export function individualIsMinor(
+  person: { birth_date?: string; death_date?: string },
+  thresholdYears: number,
+): boolean {
+  if (!person.birth_date || person.death_date) return false;
+  const born = new Date(person.birth_date);
+  if (Number.isNaN(born.getTime())) return false;
+  const thresholdBirthday = new Date(born);
+  thresholdBirthday.setFullYear(born.getFullYear() + thresholdYears);
+  return new Date() < thresholdBirthday;
 }
 
 interface FilterableTreeEvent {

@@ -23,6 +23,13 @@ interface PhotoUploadDialogProps {
   initialImageSrc?: string;
   initialAge?: number;
   initialIsDefault?: boolean;
+  /** GDPR Art. 8: when true the subject is a living minor without recorded
+   *  parental consent; the OK button is blocked until the Owner confirms it. */
+  requiresConsent?: boolean;
+  /** Explanatory copy for the consent checkbox (minorDataExplanation). */
+  consentExplanation?: string;
+  /** Persists parental_consent on the individual when the Owner ticks the box. */
+  onParentalConsent?: (granted: boolean) => void;
   onUpload: (params: {
     blob?: Blob;
     age: number;
@@ -37,6 +44,9 @@ export function PhotoUploadDialog({
   initialImageSrc,
   initialAge,
   initialIsDefault,
+  requiresConsent = false,
+  consentExplanation,
+  onParentalConsent,
   onUpload,
   onClose,
 }: PhotoUploadDialogProps) {
@@ -52,6 +62,9 @@ export function PhotoUploadDialog({
   const [contrast, setContrast] = useState(100);
   const [rotation, setRotation] = useState(0);
   const [imageModified, setImageModified] = useState(false);
+  // Local mirror of the parental-consent confirmation; ticking also persists it
+  // on the individual via onParentalConsent so the gate clears for next time.
+  const [consentGranted, setConsentGranted] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
@@ -70,6 +83,7 @@ export function PhotoUploadDialog({
     setContrast(100);
     setRotation(0);
     setImageModified(false);
+    setConsentGranted(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   }, [initialImageSrc, initialAge, initialIsDefault, sourceMediaId]);
 
@@ -535,6 +549,30 @@ export function PhotoUploadDialog({
             </>
           )}
 
+          {requiresConsent && (
+            <div className="flex gap-3 p-3 rounded-lg border border-sky-200 bg-sky-50">
+              <label className="flex items-start gap-2 text-sm font-semibold text-sky-900">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={consentGranted}
+                  onChange={(e) => {
+                    setConsentGranted(e.target.checked);
+                    onParentalConsent?.(e.target.checked);
+                  }}
+                />
+                <span>
+                  I have parental consent to store this minor's photo
+                  {consentExplanation && (
+                    <span className="block font-normal text-xs text-sky-800 mt-1">
+                      {consentExplanation}
+                    </span>
+                  )}
+                </span>
+              </label>
+            </div>
+          )}
+
           {error && <p className="text-sm text-red-600">{error}</p>}
         </div>
 
@@ -547,9 +585,10 @@ export function PhotoUploadDialog({
             variant="primary"
             onClick={handleOk}
             disabled={
-              (sourceMediaId && !imageModified)
+              (requiresConsent && !consentGranted) ||
+              ((sourceMediaId && !imageModified)
                 ? isUploading
-                : !imageSrc || !completedCrop || isUploading
+                : !imageSrc || !completedCrop || isUploading)
             }
             isLoading={isUploading}
           >

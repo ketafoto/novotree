@@ -11,7 +11,7 @@ import { privacyRequestsApi } from '../../api/privacy_requests';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
 import { Spinner } from '../../components/common/Spinner';
-import { ShareSensitiveBadge } from '../../components/common/ShareSensitiveBadge';
+import { ShareSensitiveBadge, ShareMinorBadge } from '../../components/common/ShareSensitiveBadge';
 import { formatIndividualName, getLatestName } from '../../utils/nameUtils';
 import { useAuth } from '../../contexts/AuthContext';
 import { isLocalApp } from '../../config/appMode';
@@ -111,8 +111,9 @@ function ShareLinksWidget() {
                     <Check className="inline w-3 h-3 text-emerald-500 mr-0.5" aria-hidden /> Acknowledged on {new Date(t.created_at).toLocaleDateString()}
                   </p>
                 )}
-                <div className="mt-1">
+                <div className="mt-1 flex flex-wrap gap-1">
                   <ShareSensitiveBadge exposeSensitive={t.expose_sensitive} />
+                  <ShareMinorBadge exposeMinors={t.expose_minors} />
                 </div>
               </div>
               <button onClick={() => copy(t.token)} className="p-1.5 hover:bg-gray-100 rounded" title="Copy link">

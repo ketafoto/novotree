@@ -22,7 +22,7 @@ import { usersApi } from '../../api/auth';
 import { Button } from '../../components/common/Button';
 import { Card } from '../../components/common/Card';
 import { Spinner } from '../../components/common/Spinner';
-import { ShareSensitiveBadge } from '../../components/common/ShareSensitiveBadge';
+import { ShareSensitiveBadge, ShareMinorBadge } from '../../components/common/ShareSensitiveBadge';
 import { ShareConsentModal } from '../../components/ShareConsentModal';
 import toast from 'react-hot-toast';
 import { apiErrorMessage } from '../../utils/apiError';
@@ -63,13 +63,14 @@ function ShareTokensTab() {
 
   const activeTokens = tokens.filter((t) => t.is_active);
 
-  const create = async (exposeSensitive: boolean) => {
+  const create = async (exposeSensitive: boolean, exposeMinors: boolean) => {
     setIsCreating(true);
     try {
       await usersApi.createShareToken({
         label: label.trim() || undefined,
         expires_after_days: expiryDays,
         expose_sensitive: exposeSensitive,
+        expose_minors: exposeMinors,
         acknowledgement: true,
       });
       qc.invalidateQueries({ queryKey: ['share-tokens'] });
@@ -187,8 +188,9 @@ function ShareTokensTab() {
                     </p>
                   </>
                 )}
-                <div className="mt-1">
+                <div className="mt-1 flex flex-wrap gap-1">
                   <ShareSensitiveBadge exposeSensitive={t.expose_sensitive} />
+                  <ShareMinorBadge exposeMinors={t.expose_minors} />
                 </div>
               </div>
               <button
