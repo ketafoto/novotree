@@ -20,7 +20,7 @@ import sys
 import re
 import shutil
 import argparse
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -195,11 +195,14 @@ def is_exact_gedcom_date(gedcom_date: str) -> bool:
         return False
 
 
-def parse_gedcom_date(gedcom_date: str) -> Optional[str]:
-    """Convert exact GEDCOM date to ISO format (YYYY-MM-DD).
+def parse_gedcom_date(gedcom_date: str) -> Optional[date]:
+    """Convert exact GEDCOM date (DD MON YYYY) to a Python date.
 
-    Only parses exact dates (DD MON YYYY). Returns None for partial or modified dates.
-    For non-exact dates, store the raw GEDCOM string in X_date_approx instead.
+    Returns None for partial or modified dates; store the raw GEDCOM string in
+    X_date_approx instead. A date object (not an ISO string) is returned because
+    the X_date columns are SQLAlchemy Date, which only binds Python date objects
+    -- the individual/family paths happen to coerce via Pydantic, but events are
+    constructed directly and would raise on a string.
     """
     if not gedcom_date or not is_exact_gedcom_date(gedcom_date):
         return None
@@ -215,7 +218,7 @@ def parse_gedcom_date(gedcom_date: str) -> Optional[str]:
         day = int(parts[0])
         month = months.get(parts[1], 1)
         year = int(parts[2])
-        return f"{year:04d}-{month:02d}-{day:02d}"
+        return date(year, month, day)
     except:
         return None
 

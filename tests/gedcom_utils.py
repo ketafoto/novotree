@@ -12,7 +12,11 @@ from pathlib import Path
 # marriage, and a media reference. The OCCU and BAPM events ensure the
 # main_events table is exercised (BIRT/DEAT/MARR land in individual/family date
 # columns, not main_events); BAPM additionally gives the privacy tests a known
-# sensitive event row.
+# sensitive event row. BAPM carries an exact date (10 FEB 1960) on purpose: a
+# standalone event with an exact date is the case that exercises binding a real
+# date into the main_events.event_date Date column (events are built directly,
+# not via the Pydantic coercion the individual/family paths get).
+#
 MINIMAL_GEDCOM = """\
 0 HEAD
 1 SOUR TEST
@@ -38,7 +42,7 @@ MINIMAL_GEDCOM = """\
 2 DATE ABT 1985
 2 PLAC Springfield
 1 BAPM
-2 DATE ABT 1960
+2 DATE 10 FEB 1960
 2 PLAC Springfield Church
 1 OBJE
 2 FILE media/john_35.jpg
