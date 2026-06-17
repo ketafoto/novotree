@@ -36,6 +36,8 @@ class IndividualBase(BaseModel):
     death_date_approx: Optional[str] = None  # Raw GEDCOM date string for non-exact dates, e.g. 'ABT 1970'
     death_place: Optional[str] = None
     notes: Optional[str] = None
+    is_sensitive: Optional[bool] = None       # GDPR Art. 9: hide whole person from share-link viewers
+    notes_sensitive: Optional[bool] = None    # GDPR Art. 9: hide only the notes
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -88,6 +90,7 @@ class FamilyBase(BaseModel):
     divorce_date_approx: Optional[str] = None  # Raw GEDCOM date string for non-exact dates, e.g. 'ABT 1970'
     family_type: Optional[str] = "marriage"
     notes: Optional[str] = None
+    notes_sensitive: Optional[bool] = None    # GDPR Art. 9: hide the family's free-text notes
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -118,6 +121,7 @@ class EventBase(BaseModel):
     event_date_approx: Optional[str] = None  # Raw GEDCOM date string for non-exact dates, e.g. 'ABT 1970'
     event_place: Optional[str] = None
     description: Optional[str] = None
+    is_sensitive: Optional[bool] = None       # GDPR Art. 9 manual flag (religious-rite types are auto-sensitive)
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -146,6 +150,7 @@ class MediaBase(BaseModel):
     description: Optional[str] = None
     is_default: Optional[bool] = None
     age_on_photo: Optional[int] = None
+    is_sensitive: Optional[bool] = None       # GDPR Art. 9 manual flag, default off
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -231,6 +236,7 @@ class TreeNodeEvent(BaseModel):
     event_date_approx: Optional[str] = None
     event_place: Optional[str] = None
     description: Optional[str] = None
+    is_sensitive: bool = False  # special-category (GDPR Art. 9): drives the Owner's tree-view hide toggle
 
 class TreeNodePhoto(BaseModel):
     url: str
@@ -250,6 +256,8 @@ class TreeNode(BaseModel):
     death_date_approx: Optional[str] = None
     death_place: Optional[str] = None
     notes: Optional[str] = None
+    is_sensitive: bool = False     # special-category (GDPR Art. 9): whole-person flag, drives the Owner's tree-view hide
+    notes_sensitive: bool = False  # special-category (GDPR Art. 9): drives the Owner's tree-view hide toggle
     photo_url: Optional[str] = None
     photos: List[TreeNodePhoto] = []
     generation: int

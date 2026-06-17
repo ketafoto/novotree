@@ -9,7 +9,7 @@ from typing import Dict, List, Optional, Set, Tuple
 
 from .. import schemas
 import database.models as models
-from .auth import get_viewer_tree_db
+from .auth import ViewerContext, get_viewer_context, get_viewer_tree_db
 
 router = APIRouter(prefix="/individuals", tags=["tree"])
 full_tree_router = APIRouter(prefix="/tree", tags=["tree"])
@@ -122,13 +122,23 @@ def _build_node(
     individual: models.Individual,
     generation: int,
     event_type_map: Dict[str, str],
+    exclude_sensitive: bool = False,
 ) -> schemas.TreeNode:
-    """Build a TreeNode from an ORM Individual."""
+    """Build a TreeNode from an ORM Individual.
+
+    When exclude_sensitive is True (a share-link viewer whose token does not
+    expose sensitive data), special-category (GDPR Art. 9) content is dropped
+    with no trace: sensitive events are omitted from the events list and
+    notes_sensitive notes are blanked. Whole-person exclusion (is_sensitive) is
+    handled by the caller, which drops the node and its edges entirely.
+    """
     events = []
     for evt in sorted(
         individual.events,
         key=lambda e: (str(e.event_date or ""), e.event_date_approx or "", e.id),
     ):
+        if exclude_sensitive and models.event_is_sensitive(evt):
+            continue
         events.append(
             schemas.TreeNodeEvent(
                 event_type=event_type_map.get(evt.event_type_code, evt.event_type_code),
@@ -136,6 +146,7 @@ def _build_node(
                 event_date_approx=evt.event_date_approx,
                 event_place=evt.event_place,
                 description=evt.description,
+                is_sensitive=models.event_is_sensitive(evt),
             )
         )
 
@@ -163,12 +174,37 @@ def _build_node(
         death_date=str(individual.death_date) if individual.death_date else None,
         death_date_approx=individual.death_date_approx,
         death_place=individual.death_place,
-        notes=individual.notes,
+        notes=None if (exclude_sensitive and individual.notes_sensitive) else individual.notes,
+        is_sensitive=bool(individual.is_sensitive),
+        notes_sensitive=bool(individual.notes_sensitive),
         photo_url=_get_photo_url(individual),
         photos=_get_all_photos(individual),
         generation=generation,
         events=events,
     )
+
+
+def _filter_excluded_individuals(
+    nodes: List[schemas.TreeNode],
+    edges: List[schemas.TreeEdge],
+    couples: List[schemas.TreeCouple],
+    excluded_ids: Set[int],
+) -> Tuple[List[schemas.TreeNode], List[schemas.TreeEdge], List[schemas.TreeCouple]]:
+    """Drop whole-person-sensitive individuals and any graph element referencing
+    them, so a share-link viewer's payload carries no trace of an is_sensitive
+    person and no dangling parent/child/partner references."""
+    if not excluded_ids:
+        return nodes, edges, couples
+    nodes = [n for n in nodes if n.id not in excluded_ids]
+    edges = [
+        e for e in edges
+        if e.parent_id not in excluded_ids and e.child_id not in excluded_ids
+    ]
+    couples = [
+        c for c in couples
+        if not any(pid in excluded_ids for pid in c.partner_ids)
+    ]
+    return nodes, edges, couples
 
 
 def _compute_max_depth(
@@ -241,12 +277,14 @@ def get_individual_tree(
     ancestor_depth: int = Query(default=1, ge=0, le=MAX_DEPTH_CAP),
     descendant_depth: int = Query(default=1, ge=0, le=MAX_DEPTH_CAP),
     db: Session = Depends(get_viewer_tree_db),
+    ctx: ViewerContext = Depends(get_viewer_context),
 ):
     """Get the family tree centered on an individual.
 
     Returns a tree structure with nodes (individuals), edges (parent-child links),
     and couples (partner pairs) up to the requested ancestor/descendant depth.
     """
+    exclude_sensitive = ctx.is_share_viewer and not ctx.expose_sensitive
     # Verify the focus individual exists
     focus = (
         db.query(models.Individual)
@@ -453,11 +491,17 @@ def get_individual_tree(
 
     # ---- Build nodes (sort children by birth date for left-to-right ordering) ----
     nodes: List[schemas.TreeNode] = []
+    excluded_ids: Set[int] = set()
     for ind_id in collected_ids:
         ind = individual_map.get(ind_id)
         if ind:
+            if exclude_sensitive and ind.is_sensitive:
+                excluded_ids.add(ind_id)
+                continue
             gen = individual_generation.get(ind_id, 0)
-            nodes.append(_build_node(ind, gen, event_type_map))
+            nodes.append(_build_node(ind, gen, event_type_map, exclude_sensitive))
+
+    nodes, edges, couples = _filter_excluded_individuals(nodes, edges, couples, excluded_ids)
 
     # Sort nodes: by generation first (ascending = ancestors first), then by birth sort key
     nodes.sort(key=lambda n: (
@@ -480,13 +524,18 @@ def get_individual_tree(
 
 
 @full_tree_router.get("/full", response_model=schemas.TreeResponse)
-def get_full_tree(db: Session = Depends(get_viewer_tree_db)):
+def get_full_tree(
+    db: Session = Depends(get_viewer_tree_db),
+    ctx: ViewerContext = Depends(get_viewer_context),
+):
     """Return a tree containing every individual in the database with all
     family connections.  Disconnected sub-trees are included side by side.
 
     Generation numbers are computed per connected component via BFS from an
     arbitrary root so that the layout algorithm can position them correctly.
     """
+    exclude_sensitive = ctx.is_share_viewer and not ctx.expose_sensitive
+
     from sqlalchemy import text as sql_text
 
     event_type_rows = db.execute(
@@ -631,9 +680,15 @@ def get_full_tree(db: Session = Depends(get_viewer_tree_db)):
 
     # Build nodes
     nodes: List[schemas.TreeNode] = []
+    excluded_ids: Set[int] = set()
     for ind in all_individuals:
+        if exclude_sensitive and ind.is_sensitive:
+            excluded_ids.add(ind.id)
+            continue
         gen = generation.get(ind.id, 0)
-        nodes.append(_build_node(ind, gen, event_type_map))
+        nodes.append(_build_node(ind, gen, event_type_map, exclude_sensitive))
+
+    nodes, edges, couples = _filter_excluded_individuals(nodes, edges, couples, excluded_ids)
 
     nodes.sort(key=lambda n: (
         n.generation,

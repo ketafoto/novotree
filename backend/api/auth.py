@@ -425,46 +425,80 @@ def require_editor(session: EditorSession = Depends(get_current_editor)) -> Edit
     return session  # get_current_editor already validates auth
 
 
-def get_viewer_owner_id(
+class ViewerContext:
+    """Resolved read-only (viewer) access context.
+
+    Distinguishes an authenticated editor (owner/contributor) from an anonymous
+    share-token viewer, and carries the share link's `expose_sensitive` flag so
+    payload endpoints can gate special-category (GDPR Art. 9) data. For an
+    editor (or dev bypass) `is_share_viewer` is False — the Owner always sees
+    everything and no filtering applies.
+    """
+    def __init__(self, owner_id: str, is_share_viewer: bool, expose_sensitive: bool):
+        self.owner_id = owner_id
+        self.is_share_viewer = is_share_viewer
+        self.expose_sensitive = expose_sensitive
+
+
+def _resolve_valid_share_token(db: Session, share: str):
+    """Return the active, non-expired AuthShareToken row for `share`, or None.
+
+    Touches last_used_at on success (rolling-window expiry anchor). Single
+    source of truth for share-token validation used by viewer resolution.
+    """
+    from database.system_models import AuthShareToken
+    from datetime import timedelta
+
+    token_row = db.query(AuthShareToken).filter(
+        AuthShareToken.token == share,
+        AuthShareToken.is_active == True,
+    ).first()
+    if not token_row:
+        return None
+    anchor = token_row.last_used_at or token_row.created_at
+    expiry = datetime.fromisoformat(anchor) + timedelta(days=token_row.expires_after_days)
+    if datetime.now(timezone.utc) > expiry:
+        return None
+    token_row.last_used_at = datetime.now(timezone.utc).isoformat()
+    db.commit()
+    return token_row
+
+
+def get_viewer_context(
     share: Optional[str] = None,
     access_token: Optional[str] = Cookie(default=None),
     db: Session = Depends(get_system_db),
-) -> str:
+) -> ViewerContext:
     """
-    Resolve owner_id for read-only (viewer) access.
+    Resolve read-only (viewer) access for the current request.
     Accepts either an authenticated editor session or a valid share token.
-    Returns owner_id string.
     """
     if settings.is_dev:
-        return DEFAULT_OWNER_ID
+        return ViewerContext(DEFAULT_OWNER_ID, is_share_viewer=False, expose_sensitive=True)
 
     # Try authenticated session first — reuse get_current_editor to enforce freeze checks
     if access_token:
         try:
             session = get_current_editor(access_token=access_token, db=db)
-            return session.owner_id
+            return ViewerContext(session.owner_id, is_share_viewer=False, expose_sensitive=True)
         except HTTPException:
             pass
 
-    # Try share token
     if share:
-        from database.system_models import AuthShareToken
-        from datetime import datetime, timezone, timedelta
-        token_row = db.query(AuthShareToken).filter(
-            AuthShareToken.token == share,
-            AuthShareToken.is_active == True,
-        ).first()
+        token_row = _resolve_valid_share_token(db, share)
         if token_row:
-            # Check rolling expiry
-            anchor = token_row.last_used_at or token_row.created_at
-            expiry = datetime.fromisoformat(anchor) + timedelta(days=token_row.expires_after_days)
-            if datetime.now(timezone.utc) <= expiry:
-                # Update last_used_at (rolling window)
-                token_row.last_used_at = datetime.now(timezone.utc).isoformat()
-                db.commit()
-                return token_row.owner_id
+            return ViewerContext(
+                token_row.owner_id,
+                is_share_viewer=True,
+                expose_sensitive=bool(token_row.expose_sensitive),
+            )
 
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+
+
+def get_viewer_owner_id(ctx: "ViewerContext" = Depends(get_viewer_context)) -> str:
+    """Resolve owner_id for read-only (viewer) access (editor session or share token)."""
+    return ctx.owner_id
 
 
 # ---------------------------------------------------------------------------

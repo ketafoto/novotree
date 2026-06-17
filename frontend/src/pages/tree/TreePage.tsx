@@ -1,10 +1,12 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ReactFlowProvider } from '@xyflow/react';
 import { X, Download, GitBranch, UserPlus, Menu } from 'lucide-react';
 
 import { treeApi } from '../../api/tree';
+import { hideSensitiveFromTree } from '../../constants/sensitiveData';
+import { SensitiveViewToggle } from '../../components/common/SensitiveViewToggle';
 import { individualsApi } from '../../api/individuals';
 import { Spinner } from '../../components/common/Spinner';
 import { TreeCanvas } from '../../components/tree/TreeCanvas';
@@ -40,8 +42,13 @@ export function TreePage() {
   const [showContribute, setShowContribute] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileSheetPersonId, setMobileSheetPersonId] = useState<number | null>(null);
+  // Owner-only, per-session cosmetic guard. Default hidden: sensitive events/notes
+  // are stripped from node tooltips until the Owner reveals them. Viewers never get
+  // this toggle (their payload is already filtered server-side per share token).
+  const [showSensitive, setShowSensitive] = useState(false);
   const viewportRef = useRef<HTMLDivElement | null>(null);
 
+  const isOwner = editor?.role === 'owner';
   const ownerOwnerId = editor?.owner_id ?? viewerOwnerId ?? '';
 
   // Whether to offer the viewer the "contribute" CTA — gated on the
@@ -119,9 +126,20 @@ export function TreePage() {
     ? formatIndividualName(getLatestName(individual.names))
     : 'Individual';
 
+  // Owner-only cosmetic hide. Viewers are filtered server-side, so this is a no-op
+  // for them; gate on isOwner so it only ever touches the Owner's own view.
+  const hideSensitive = isOwner && !showSensitive;
+  // Memoized so an unrelated re-render (e.g. opening/closing the export panel)
+  // does not hand TreeCanvas a brand-new data object, which would needlessly
+  // recompute the layout and re-fit the viewport (and could blank the canvas).
+  const displayedTreeData = useMemo(
+    () => (treeData && hideSensitive ? hideSensitiveFromTree(treeData, individualId) : treeData),
+    [treeData, hideSensitive, individualId],
+  );
+
   // Find the tapped person's tree-node data for the mobile sheet
-  const mobileSheetNode = mobileSheetPersonId !== null && treeData
-    ? treeData.nodes.find((n) => n.id === mobileSheetPersonId) ?? null
+  const mobileSheetNode = mobileSheetPersonId !== null && displayedTreeData
+    ? displayedTreeData.nodes.find((n) => n.id === mobileSheetPersonId) ?? null
     : null;
 
   const handleMobileSheetRecenter = useCallback(() => {
@@ -209,6 +227,12 @@ export function TreePage() {
               PrivacyLinks is the only path to "Remove Me / Our Privacy" on the
               Tree page (the fullscreen overlay hides the global PrivacyFooter). */}
           <div className="flex items-center gap-1 px-2 py-1 bg-white rounded-full border border-slate-200">
+            {isOwner && (
+              <>
+                <SensitiveViewToggle shown={showSensitive} onToggle={setShowSensitive} className="px-1" />
+                <span aria-hidden className="w-px h-4 bg-slate-200 mx-1" />
+              </>
+            )}
             {!isLocalApp && (
               <>
                 <PrivacyLinks className="text-[11px] text-slate-500 px-2" />
@@ -300,6 +324,12 @@ export function TreePage() {
             </button>
           )}
 
+          {isOwner && (
+            <div className="flex justify-center py-1">
+              <SensitiveViewToggle shown={showSensitive} onToggle={setShowSensitive} />
+            </div>
+          )}
+
           <button
             onClick={() => {
               setShowExport(true);
@@ -344,10 +374,10 @@ export function TreePage() {
           </div>
         )}
 
-        {treeData && (
+        {displayedTreeData && (
           <ReactFlowProvider key={individualId}>
             <TreeCanvas
-              data={treeData}
+              data={displayedTreeData}
               photoIntervalMs={photoIntervalSec * 1000}
               viewportRef={viewportRef}
               onPersonClick={handlePersonClick}

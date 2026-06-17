@@ -22,6 +22,7 @@ import { usersApi } from '../../api/auth';
 import { Button } from '../../components/common/Button';
 import { Card } from '../../components/common/Card';
 import { Spinner } from '../../components/common/Spinner';
+import { ShareSensitiveBadge } from '../../components/common/ShareSensitiveBadge';
 import { ShareConsentModal } from '../../components/ShareConsentModal';
 import toast from 'react-hot-toast';
 import { apiErrorMessage } from '../../utils/apiError';
@@ -62,12 +63,13 @@ function ShareTokensTab() {
 
   const activeTokens = tokens.filter((t) => t.is_active);
 
-  const create = async () => {
+  const create = async (exposeSensitive: boolean) => {
     setIsCreating(true);
     try {
       await usersApi.createShareToken({
         label: label.trim() || undefined,
         expires_after_days: expiryDays,
+        expose_sensitive: exposeSensitive,
         acknowledgement: true,
       });
       qc.invalidateQueries({ queryKey: ['share-tokens'] });
@@ -166,7 +168,7 @@ function ShareTokensTab() {
             <div key={t.id} className="flex items-center gap-3 py-3">
               <Share2 className="w-4 h-4 text-gray-400 flex-shrink-0" />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-800">{t.label || 'Unnamed link'}</p>
+                <p className="text-sm font-medium text-gray-800 truncate">{t.label || 'Unnamed link'}</p>
                 <p className="text-xs text-gray-400 font-mono truncate">
                   {shareUrl(t.token)}
                 </p>
@@ -185,6 +187,9 @@ function ShareTokensTab() {
                     </p>
                   </>
                 )}
+                <div className="mt-1">
+                  <ShareSensitiveBadge exposeSensitive={t.expose_sensitive} />
+                </div>
               </div>
               <button
                 onClick={() => copy(t)}

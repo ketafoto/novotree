@@ -51,6 +51,7 @@ def create_family(
         divorce_date_approx=family.divorce_date_approx,
         family_type=family.family_type or "marriage",
         notes=family.notes,
+        notes_sensitive=family.notes_sensitive,
         created_by=session.editor_id,
         created_at=now,
     )

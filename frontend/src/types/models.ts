@@ -32,6 +32,8 @@ export interface Individual {
   death_date_approx?: string;
   death_place?: string;
   notes?: string;
+  is_sensitive?: boolean;       // GDPR Art. 9: hide whole person from share-link viewers
+  notes_sensitive?: boolean;    // GDPR Art. 9: hide only the notes
   names: IndividualName[];
   created_by?: string;
   created_by_display_name?: string;
@@ -48,6 +50,8 @@ export interface IndividualCreate {
   death_date_approx?: string;
   death_place?: string;
   notes?: string;
+  is_sensitive?: boolean;
+  notes_sensitive?: boolean;
   names: IndividualNameCreate[];
 }
 
@@ -86,6 +90,7 @@ export interface Family {
   divorce_date_approx?: string;
   family_type?: string;
   notes?: string;
+  notes_sensitive?: boolean;    // GDPR Art. 9: hide the family's free-text notes
   members: FamilyMember[];
   children: FamilyChild[];
   created_by?: string;
@@ -102,6 +107,7 @@ export interface FamilyCreate {
   divorce_date_approx?: string;
   family_type?: string;
   notes?: string;
+  notes_sensitive?: boolean;
   members: FamilyMemberCreate[];
   children: FamilyChildCreate[];
 }
@@ -118,6 +124,7 @@ export interface Event {
   event_date_approx?: string;
   event_place?: string;
   description?: string;
+  is_sensitive?: boolean;       // GDPR Art. 9 manual flag (religious-rite types are auto-sensitive)
   created_by?: string;
   created_by_display_name?: string;
 }
@@ -130,6 +137,7 @@ export interface EventCreate {
   event_date_approx?: string;
   event_place?: string;
   description?: string;
+  is_sensitive?: boolean;
 }
 
 export interface EventUpdate extends Partial<EventCreate> {}
@@ -146,6 +154,7 @@ export interface Media {
   description?: string;
   is_default?: boolean;
   age_on_photo?: number;
+  is_sensitive?: boolean;       // GDPR Art. 9 manual flag, default off
   created_by?: string;
   created_by_display_name?: string;
 }
@@ -160,6 +169,7 @@ export interface MediaCreate {
   description?: string;
   is_default?: boolean;
   age_on_photo?: number;
+  is_sensitive?: boolean;
 }
 
 export interface MediaUpdate extends Partial<MediaCreate> {}
@@ -233,6 +243,7 @@ export interface ShareToken {
   token: string;
   label?: string;
   is_active: boolean;
+  expose_sensitive: boolean;  // GDPR Art. 9: whether this link exposes sensitive data
   created_at?: string;
   last_used_at?: string;
   expires_after_days: number;
@@ -242,6 +253,7 @@ export interface ShareTokenCreate {
   label?: string;
   description?: string;  // alias accepted by backend
   expires_after_days?: number;
+  expose_sensitive?: boolean;  // per-share §3.7 flag; default false (sensitive data excluded)
   acknowledgement: boolean;  // per-share §9.4 modal; backend rejects when false
 }
 
@@ -297,6 +309,7 @@ export interface TreeNodeEvent {
   event_date_approx?: string;
   event_place?: string;
   description?: string;
+  is_sensitive?: boolean;
 }
 
 export interface TreeNodePhoto {
@@ -318,6 +331,8 @@ export interface TreeNode {
   death_date_approx?: string;
   death_place?: string;
   notes?: string;
+  is_sensitive?: boolean;
+  notes_sensitive?: boolean;
   photo_url?: string;
   photos: TreeNodePhoto[];
   generation: number;

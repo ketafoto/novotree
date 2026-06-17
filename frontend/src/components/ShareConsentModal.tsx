@@ -10,17 +10,27 @@
  * legally-relevant copy: do not paraphrase without bumping
  * privacy_policy_version (the version stamped onto each consent row).
  */
+import { useEffect, useState } from 'react';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import { Modal } from './common/Modal';
+import { SensitiveCheckbox } from './common/SensitiveCheckbox';
 
 interface ShareConsentModalProps {
   open: boolean;
   onCancel: () => void;
-  onConfirm: () => void;
+  onConfirm: (exposeSensitive: boolean) => void;
   isSubmitting?: boolean;
 }
 
 export function ShareConsentModal({ open, onCancel, onConfirm, isSubmitting }: ShareConsentModalProps) {
+  // Default off: sensitive data is excluded from the link unless the Owner opts in.
+  const [exposeSensitive, setExposeSensitive] = useState(false);
+
+  // Reset the opt-in each time the modal opens, so it never carries over silently.
+  useEffect(() => {
+    if (open) setExposeSensitive(false);
+  }, [open]);
+
   return (
     <Modal open={open} onClose={onCancel} title="Sharing this tree">
       <div className="space-y-4">
@@ -38,6 +48,12 @@ export function ShareConsentModal({ open, onCancel, onConfirm, isSubmitting }: S
             </ul>
           </div>
         </div>
+        <SensitiveCheckbox
+          checked={exposeSensitive}
+          onChange={setExposeSensitive}
+          label="Include sensitive data in this link"
+          description="Off by default: sensitive events, notes, people and photos are excluded entirely from this link. Tick only if the viewers are entitled to see special-category data."
+        />
         <div className="flex justify-end gap-2 pt-2">
           <button
             type="button"
@@ -49,7 +65,7 @@ export function ShareConsentModal({ open, onCancel, onConfirm, isSubmitting }: S
           </button>
           <button
             type="button"
-            onClick={onConfirm}
+            onClick={() => onConfirm(exposeSensitive)}
             disabled={isSubmitting}
             className="inline-flex items-center px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
           >

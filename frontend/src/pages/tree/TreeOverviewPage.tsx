@@ -1,10 +1,12 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ReactFlowProvider } from '@xyflow/react';
 import { X, Download, GitBranch, UserPlus, Menu } from 'lucide-react';
 
 import { treeApi } from '../../api/tree';
+import { hideSensitiveFromTree } from '../../constants/sensitiveData';
+import { SensitiveViewToggle } from '../../components/common/SensitiveViewToggle';
 import { Spinner } from '../../components/common/Spinner';
 import { TreeCanvas } from '../../components/tree/TreeCanvas';
 import { TreeLegend } from '../../components/tree/TreeLegend';
@@ -31,10 +33,13 @@ export function TreeOverviewPage() {
   const [showContribute, setShowContribute] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileSheetPersonId, setMobileSheetPersonId] = useState<number | null>(null);
+  // Owner-only, per-session cosmetic guard (default hidden). See TreePage.
+  const [showSensitive, setShowSensitive] = useState(false);
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // For authenticated editors, owner_id comes from the session; for viewers, from the share token
+  const isOwner = editor?.role === 'owner';
   const ownerOwnerId = editor?.owner_id ?? viewerOwnerId ?? '';
 
   // Whether to offer the viewer the "contribute" CTA — gated on the
@@ -89,8 +94,17 @@ export function TreeOverviewPage() {
     return viewportRef.current.querySelector('.react-flow__viewport') as HTMLElement | null;
   }, []);
 
-  const mobileSheetNode = mobileSheetPersonId !== null && treeData
-    ? treeData.nodes.find((n) => n.id === mobileSheetPersonId) ?? null
+  const hideSensitive = isOwner && !showSensitive;
+  // Memoized so an unrelated re-render (e.g. opening/closing the export panel)
+  // does not hand TreeCanvas a brand-new data object, which would needlessly
+  // recompute the layout and re-fit the viewport (and could blank the canvas).
+  const displayedTreeData = useMemo(
+    () => (treeData && hideSensitive ? hideSensitiveFromTree(treeData) : treeData),
+    [treeData, hideSensitive],
+  );
+
+  const mobileSheetNode = mobileSheetPersonId !== null && displayedTreeData
+    ? displayedTreeData.nodes.find((n) => n.id === mobileSheetPersonId) ?? null
     : null;
 
   const handleMobileSheetRecenter = useCallback(() => {
@@ -149,6 +163,10 @@ export function TreeOverviewPage() {
               <UserPlus className="w-3.5 h-3.5" />
               Wanna contribute to this tree? 🌿
             </button>
+          )}
+
+          {isOwner && (
+            <SensitiveViewToggle shown={showSensitive} onToggle={setShowSensitive} />
           )}
 
           {/* Privacy links — see TreePage for rationale (fullscreen overlay
@@ -227,6 +245,12 @@ export function TreeOverviewPage() {
             </button>
           )}
 
+          {isOwner && (
+            <div className="flex justify-center py-1">
+              <SensitiveViewToggle shown={showSensitive} onToggle={setShowSensitive} />
+            </div>
+          )}
+
           <button
             onClick={() => {
               setShowExport(true);
@@ -270,10 +294,10 @@ export function TreeOverviewPage() {
           </div>
         )}
 
-        {treeData && (
+        {displayedTreeData && (
           <ReactFlowProvider>
             <TreeCanvas
-              data={treeData}
+              data={displayedTreeData}
               photoIntervalMs={photoIntervalSec * 1000}
               viewportRef={viewportRef}
               onPersonClick={handlePersonClick}

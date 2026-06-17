@@ -37,6 +37,7 @@ def create_event(
         event_date_approx=event.event_date_approx,
         event_place=event.event_place,
         description=event.description,
+        is_sensitive=event.is_sensitive,
         created_by=session.editor_id,
         created_at=_now_iso(),
     )

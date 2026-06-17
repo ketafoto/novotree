@@ -39,6 +39,10 @@ import { formatIndividualName, getLatestName } from '../../utils/nameUtils';
 import { sortEventsChronologically } from '../../utils/eventSort';
 import { saveBlob } from '../../utils/saveBlob';
 import { useAuth } from '../../contexts/AuthContext';
+import { SensitiveInfo } from '../../components/common/SensitiveInfo';
+import { SensitiveCheckbox } from '../../components/common/SensitiveCheckbox';
+import { SensitiveViewToggle } from '../../components/common/SensitiveViewToggle';
+import { eventIsSensitive } from '../../constants/sensitiveData';
 import type { Event, Media } from '../../types/models';
 
 type SectionModal = 'basic' | 'names' | 'birth' | 'death' | 'notes' | 'events' | 'photos' | 'families' | null;
@@ -94,6 +98,11 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
   const [eventDialogOpen, setEventDialogOpen] = useState(false);
   const [eventToEdit, setEventToEdit] = useState<Event | null>(null);
   const [sectionModal, setSectionModal] = useState<SectionModal>(null);
+
+  // Owner-only, per-session shoulder-surfing guard (not access control, not
+  // persisted). Default off: sensitive events/notes/photos are collapsed until
+  // the Owner reveals them. Viewers (readOnly) never get this toggle.
+  const [showSensitive, setShowSensitive] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -153,6 +162,19 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
     onError: (err) => {
       toast.error(apiErrorMessage(err, 'Failed to delete individual'));
     },
+  });
+
+  const setSensitiveMutation = useMutation({
+    mutationFn: (value: boolean) => individualsApi.update(Number(id), { is_sensitive: value }),
+    onSuccess: (_, value) => {
+      queryClient.invalidateQueries({ queryKey: ['individuals', id] });
+      queryClient.invalidateQueries({ queryKey: ['individuals'] });
+      // The tree payloads embed each person's sensitivity flags, so they must
+      // refetch too or the tree view shows a stale sensitive/not-sensitive state.
+      queryClient.invalidateQueries({ queryKey: ['tree'] });
+      toast.success(value ? 'Marked person sensitive' : 'Unmarked person');
+    },
+    onError: (err) => toast.error(apiErrorMessage(err, 'Failed to update sensitivity')),
   });
 
   const deleteMediaMutation = useMutation({
@@ -287,6 +309,14 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
   const primaryName = getLatestName(individual.names);
   const displayName = formatIndividualName(primaryName);
 
+  // The toggle is an Owner-only local guard; it never applies to viewers
+  // (readOnly), whose payload is already filtered server-side per share token.
+  const ownerCanToggle = !readOnly && isOwner;
+  const hideSensitive = ownerCanToggle && !showSensitive;
+  const notesAreSensitive = !!individual.notes_sensitive;
+  const visibleEvents = (events ?? []).filter((ev) => !(hideSensitive && eventIsSensitive(ev)));
+  const hiddenEventCount = (events?.length ?? 0) - visibleEvents.length;
+
   const cardDoubleClick = (section: SectionModal) => (!readOnly ? { onDoubleClick: () => setSectionModal(section) } : {});
 
   // Find families where this individual is a member
@@ -295,7 +325,10 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
     family.children.some((c) => c.child_id === Number(id))
   );
   const TYPE_ORDER: Record<string, number> = { photo: 0, audio: 1, video: 2 };
-  const sortedAllMedia = [...(media || [])].sort((a, b) => {
+  const hiddenMediaCount = (media || []).filter((m) => hideSensitive && m.is_sensitive).length;
+  const sortedAllMedia = [...(media || [])]
+    .filter((m) => !(hideSensitive && m.is_sensitive))
+    .sort((a, b) => {
     const ta = TYPE_ORDER[a.media_type_code ?? ''] ?? 3;
     const tb = TYPE_ORDER[b.media_type_code ?? ''] ?? 3;
     if (ta !== tb) return ta - tb;
@@ -327,8 +360,16 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
             {individual.created_by && (
               <p className="text-xs text-gray-400 mt-0.5">Added by {individual.created_by_display_name || individual.created_by}</p>
             )}
+            {/* Sensitive-view state lives next to the title (not in the action
+                row) — it is a view setting, not a record action. */}
+            {ownerCanToggle && (
+              <div className="mt-2">
+                <SensitiveViewToggle shown={showSensitive} onToggle={setShowSensitive} />
+              </div>
+            )}
           </div>
         </div>
+        {/* Header actions: navigation + record actions only. */}
         <div className="flex items-center gap-2">
           <Link to={`/individuals/${id}/tree`}>
             <Button variant="secondary">
@@ -348,9 +389,9 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
           )}
           {!readOnly && (
             <Button variant="danger" onClick={handleDelete}>
-                <Trash2 className="w-4 h-4 mr-2" />
-                Delete
-              </Button>
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete
+            </Button>
           )}
         </div>
       </div>
@@ -370,6 +411,17 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
                 <dd className="mt-1 text-gray-900">{individual.gedcom_id || '-'}</dd>
               </div>
             </dl>
+            {/* Whole-person sensitivity flag lives where the person's facts live,
+                not in the page action row. Persists immediately on toggle. */}
+            {!readOnly && isOwner && (
+              <div className="mt-4">
+                <SensitiveCheckbox
+                  checked={!!individual.is_sensitive}
+                  onChange={(c) => setSensitiveMutation.mutate(c)}
+                  label="Mark this whole person sensitive (hide from share links)"
+                />
+              </div>
+            )}
           </Card>
 
           {/* Birth & Death on same row */}
@@ -420,9 +472,18 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
           <Card title="Events" {...cardDoubleClick('events')}>
             {(events?.length || 0) === 0 ? (
               <p className="text-gray-500 text-center py-4">No events recorded</p>
+            ) : visibleEvents.length === 0 ? (
+              <p className="text-gray-500 text-center py-4">
+                {hiddenEventCount} sensitive event{hiddenEventCount === 1 ? '' : 's'} hidden — use "Show sensitive" to reveal.
+              </p>
             ) : (
               <div className="divide-y divide-gray-100">
-                {sortEventsChronologically(events ?? []).map((ev) => (
+                {hiddenEventCount > 0 && (
+                  <p className="text-xs text-gray-400 pb-2">
+                    {hiddenEventCount} sensitive event{hiddenEventCount === 1 ? '' : 's'} hidden — use "Show sensitive" to reveal.
+                  </p>
+                )}
+                {sortEventsChronologically(visibleEvents).map((ev) => (
                   <div key={ev.id} className="py-3 flex items-start gap-4">
                     <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
                       <Calendar className="w-4 h-4 text-blue-600" />
@@ -449,10 +510,14 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
           {/* Notes */}
           <Card
             title="Notes"
-            actions={individual.notes ? <TranslateButton getText={individual.notes} /> : undefined}
+            actions={individual.notes && !(hideSensitive && notesAreSensitive) ? <TranslateButton getText={individual.notes} /> : undefined}
             {...cardDoubleClick('notes')}
           >
-            {individual.notes ? (
+            {hideSensitive && notesAreSensitive ? (
+              <p className="text-gray-500 text-sm flex items-center gap-1">
+                Sensitive notes hidden — use "Show sensitive" to reveal. <SensitiveInfo />
+              </p>
+            ) : individual.notes ? (
               <p className="text-gray-700 whitespace-pre-wrap">{individual.notes}</p>
             ) : (
               <p className="text-gray-500 text-sm">No notes recorded</p>
@@ -513,6 +578,11 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
 
           {/* Media */}
           <Card title="Media" {...cardDoubleClick('photos')}>
+            {hiddenMediaCount > 0 && (
+              <p className="text-xs text-gray-400 mb-2">
+                {hiddenMediaCount} sensitive item{hiddenMediaCount === 1 ? '' : 's'} hidden — use "Show sensitive" to reveal.
+              </p>
+            )}
             {sortedAllMedia.length === 0 ? (
               <div className="text-center py-4">
                 <Image className="w-12 h-12 mx-auto text-gray-300 mb-2" />

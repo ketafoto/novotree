@@ -86,6 +86,13 @@ class AuthShareToken(SystemBase):
     is_active = Column(Boolean, nullable=False, default=True)
     expires_after_days = Column(Integer, nullable=False, default=90)
 
+    # Per-link special-category (GDPR Art. 9) exposure. Default False: sensitive
+    # events, notes, flagged individuals and media are excluded entirely from this
+    # link's viewer payload. The Owner opts in per link at create time. See
+    # PRIVACY_DESIGN.md 3.7; enforced server-side in backend/api/tree.py + media.py.
+	#
+    expose_sensitive = Column(Boolean, nullable=False, default=False)
+
     created_at = Column(String, nullable=True)       # ISO-8601 UTC
     last_used_at = Column(String, nullable=True)     # ISO-8601 UTC (rolling anchor)
 

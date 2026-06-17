@@ -60,6 +60,8 @@ def create_individual(
         death_date_approx=individual.death_date_approx,
         death_place=individual.death_place,
         notes=individual.notes,
+        is_sensitive=individual.is_sensitive,
+        notes_sensitive=individual.notes_sensitive,
         created_by=session.editor_id,
         created_at=now,
     )

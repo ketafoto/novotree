@@ -17,6 +17,8 @@ interface ModalBasicInfoProps {
   onSaved?: () => void;
 }
 
+// is_sensitive is edited inline on the Basic Information card (persists immediately),
+// not here, so there is one editable place for the whole-person flag.
 type FormData = { gedcom_id?: string; sex_code?: string };
 
 export function ModalBasicInfo({ open, onClose, individual, onSaved }: ModalBasicInfoProps) {
@@ -40,7 +42,10 @@ export function ModalBasicInfo({ open, onClose, individual, onSaved }: ModalBasi
 
   const updateMutation = useMutation({
     mutationFn: (data: FormData) =>
-      individualsApi.update(individual.id, { gedcom_id: data.gedcom_id?.trim() || undefined, sex_code: data.sex_code || undefined }),
+      individualsApi.update(individual.id, {
+        gedcom_id: data.gedcom_id?.trim() || undefined,
+        sex_code: data.sex_code || undefined,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['individuals'] });
       toast.success('Basic information updated');

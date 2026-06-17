@@ -28,3 +28,7 @@
 - **Never commit automatically.** Always show the diff and wait for explicit user approval before running `git commit`. The user needs to verify changes before they land in history.
 - **Short commit messages.** One concise line, no body. No `Co-Authored-By` trailer unless the user asks.
 - **Keep executable scripts executable.** Scripts that ship with a shebang and `100755` mode (e.g. `tools/ops/*.py`, `database/gedcom_*.py`, `backend/run_dev_backend.py`, `tools/git-hooks/*`) must stay executable. After any commit touching them, verify with `git ls-files --stage <path>` that the mode is still `100755`; if it dropped to `100644`, run `git update-index --chmod=+x <file>` and commit immediately.
+
+## Workflow
+
+- **Don't run the test suite while iterating; defer it until the change is approved.** During the write/review loop, verify with build and typecheck only — `npx tsc -b`, `npm run build`, `python -m py_compile`. Do **not** run `pytest` or `npm run test` / vitest on every iteration (it burns tokens); the user runs tests manually or wants them deferred. Run the full suite only after the user approves the change or explicitly asks for tests.

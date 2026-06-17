@@ -49,6 +49,7 @@ class ShareTokenResponse(BaseModel):
     label: Optional[str] = None
     is_active: bool
     expires_after_days: int
+    expose_sensitive: bool = False
     created_at: Optional[str] = None
     last_used_at: Optional[str] = None
 
@@ -59,10 +60,16 @@ class ShareTokenCreate(BaseModel):
     label: Optional[str] = None
     description: Optional[str] = None  # frontend alias for label
     expires_after_days: int = 90
+    # Per-share special-category (GDPR Art. 9) exposure (Privacy §3.7, M-05).
+    # Default False: sensitive events, notes, flagged individuals and media are
+    # excluded entirely from this link's viewer payload. The Owner opts in.
+	#
+    expose_sensitive: bool = False
     # Per-share acknowledgement (Privacy §2.5, M-03). Must be True; the modal
     # in the UI sets it on submit. Backend rejects creation without it so the
     # consent row in auth_share_consents is the authoritative record that the
     # Owner saw and accepted the §9.4 text.
+	#
     acknowledgement: bool = False
 
 
@@ -260,6 +267,7 @@ def create_share_token(
         label=label,
         is_active=True,
         expires_after_days=max(1, body.expires_after_days),
+        expose_sensitive=body.expose_sensitive,
         created_at=now,
     )
     db.add(row)

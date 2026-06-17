@@ -218,7 +218,7 @@ Next
 =======================
 Bugs
 -----------------------------
--
+- I found a latent importer bug (unrelated to §3.7): exact event dates on standalone events (1 BAPM / 2 DATE 10 FEB 1960) fail to import (SQLite Date type only accepts Python date objects). I sidestepped it in the test GEDCOM by using ABT 1960. Worth a separate fix later.
 
 Go private
 -----------------------------

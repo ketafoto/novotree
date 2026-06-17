@@ -5,6 +5,7 @@ import { individualsApi } from '../../api/individuals';
 import { Button } from '../common/Button';
 import { Modal } from '../common/Modal';
 import { TranslateButton } from '../common/TranslateButton';
+import { SensitiveCheckbox } from '../common/SensitiveCheckbox';
 import toast from 'react-hot-toast';
 import { apiErrorMessage } from '../../utils/apiError';
 import type { Individual } from '../../types/models';
@@ -16,25 +17,30 @@ interface ModalNotesProps {
   onSaved?: () => void;
 }
 
-type FormData = { notes?: string };
+type FormData = { notes?: string; notes_sensitive?: boolean };
 
 export function ModalNotes({ open, onClose, individual, onSaved }: ModalNotesProps) {
   const queryClient = useQueryClient();
-  const { register, handleSubmit, reset, getValues, formState: { isSubmitting } } = useForm<FormData>({
-    defaultValues: { notes: '' },
+  const { register, handleSubmit, reset, watch, setValue, getValues, formState: { isSubmitting } } = useForm<FormData>({
+    defaultValues: { notes: '', notes_sensitive: false },
   });
 
   useEffect(() => {
     if (open && individual) {
-      reset({ notes: individual.notes || '' });
+      reset({ notes: individual.notes || '', notes_sensitive: !!individual.notes_sensitive });
     }
   }, [open, individual, reset]);
 
   const updateMutation = useMutation({
     mutationFn: (data: FormData) =>
-      individualsApi.update(individual.id, { notes: data.notes?.trim() || undefined }),
+      individualsApi.update(individual.id, {
+        notes: data.notes?.trim() || undefined,
+        notes_sensitive: !!data.notes_sensitive,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['individuals'] });
+      // notes_sensitive feeds the tree payload's per-node flag — refetch the tree too.
+      queryClient.invalidateQueries({ queryKey: ['tree'] });
       toast.success('Notes updated');
       onClose();
       onSaved?.();
@@ -57,6 +63,11 @@ export function ModalNotes({ open, onClose, individual, onSaved }: ModalNotesPro
             placeholder="Additional notes..."
           />
         </div>
+        <SensitiveCheckbox
+          checked={!!watch('notes_sensitive')}
+          onChange={(c) => setValue('notes_sensitive', c)}
+          label="Mark these notes sensitive"
+        />
         <div className="flex justify-end gap-2 pt-2">
           <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
           <Button type="submit" isLoading={isSubmitting}>Save</Button>

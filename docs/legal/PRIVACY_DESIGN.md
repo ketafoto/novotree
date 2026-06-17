@@ -877,13 +877,87 @@ attribution to the Owner.
 
 ### 3.7 Special-category gating (M-05, Phase 6.1–6.2)
 
-Defer if the current tree has none; do before going public.
+**Status: SHIPPED.** The viewer-exclusion half was Mode-A-relevant *today* —
+[privacy.md](privacy.md) already promised sensitive fields are "excluded from
+share links by default" — so this was an unkept live promise, not a deferrable
+item. All three bullets landed in one pass.
 
-- [ ] Tag sensitive event types (cause of death, religion, ethnicity, certain
-      medical events).
-- [ ] Hide sensitive fields behind a "show sensitive" toggle in the UI.
-- [ ] Per-share-token flag `expose_sensitive` (default False) — sensitive
-      fields excluded from viewer payload unless explicitly enabled.
+- [x] **Tag sensitive data — two mechanisms.** (a) An inherently-religious
+      **event-type allow-list** (`BAPM, BARM, BASM, BLES, CHR, CHRA, CONF, FCOM,
+      ORDN`) is a single named constant `SENSITIVE_EVENT_CODES` in
+      [database/models.py](../database/models.py), with an
+      `event_is_sensitive(event)` helper (auto type OR manual flag). (b) A
+      **manual per-record flag** the Owner sets by hand (the schema has no
+      religion/ethnicity/health columns; that data is free text in notes and
+      descriptions, which the user explicitly chose **not** to auto-scan). New
+      nullable `Boolean` columns: `Individual.is_sensitive` (whole-person) +
+      `Individual.notes_sensitive` (notes only), `Family.notes_sensitive`,
+      `Event.is_sensitive`, `Media.is_sensitive`. Field-level granularity lets
+      the Owner show a person's non-sensitive data while hiding only the
+      sensitive parts.
+- [x] **Owner "show sensitive" toggle** — per-session, Owner-only, default
+      collapsed; one click reveals sensitive events, notes, and flagged media.
+      **UI-only**: a shoulder-surfing guard, not access control, not persisted,
+      never sent to the backend; viewers never get the toggle. Mounted on three
+      surfaces so it is consistent wherever the Owner sees data:
+      [IndividualDetailPage.tsx](../frontend/src/pages/individuals/IndividualDetailPage.tsx)
+      (detail/edit view) and **both tree views**
+      ([TreePage.tsx](../frontend/src/pages/tree/TreePage.tsx) per-individual,
+      [TreeOverviewPage.tsx](../frontend/src/pages/tree/TreeOverviewPage.tsx) full
+      tree) — on the tree, when off, the shared `hideSensitiveFromTree` helper
+      strips sensitive events and notes AND drops whole-`is_sensitive` people
+      *atomically* (the person plus every edge/couple referencing them, mirroring
+      the backend's `_filter_excluded_individuals`), so React Flow never sees a
+      dangling edge endpoint. The focus person is preserved even if sensitive so a
+      per-individual tree never goes blank. The backend stamps `is_sensitive` /
+      `notes_sensitive` on each `TreeNode` and `is_sensitive` on each
+      `TreeNodeEvent` to drive it; mutating a sensitivity flag invalidates the
+      `['tree']` query so the tree never shows a stale flag. The detail-page
+      header also carries a visible whole-person **"Mark sensitive"** control (in
+      addition to the Basic-Info modal checkbox) so flagging a person does not
+      require hunting through a modal. All four "mark sensitive" checkboxes share
+      one component (`SensitiveCheckbox`) for consistent look and copy. Covered by
+      [hideSensitiveFromTree.test.ts](../frontend/tests/frontend/hideSensitiveFromTree.test.ts).
+- [x] **Per-share-token `expose_sensitive` flag** (default False) on
+      `AuthShareToken` ([database/system_models.py](../database/system_models.py)),
+      set by the Owner in [ShareConsentModal.tsx](../frontend/src/components/ShareConsentModal.tsx).
+      Server-side exclusion (a viewer never receives sensitive bytes) is enforced
+      in [backend/api/tree.py](../backend/api/tree.py) (sensitive events dropped,
+      `notes_sensitive` notes blanked, `is_sensitive` individuals omitted with
+      their edges/couples) and [backend/api/media.py](../backend/api/media.py)
+      (flagged media, and media of a sensitive individual, 404 / filtered).
+      Exclusion keys off a new `get_viewer_context` dependency in
+      [auth.py](../backend/api/auth.py) that distinguishes a share-token viewer
+      from an editor and carries the token's `expose_sensitive`. **Full
+      exclusion, no trace** (chosen over redaction): the viewer sees no
+      placeholder. The Owner (non-share session) always sees everything.
+
+**Explanatory affordance (the user's main addition).** The "what counts as
+sensitive (religion, ethnicity, health, cause of death — GDPR Art. 9)" copy is a
+single shared string `SENSITIVE_DATA_EXPLANATION` in
+[frontend/src/constants/sensitiveData.ts](../frontend/src/constants/sensitiveData.ts),
+surfaced via a reusable `SensitiveInfo` info icon at **all four** surfaces: the
+show-sensitive toggle, every mark-sensitive checkbox (basic-info, notes, event,
+photo), the Notes editor (a "think about sensitivity while typing" reminder),
+and the share-link modal. Wording is reconciled with privacy.md:44 and M-05 —
+not reinvented.
+
+**Migration / back-fill posture.** No migration code (project is pre-production).
+Columns are added to the model definitions only; `Base.metadata.create_all`
+carries them on **fresh** DBs. Existing dev / VM owner DBs and the system DB are
+**recreated** by the operator (stop service, drop tables / delete the sqlite
+files, re-import GEDCOM from the Google Drive backup, recreate share tokens).
+Existing rows are NULL = not-sensitive; no back-fill (mirrors §3.6's out-of-scope
+back-fill). **`privacy_policy_version` is NOT bumped** (stays 1.1 until real
+deployment, per §3.4's standing decision); privacy.md:44's "Sensitive fields"
+promise already matches the shipped behavior, so no wording change was needed.
+
+**Tests.** [tests/backend/test_sensitive_gating.py](../tests/backend/test_sensitive_gating.py)
+asserts (per share token) that sensitive events (BAPM + manual), notes,
+whole-person-flagged individuals, and flagged media are excluded when
+`expose_sensitive` is False and included when True, and that the Owner session
+always sees everything. `MINIMAL_GEDCOM` gained a BAPM event as a known sensitive
+row.
 
 ### 3.8 Children data handling (M-06, Phase 6.3)
 

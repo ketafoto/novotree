@@ -13,7 +13,17 @@ from .. import schemas
 import database.models
 from database.owner_info import OwnerInfo
 from database.system_db import get_system_db
-from .auth import EditorSession, get_tree_db, get_tree_owner_info, get_viewer_tree_db, get_viewer_owner_info, require_editor, require_owner
+from .auth import (
+    EditorSession,
+    ViewerContext,
+    get_tree_db,
+    get_tree_owner_info,
+    get_viewer_context,
+    get_viewer_tree_db,
+    get_viewer_owner_info,
+    require_editor,
+    require_owner,
+)
 from .api_utils import fetch_display_names, enrich_created_by
 
 
@@ -24,6 +34,23 @@ def _now_iso() -> str:
 def _check_edit_permission(session: EditorSession, record_created_by: str | None) -> None:
     if session.is_contributor and record_created_by != session.editor_id:
         raise HTTPException(status_code=403, detail="Contributors can only edit their own records")
+
+
+def _media_hidden_from_viewer(db: Session, media: database.models.Media) -> bool:
+    """True if a share-link viewer (not exposing sensitive data) must not see this
+    media: the file is manually flagged, or it belongs to a fully-sensitive
+    Individual (GDPR Art. 9). See PRIVACY_DESIGN.md 3.7."""
+    if media.is_sensitive:
+        return True
+    if media.individual_id is not None:
+        ind = (
+            db.query(database.models.Individual.is_sensitive)
+            .filter(database.models.Individual.id == media.individual_id)
+            .first()
+        )
+        if ind and ind[0]:
+            return True
+    return False
 
 logger = logging.getLogger("novotree.backend")
 
@@ -118,6 +145,7 @@ def serve_media_file(
     media_id: int,
     db: Session = Depends(get_viewer_tree_db),
     owner: OwnerInfo = Depends(get_viewer_owner_info),
+    ctx: ViewerContext = Depends(get_viewer_context),
 ):
     """Serve a media file by its database ID."""
     media = (
@@ -126,6 +154,11 @@ def serve_media_file(
         .first()
     )
     if not media or not media.file_path:
+        raise HTTPException(status_code=404, detail="Media file not found")
+
+    # Sensitive media (or media of a fully-sensitive Individual) is indistinguishable
+    # from "not found" for a share-link viewer that does not expose sensitive data.
+    if ctx.is_share_viewer and not ctx.expose_sensitive and _media_hidden_from_viewer(db, media):
         raise HTTPException(status_code=404, detail="Media file not found")
 
     file_path = Path(owner.media_dir) / media.file_path
@@ -290,6 +323,7 @@ def create_media(
         description=media.description,
         is_default=1 if media.is_default else 0,
         age_on_photo=media.age_on_photo,
+        is_sensitive=media.is_sensitive,
         created_by=session.editor_id,
         created_at=_now_iso(),
     )
@@ -308,6 +342,7 @@ def read_media(
     family_id: Optional[int] = None,
     db: Session = Depends(get_viewer_tree_db),
     db_sys: Session = Depends(get_system_db),
+    ctx: ViewerContext = Depends(get_viewer_context),
 ):
     """Read list of media with optional filtering."""
     query = db.query(database.models.Media)
@@ -316,6 +351,8 @@ def read_media(
     if family_id:
         query = query.filter(database.models.Media.family_id == family_id)
     db_rows = query.offset(skip).limit(limit).all()
+    if ctx.is_share_viewer and not ctx.expose_sensitive:
+        db_rows = [m for m in db_rows if not _media_hidden_from_viewer(db, m)]
     name_map = fetch_display_names({m.created_by for m in db_rows if m.created_by}, db_sys)
     return [enrich_created_by(schemas.Media.model_validate(m), name_map) for m in db_rows]
 
@@ -325,6 +362,7 @@ def read_media_by_id(
     media_id: int,
     db: Session = Depends(get_viewer_tree_db),
     db_sys: Session = Depends(get_system_db),
+    ctx: ViewerContext = Depends(get_viewer_context),
 ):
     """Read a single media record by ID."""
     media = (
@@ -333,6 +371,8 @@ def read_media_by_id(
         .first()
     )
     if media is None:
+        raise HTTPException(status_code=404, detail="Media not found")
+    if ctx.is_share_viewer and not ctx.expose_sensitive and _media_hidden_from_viewer(db, media):
         raise HTTPException(status_code=404, detail="Media not found")
     name_map = fetch_display_names({media.created_by} if media.created_by else set(), db_sys)
     return enrich_created_by(schemas.Media.model_validate(media), name_map)

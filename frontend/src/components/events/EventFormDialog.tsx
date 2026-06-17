@@ -8,6 +8,8 @@ import { Input } from '../common/Input';
 import { Modal } from '../common/Modal';
 import { TranslateButton } from '../common/TranslateButton';
 import { ApproxDateInput } from '../common/ApproxDateInput';
+import { SensitiveCheckbox } from '../common/SensitiveCheckbox';
+import { SENSITIVE_EVENT_CODES } from '../../constants/sensitiveData';
 import toast from 'react-hot-toast';
 import { apiErrorMessage } from '../../utils/apiError';
 import { latinOnlyRule } from '../../utils/textValidation';
@@ -28,6 +30,7 @@ type FormData = {
   event_date_approx?: string;
   event_place?: string;
   description?: string;
+  is_sensitive?: boolean;
 };
 
 const clean = (s: string | undefined) => (s?.trim() || undefined);
@@ -58,6 +61,8 @@ export function EventFormDialog({
     control,
     handleSubmit,
     reset,
+    watch,
+    setValue,
     getValues,
     formState: { isSubmitting, errors },
   } = useForm<FormData>({
@@ -68,6 +73,7 @@ export function EventFormDialog({
       event_date_approx: '',
       event_place: '',
       description: '',
+      is_sensitive: false,
     },
   });
 
@@ -80,6 +86,7 @@ export function EventFormDialog({
           event_date_approx: event.event_date_approx || '',
           event_place: event.event_place || '',
           description: event.description || '',
+          is_sensitive: !!event.is_sensitive,
         });
       } else {
         reset({
@@ -88,15 +95,26 @@ export function EventFormDialog({
           event_date_approx: '',
           event_place: '',
           description: '',
+          is_sensitive: false,
         });
       }
     }
   }, [open, event, reset]);
 
+  // Inherently-religious event types are always treated as sensitive server-side,
+  // regardless of the manual flag; reflect that in the UI so the Owner understands.
+  // For such types the checkbox shows checked-and-locked: it is effectively
+  // sensitive even though the stored is_sensitive flag may be false (the backend
+  // ORs the type via event_is_sensitive()).
+  const autoSensitive = SENSITIVE_EVENT_CODES.has(watch('event_type_code'));
+  const manualSensitive = !!watch('is_sensitive');
+
   const createMutation = useMutation({
     mutationFn: (data: EventCreate) => eventsApi.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['events'] });
+      // Event sensitivity (type or is_sensitive) feeds the tree payload — refetch it.
+      queryClient.invalidateQueries({ queryKey: ['tree'] });
       toast.success('Event added');
       onClose();
       onSaved?.();
@@ -109,6 +127,7 @@ export function EventFormDialog({
       eventsApi.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['events'] });
+      queryClient.invalidateQueries({ queryKey: ['tree'] });
       toast.success('Event updated');
       onClose();
       onSaved?.();
@@ -123,6 +142,7 @@ export function EventFormDialog({
       event_date_approx: clean(data.event_date_approx),
       event_place: clean(data.event_place),
       description: clean(data.description),
+      is_sensitive: !!data.is_sensitive,
     };
 
     if (isEdit && event) {
@@ -205,6 +225,16 @@ export function EventFormDialog({
             placeholder="Optional description"
           />
         </div>
+
+        <SensitiveCheckbox
+          checked={manualSensitive}
+          locked={autoSensitive}
+          onChange={(c) => setValue('is_sensitive', c)}
+          label="Mark this event sensitive"
+          description={autoSensitive
+            ? 'This event type is always treated as sensitive (it reveals religion, GDPR Art. 9).'
+            : undefined}
+        />
 
         <div className="flex justify-end gap-2 pt-2">
           <Button type="button" variant="secondary" onClick={handleClose}>

@@ -3,6 +3,7 @@
 # The models are used by SQLAlchemy ORM to read and write data from/to the database.
 
 from sqlalchemy import (
+    Boolean,
     Column,
     Integer,
     String,
@@ -19,6 +20,24 @@ from datetime import datetime, timezone
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
+
+# GEDCOM event codes that inherently reveal religion, and so are GDPR Art. 9
+# special-category data regardless of any manual flag (a baptism record is a
+# religion record). Source list: db.LOOKUP_TABLES["lookup_event_types"] (the
+# religious-rite subset). Events of these types are excluded from share-link
+# viewer payloads by default; see backend/api/tree.py and PRIVACY_DESIGN.md 3.7.
+#
+SENSITIVE_EVENT_CODES = frozenset({
+    "BAPM", "BARM", "BASM", "BLES", "CHR", "CHRA", "CONF", "FCOM", "ORDN",
+})
+
+
+def event_is_sensitive(event) -> bool:
+    """True if an Event row is special-category: an inherently-religious type
+    (SENSITIVE_EVENT_CODES) OR the Owner manually flagged it via is_sensitive."""
+    return bool(event.is_sensitive) or event.event_type_code in SENSITIVE_EVENT_CODES
+
+
 Base = declarative_base()
 
 class Individual(Base):
@@ -34,6 +53,12 @@ class Individual(Base):
     death_date_approx = Column(String, nullable=True)  # Raw GEDCOM date string for non-exact dates, e.g. 'ABT 1970'
     death_place = Column(String, nullable=True)
     notes = Column(Text, nullable=True)
+    # Special-category (GDPR Art. 9) flags, Owner-set. NULL/False = not sensitive.
+    # is_sensitive hides the whole person from share-link viewers; notes_sensitive
+    # hides only the free-text notes while the rest stays visible. See PRIVACY_DESIGN.md 3.7.
+	#
+    is_sensitive = Column(Boolean, nullable=True)
+    notes_sensitive = Column(Boolean, nullable=True)
     created_by = Column(String, nullable=True)
     created_at = Column(String, nullable=True)
 
@@ -72,6 +97,8 @@ class Family(Base):
     divorce_date_approx = Column(String, nullable=True)  # Raw GEDCOM date string for non-exact dates, e.g. 'ABT 1970'
     family_type = Column(String, nullable=False, default="marriage")
     notes = Column(Text, nullable=True)
+    # Special-category (GDPR Art. 9) flag for the family's free-text notes. See Individual.notes_sensitive.
+    notes_sensitive = Column(Boolean, nullable=True)
     created_by = Column(String, nullable=True)
     created_at = Column(String, nullable=True)
 
@@ -113,6 +140,9 @@ class Event(Base):
     event_date_approx = Column(String, nullable=True)  # Raw GEDCOM date string for non-exact dates, e.g. 'ABT 1970'
     event_place = Column(String, nullable=True)
     description = Column(Text, nullable=True)
+    # Manual special-category (GDPR Art. 9) flag. Independent of the inherently-religious
+    # event types in SENSITIVE_EVENT_CODES; event_is_sensitive() ORs the two.
+    is_sensitive = Column(Boolean, nullable=True)
     created_by = Column(String, nullable=True)
     created_at = Column(String, nullable=True)
 
@@ -133,6 +163,9 @@ class Media(Base):
     description = Column(Text, nullable=True)
     is_default = Column(Integer, nullable=True, default=0)
     age_on_photo = Column(Integer, nullable=True)
+    # Manual special-category (GDPR Art. 9) flag, default off. A flagged photo is
+    # excluded from share-link viewers; so are all photos of an is_sensitive Individual.
+    is_sensitive = Column(Boolean, nullable=True)
     created_by = Column(String, nullable=True)
     created_at = Column(String, nullable=True)
 

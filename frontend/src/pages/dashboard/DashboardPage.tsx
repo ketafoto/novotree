@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { shareUrl } from '../../utils/shareUrl';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
@@ -12,7 +11,7 @@ import { privacyRequestsApi } from '../../api/privacy_requests';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
 import { Spinner } from '../../components/common/Spinner';
-import { ShareConsentModal } from '../../components/ShareConsentModal';
+import { ShareSensitiveBadge } from '../../components/common/ShareSensitiveBadge';
 import { formatIndividualName, getLatestName } from '../../utils/nameUtils';
 import { useAuth } from '../../contexts/AuthContext';
 import { isLocalApp } from '../../config/appMode';
@@ -51,24 +50,13 @@ function ShareLinksWidget() {
     queryKey: ['share-tokens'],
     queryFn: usersApi.listShareTokens,
   });
-  const [isCreating, setIsCreating] = useState(false);
-  const [showConsent, setShowConsent] = useState(false);
 
   const activeTokens = tokens.filter(t => t.is_active);
 
-  const create = async () => {
-    setIsCreating(true);
-    try {
-      await usersApi.createShareToken({ description: 'Family share link', acknowledgement: true });
-      qc.invalidateQueries({ queryKey: ['share-tokens'] });
-      toast.success('Share link created');
-      setShowConsent(false);
-    } catch (err) {
-      toast.error(apiErrorMessage(err, 'Failed to create share link'));
-    } finally {
-      setIsCreating(false);
-    }
-  };
+  // Creating share links lives on the User Manager page (/users), where the
+  // Owner can set a label and the expose-sensitive flag. This widget is a
+  // read-only summary with copy/revoke; it deliberately does not create links
+  // (a label-less one-click create was confusing — see commit history).
 
   const copy = (token: string) => {
     const url = shareUrl(token);
@@ -102,10 +90,12 @@ function ShareLinksWidget() {
         <div className="text-center py-4">
           <Share2 className="w-8 h-8 mx-auto mb-2 text-gray-300" />
           <p className="text-sm text-gray-500 mb-3">No share links yet.</p>
-          <Button size="sm" onClick={() => setShowConsent(true)} disabled={isCreating}>
-            <Plus className="w-3.5 h-3.5 mr-1" />
-            Create link
-          </Button>
+          <Link to="/users">
+            <Button size="sm" variant="secondary">
+              <Plus className="w-3.5 h-3.5 mr-1" />
+              Create a link
+            </Button>
+          </Link>
         </div>
       ) : (
         <div className="space-y-2">
@@ -121,6 +111,9 @@ function ShareLinksWidget() {
                     <Check className="inline w-3 h-3 text-emerald-500 mr-0.5" aria-hidden /> Acknowledged on {new Date(t.created_at).toLocaleDateString()}
                   </p>
                 )}
+                <div className="mt-1">
+                  <ShareSensitiveBadge exposeSensitive={t.expose_sensitive} />
+                </div>
               </div>
               <button onClick={() => copy(t.token)} className="p-1.5 hover:bg-gray-100 rounded" title="Copy link">
                 <Copy className="w-4 h-4 text-gray-500" />
@@ -130,17 +123,11 @@ function ShareLinksWidget() {
               </button>
             </div>
           ))}
-          <button onClick={() => setShowConsent(true)} disabled={isCreating} className="text-xs text-blue-600 hover:underline">
+          <Link to="/users" className="text-xs text-blue-600 hover:underline">
             + New link
-          </button>
+          </Link>
         </div>
       )}
-      <ShareConsentModal
-        open={showConsent}
-        onCancel={() => setShowConsent(false)}
-        onConfirm={create}
-        isSubmitting={isCreating}
-      />
     </Card>
   );
 }
