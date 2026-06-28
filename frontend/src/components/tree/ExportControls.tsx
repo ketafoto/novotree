@@ -4,6 +4,7 @@ import { toPng, toJpeg } from 'html-to-image';
 import { Button } from '../common/Button';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../contexts/AuthContext';
+import { usePrivacyConfig } from '../../hooks/usePrivacyConfig';
 import { buildExportFilename } from '../../utils/exportFilename';
 import { saveDataUrl } from '../../utils/saveBlob';
 import { showSaveToast } from '../../utils/saveToast';
@@ -37,6 +38,10 @@ export function ExportControls({
   onClose,
 }: ExportControlsProps) {
   const { editor, viewerOwnerId } = useAuth();
+  const { config } = usePrivacyConfig();
+  // Same gate as the PrivacyLinks Donate link: Mode A, analytics off. The
+  // post-export success toast is a natural value-moment to surface it.
+  const showDonatePrompt = config?.deployment_mode === 'private' && !config.analytics_enabled;
   const [format, setFormat] = useState<ImageFormat>('png');
   const [quality, setQuality] = useState(0.92);
   const [dpi, setDpi] = useState<DpiOption>(300);
@@ -76,7 +81,7 @@ export function ExportControls({
       const ownerId = editor?.owner_id ?? viewerOwnerId ?? 'tree';
       const filename = buildExportFilename(ownerId, kind, ext);
       const result = await saveDataUrl(dataUrl, filename, { silent: true });
-      showSaveToast(result);
+      showSaveToast(result, { showDonatePrompt });
 
       onClose();
     } catch (err) {
@@ -86,7 +91,7 @@ export function ExportControls({
       setExporting(false);
       onExportEnd?.();
     }
-  }, [format, quality, dpi, kind, getElement, onExportStart, onExportEnd, editor, viewerOwnerId]);
+  }, [format, quality, dpi, kind, getElement, onExportStart, onExportEnd, editor, viewerOwnerId, showDonatePrompt]);
 
   return (
     <div className="bg-white/95 backdrop-blur-sm rounded-lg shadow-lg border border-gray-200 p-4 w-64">
