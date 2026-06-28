@@ -22,13 +22,18 @@
 ; the file we ship is at installer\dist\novotree.exe — i.e. dist\novotree.exe
 ; relative to this .iss.
 #define MyBuildDir      "dist"
+; App GUID (no braces) — single source of truth, used for AppId and the
+; upgrade-detection registry lookup in [Code]. Braces are added at each use
+; site because the [Setup] AppId needs a doubled "{{" to escape the constant
+; syntax, while the [Code] string needs a plain single "{".
+#define MyAppGuid       "AF465320-1269-4CC5-8860-9C17E4BD536B"
 
 [Setup]
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
-AppId={{AF465320-1269-4CC5-8860-9C17E4BD536B}
+AppId={{{#MyAppGuid}}
 
 ; Install to %LocalAppData%\Programs\NovoTree by default (no admin rights needed)
 DefaultDirName={localappdata}\Programs\{#MyAppName}
@@ -48,6 +53,10 @@ LZMAUseSeparateProcess=yes
 ; Appearance
 WizardStyle=modern
 SetupIconFile=novotree.ico
+
+; Always write a setup log to %TEMP%\Setup Log YYYY-MM-DD #NNN.txt so install
+; problems (e.g. an upgrade-in-place file replace) can be diagnosed after the fact.
+SetupLogging=yes
 
 ; Uninstaller
 UninstallDisplayName={#MyAppName}
@@ -101,6 +110,23 @@ Filename: "{app}\{#MyAppExeName}"; \
   Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; \
   Flags: nowait postinstall skipifsilent
 
+[InstallDelete]
+; Upgrade-in-place cleanup. Runs as part of the normal install pass (there is NO
+; separate, slow uninstaller step) so the new build never sits next to stale
+; leftovers from a previous version:
+;   - The single novotree.exe is overwritten by [Files] (ignoreversion), but we
+;     delete it first so the claim "old files are cleared before the new ones are
+;     written" is literally true rather than relying on overwrite semantics.
+;   - {app}\_internal and {app}\__pycache__ only exist if an OLDER --onedir build
+;     was ever installed into this folder; remove them so switching a user from an
+;     old onedir layout to the current onefile bundle leaves nothing behind.
+; Only the program folder ({app}) is touched. The user's tree data (their chosen
+; data folder) and config (%LocalAppData%\NovoSpace\NovoTree) live elsewhere and
+; are never affected.
+Type: files;          Name: "{app}\{#MyAppExeName}"
+Type: filesandordirs; Name: "{app}\_internal"
+Type: filesandordirs; Name: "{app}\__pycache__"
+
 [UninstallDelete]
 ; In --onefile mode there's no __pycache__ in the install dir to clean up
 ; (the bundle extracts to a temp dir on launch, not next to the exe).
@@ -123,6 +149,81 @@ begin
   Exec(ExpandConstant('{cmd}'), '/C taskkill /F /IM novotree.exe /T 2>nul',
        '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Result := True;
+end;
+
+{ Upgrade reassurance.
+    We install over any existing version in place (see [InstallDelete] + the
+    ignoreversion flag in [Files]) instead of running a separate uninstaller.
+    That avoids a slow file-by-file removal and keeps the upgrade to a single
+    fast pass. The only thing the user needs to be told is that installing over
+    an existing copy is safe and leaves their tree data untouched.
+
+    The note is shown from InitializeWizard (the very first thing at startup,
+    before any wizard page) so it is impossible to miss -- unlike
+    PrepareToInstall, which fires late and can flash past on a fast machine. }
+
+{ Look up the previous install's registry key. Returns its base path, or '' if
+  no previous version is registered. }
+function GetUninstallKey(var Hive: Integer): String;
+var
+  RegKey: String;
+begin
+  RegKey := 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\' +
+            '{{#MyAppGuid}}_is1';
+  { Per-user installs (PrivilegesRequired=lowest) live under HKCU; a previous
+    admin install would be under HKLM. Check both. }
+  if RegKeyExists(HKCU, RegKey) then
+  begin
+    Hive := HKCU;
+    Result := RegKey;
+  end
+  else if RegKeyExists(HKLM, RegKey) then
+  begin
+    Hive := HKLM;
+    Result := RegKey;
+  end
+  else
+    Result := '';
+end;
+
+{ True if a previous version is installed; OutVersion gets its DisplayVersion. }
+function PreviousVersionInstalled(var OutVersion: String): Boolean;
+var
+  Hive: Integer;
+  RegKey: String;
+begin
+  OutVersion := '';
+  RegKey := GetUninstallKey(Hive);
+  if RegKey = '' then
+  begin
+    Result := False;
+    Exit;
+  end;
+  if not RegQueryStringValue(Hive, RegKey, 'DisplayVersion', OutVersion) then
+    OutVersion := 'an earlier version';
+  Result := True;
+end;
+
+{ Shown once, before any wizard page -- guaranteed visible. }
+procedure InitializeWizard();
+var
+  OldVer: String;
+begin
+  if not PreviousVersionInstalled(OldVer) then
+    Exit;   { fresh install -- no previous version, nothing to say }
+
+  MsgBox(
+    'NovoTree ' + OldVer + ' is already installed.' + #13#10 + #13#10
+    + 'This setup will update it to version {#MyAppVersion} by installing over '
+    + 'the existing version. This is perfectly safe:' + #13#10 + #13#10
+    + '  -  The old program file is replaced cleanly -- no leftover or stale '
+    + 'files remain.' + #13#10
+    + '  -  Your family tree, photos, and database are stored separately in your '
+    + 'chosen data folder and are NOT affected.' + #13#10
+    + '  -  Nothing is corrupted; the system is simply updated to the new '
+    + 'version.' + #13#10 + #13#10
+    + 'For best results, please close NovoTree before continuing.',
+    mbInformation, MB_OK);
 end;
 
 { Uninstall progress UX:

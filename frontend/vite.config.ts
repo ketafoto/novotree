@@ -1,6 +1,20 @@
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+
+// Single source of truth for the app version is version.py at the repo root
+// (the Python launcher and the Windows installer read __version__ from there).
+// Parse it here so the SPA shows the same number without a second hardcoded
+// literal that can drift -- the About dialog reads import.meta.env.VITE_APP_VERSION.
+function readAppVersion(): string {
+  const versionPy = fileURLToPath(new URL('../version.py', import.meta.url));
+  const text = readFileSync(versionPy, 'utf-8');
+  const match = text.match(/^__version__\s*=\s*["']([^"']+)["']/m);
+  if (!match) throw new Error(`Could not parse __version__ from ${versionPy}`);
+  return match[1];
+}
 
 // Reminds the developer that `npm run dev:dev-auth-on` only flips the FRONTEND
 // into public/auth mode — the backend must ALSO be started with
@@ -25,6 +39,11 @@ const devAuthOnReminderPlugin = (mode: string) => ({
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss(), devAuthOnReminderPlugin(mode)],
+  // Expose version.py's __version__ to the SPA as import.meta.env.VITE_APP_VERSION.
+  // JSON.stringify so the value is a quoted string literal after constant-folding.
+  define: {
+    'import.meta.env.VITE_APP_VERSION': JSON.stringify(readAppVersion()),
+  },
   // "base" tells Vite what URL prefix the app is served under.
   // Vite embeds this prefix into all generated asset URLs (JS, CSS, images),
   // so the browser can find them. Without the correct prefix, the browser

@@ -330,7 +330,7 @@ def load_privacy_settings() -> PrivacySettings:
         controller_name=os.getenv(
             "CONTROLLER_NAME", "NovoTree (operator: Igor Novoseltsev)"
         ),
-        privacy_contact_email=os.getenv("PRIVACY_CONTACT_EMAIL", "aktiniya@gmail.com"),
+        privacy_contact_email=os.getenv("PRIVACY_CONTACT_EMAIL", "novospace.tree@gmail.com"),
         dpo_email=os.getenv("DPO_EMAIL") or None,
         hosting_region=os.getenv("HOSTING_REGION", "EEA"),
         analytics_enabled=_as_bool(os.getenv("ANALYTICS_ENABLED"), default=False),

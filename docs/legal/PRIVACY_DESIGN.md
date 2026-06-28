@@ -1462,7 +1462,7 @@ class PrivacySettings:
 
     # Where data subjects email privacy questions and privacy-request
     # follow-ups. Must be a monitored mailbox.
-    privacy_contact_email: str = "aktiniya@gmail.com"
+    privacy_contact_email: str = "novospace.tree@gmail.com"
 
     # DPO = Data Protection Officer (GDPR Art. 37). MANDATORY only if we do
     # large-scale monitoring or large-scale special-category processing —

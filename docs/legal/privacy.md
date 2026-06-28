@@ -11,7 +11,7 @@ read it; the legal basis for each section is cited where relevant.
 NovoTree is a small, non-commercial family-tree service operated by
 **Igor Novoseltsev** as the data controller.
 
-- **Privacy contact:** [aktiniya@gmail.com](mailto:aktiniya@gmail.com)
+- **Privacy contact:** [novospace.tree@gmail.com](mailto:novospace.tree@gmail.com)
 - **Where to send privacy requests** (removal, access, or correction): the
   [Privacy request](/privacy/request) form. The contact email above is for
   follow-up questions.

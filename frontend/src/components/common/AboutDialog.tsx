@@ -1,13 +1,19 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Info, Heart, Copy } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Modal } from './Modal';
 import { Button } from './Button';
 
-// Build-time version. Single source of truth: keep in sync with version.py
-// at the repo root (the installer also reads __version__ from there).
-const APP_VERSION = '0.1.0';
-const SUPPORT_EMAIL = 'support@contact.novotree.cz';
+// Build-time version, injected by vite.config.ts from version.py at the repo
+// root (the single source of truth the launcher and installer also read).
+const APP_VERSION = import.meta.env.VITE_APP_VERSION;
+
+// Support address is kept as split parts and joined at runtime (see useMemo
+// below) so no complete "user@domain" string sits in the committed source for
+// address-harvesting scrapers to scoop out of the public repo. The address is
+// forwarded (via ImprovMX) to the monitored mailbox.
+const SUPPORT_EMAIL_USER = 'support';
+const SUPPORT_EMAIL_DOMAIN = 'novotree.cz';
 
 interface AboutDialogProps {
   /** Optional override — caller can open a Donate modal after Close. */
@@ -24,10 +30,14 @@ interface AboutDialogProps {
  */
 export function AboutDialog({ onOpenDonate }: AboutDialogProps) {
   const [open, setOpen] = useState(false);
+  const supportEmail = useMemo(
+    () => `${SUPPORT_EMAIL_USER}@${SUPPORT_EMAIL_DOMAIN}`,
+    [],
+  );
 
   const handleCopyEmail = async () => {
     try {
-      await navigator.clipboard.writeText(SUPPORT_EMAIL);
+      await navigator.clipboard.writeText(supportEmail);
       toast.success('Email copied');
     } catch {
       toast.error('Copy failed');
@@ -63,7 +73,7 @@ export function AboutDialog({ onOpenDonate }: AboutDialogProps) {
                   span with `select-text` keeps it copyable, and the small
                   copy-icon next to it is a one-click alternative. */}
               <span className="text-emerald-700 break-all select-text">
-                {SUPPORT_EMAIL}
+                {supportEmail}
               </span>
               <button
                 type="button"
