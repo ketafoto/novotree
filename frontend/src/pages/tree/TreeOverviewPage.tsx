@@ -182,10 +182,6 @@ export function TreeOverviewPage() {
             </button>
           )}
 
-          {isOwner && (
-            <SensitiveViewToggle shown={showSensitive} onToggle={setShowSensitive} />
-          )}
-
           {/* Privacy-request selection (§3.9) — see TreePage. */}
           {showSelection && (
             <TreeSelectionControls
@@ -195,19 +191,31 @@ export function TreeOverviewPage() {
             />
           )}
 
-          {/* Privacy links — see TreePage for rationale (fullscreen overlay
-              hides the global PrivacyFooter; critical path for viewers). */}
-          {!isLocalApp && (
-            <PrivacyLinks className="text-[11px] text-gray-500 px-2" />
-          )}
-
-          <button
-            onClick={() => setShowExport(!showExport)}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            title="Export as image"
-          >
-            <Download className="w-4 h-4 text-gray-600" />
-          </button>
+          {/* Actions pill — Sensitive toggle + Privacy links + Export share one
+              border, matching TreePage so the chrome is identical across the two
+              tree views. PrivacyLinks is the only path to "Remove Me / Our
+              Privacy" here (the fullscreen overlay hides the global footer). */}
+          <div className="flex items-center gap-1 px-2 py-1 bg-white rounded-full border border-slate-200">
+            {isOwner && (
+              <>
+                <SensitiveViewToggle shown={showSensitive} onToggle={setShowSensitive} className="px-1" />
+                <span aria-hidden className="w-px h-4 bg-slate-200 mx-1" />
+              </>
+            )}
+            {!isLocalApp && (
+              <>
+                <PrivacyLinks className="text-[11px] text-slate-500 px-2 whitespace-nowrap" />
+                <span aria-hidden className="w-px h-4 bg-slate-200 mx-1" />
+              </>
+            )}
+            <button
+              onClick={() => setShowExport(!showExport)}
+              className="p-1.5 hover:bg-slate-100 rounded-full transition-colors"
+              title="Export as image"
+            >
+              <Download className="w-4 h-4 text-slate-600" />
+            </button>
+          </div>
 
           <button
             onClick={handleClose}

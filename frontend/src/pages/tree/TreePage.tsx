@@ -265,7 +265,7 @@ export function TreePage() {
             )}
             {!isLocalApp && (
               <>
-                <PrivacyLinks className="text-[11px] text-slate-500 px-2" />
+                <PrivacyLinks className="text-[11px] text-slate-500 px-2 whitespace-nowrap" />
                 <span aria-hidden className="w-px h-4 bg-slate-200 mx-1" />
               </>
             )}
