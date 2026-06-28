@@ -11,7 +11,9 @@ import {
   type PrivacyRequestStatus,
   type PrivacyRequestType,
 } from '../../api/privacy_requests';
+import { individualsApi } from '../../api/individuals';
 import { usePrivacyConfig } from '../../hooks/usePrivacyConfig';
+import { formatIndividualName, getLatestName } from '../../utils/nameUtils';
 import { TestPrivacyRequestTimestampPanel } from './TestPrivacyRequestTimestampPanel';
 
 const STATUS_LABEL: Record<PrivacyRequestStatus, string> = {
@@ -44,15 +46,38 @@ const REQUEST_TYPE_BADGE: Record<PrivacyRequestType, string> = {
 // usually want the full queue, and per-kind filtering is a triage convenience.
 type RequestTypeFilter = 'all' | PrivacyRequestType;
 
-// Best-effort link from an access request to a named Individual. The
-// requester's message is free-form so this is a heuristic — match the first
-// GEDCOM-shaped ID (`I` followed by digits). If nothing matches, no link is
-// rendered; the spec is explicit that we do not build a search UI for this.
-const INDIVIDUAL_ID_RE = /\bI\d+\b/;
+// Best-effort link from a request to the named Individuals. The requester's
+// message is free-form so this is a heuristic -- match every GEDCOM-shaped ID
+// (`I` followed by digits). A removal request from the tree selection CTA
+// (PRIVACY_DESIGN.md 3.9) packs several; an access request may name one. If
+// nothing matches, no block is rendered; the spec is explicit that we do not
+// build a search UI for this.
+const INDIVIDUAL_ID_RE = /\bI\d+\b/g;
 
-function extractIndividualId(message: string): string | null {
-  const match = message.match(INDIVIDUAL_ID_RE);
-  return match ? match[0] : null;
+function extractIndividualIds(message: string): string[] {
+  const matches = message.match(INDIVIDUAL_ID_RE);
+  // Dedup while preserving first-seen order (the same person may be named twice).
+  return matches ? [...new Set(matches)] : [];
+}
+
+// One referenced person, resolved against the Owner's individuals list. When
+// `individual` is found we can show the real name and link to the numeric
+// detail route; otherwise we fall back to the raw GEDCOM id with no link (the
+// id may be a typo, or the person may already have been deleted).
+interface ReferencedPerson {
+  gedcomId: string;
+  numericId?: number;
+  name?: string;
+}
+
+function resolveReferencedPeople(
+  message: string,
+  byGedcomId: Map<string, { id: number; name: string }>,
+): ReferencedPerson[] {
+  return extractIndividualIds(message).map((gedcomId) => {
+    const hit = byGedcomId.get(gedcomId);
+    return { gedcomId, numericId: hit?.id, name: hit?.name };
+  });
 }
 
 function StatusBadge({ status }: { status: PrivacyRequestStatus }) {
@@ -82,6 +107,7 @@ function formatDate(iso: string | null): string {
 
 function PrivacyRequestCard({
   row,
+  individualsByGedcomId,
   onResolve,
   onDelete,
   resolving,
@@ -90,6 +116,7 @@ function PrivacyRequestCard({
   test_onOverridden,
 }: {
   row: PrivacyRequestRow;
+  individualsByGedcomId: Map<string, { id: number; name: string }>;
   onResolve: (id: number) => void;
   onDelete: (id: number) => void;
   resolving: boolean;
@@ -98,9 +125,9 @@ function PrivacyRequestCard({
   test_onOverridden: (updated: PrivacyRequestRow) => void;
 }) {
   const isTerminal = row.status === 'resolved' || row.status === 'escalated';
-  // Inline jump for access rows — see comment on INDIVIDUAL_ID_RE.
-  const referencedIndividualId =
-    row.request_type === 'access' ? extractIndividualId(row.message) : null;
+  // People named by id in the message -- removal, access, or correction alike
+  // (see comment on INDIVIDUAL_ID_RE).
+  const referencedPeople = resolveReferencedPeople(row.message, individualsByGedcomId);
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-5 space-y-3">
@@ -146,19 +173,37 @@ function PrivacyRequestCard({
         {row.message}
       </div>
 
-      {referencedIndividualId && (
-        <div className="text-sm">
-          <Link
-            to={`/individuals/${referencedIndividualId}`}
-            className="inline-flex items-center gap-1 text-indigo-700 hover:text-indigo-800 hover:underline"
-          >
-            Open Individual <code className="bg-indigo-50 px-1 rounded">{referencedIndividualId}</code>
-            <ExternalLink className="w-3 h-3" />
-          </Link>
-          <p className="text-xs text-gray-500 mt-1">
-            Use the "Export data" button on the Individual page (§2.6) to fulfil this access
-            request, then mark resolved.
-          </p>
+      {referencedPeople.length > 0 && (
+        <div className="text-sm space-y-1">
+          <span className="text-gray-500">Referenced people:</span>
+          <ul className="space-y-1">
+            {referencedPeople.map((person) => (
+              <li key={person.gedcomId} className="flex items-center gap-2">
+                {person.numericId !== undefined ? (
+                  <Link
+                    to={`/individuals/${person.numericId}`}
+                    className="inline-flex items-center gap-1 text-indigo-700 hover:text-indigo-800 hover:underline"
+                  >
+                    {person.name}
+                    <code className="bg-indigo-50 px-1 rounded text-xs">{person.gedcomId}</code>
+                    <ExternalLink className="w-3 h-3" />
+                  </Link>
+                ) : (
+                  // Unresolved -- id may be a typo or the person is already gone.
+                  <span className="inline-flex items-center gap-1 text-gray-500">
+                    <code className="bg-gray-100 px-1 rounded text-xs">{person.gedcomId}</code>
+                    <span className="text-xs">(not found on this tree)</span>
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+          {row.request_type === 'access' && (
+            <p className="text-xs text-gray-500">
+              Use the "Export data" button on each Individual page (§2.6) to fulfil this access
+              request, then mark resolved.
+            </p>
+          )}
         </div>
       )}
 
@@ -205,6 +250,28 @@ export function PrivacyRequestsPage() {
     queryKey: ['privacy-requests', includeResolved],
     queryFn: () => privacyRequestsApi.list(includeResolved),
   });
+
+  // Resolve the GEDCOM ids packed into request messages to real people so each
+  // card can show a name + a working link to the numeric detail route (the raw
+  // I-id is not a valid /individuals/{id} param). Owner-only page, so the full
+  // list is already authorized; fetched once and shared across all cards.
+  const { data: individuals } = useQuery({
+    queryKey: ['individuals', 'privacy-request-refs'],
+    queryFn: () => individualsApi.list({ limit: 100000 }),
+  });
+
+  const individualsByGedcomId = useMemo(() => {
+    const map = new Map<string, { id: number; name: string }>();
+    for (const ind of individuals ?? []) {
+      if (ind.gedcom_id) {
+        map.set(ind.gedcom_id, {
+          id: ind.id,
+          name: formatIndividualName(getLatestName(ind.names)),
+        });
+      }
+    }
+    return map;
+  }, [individuals]);
 
   const filtered = useMemo(() => {
     if (!data) return data;
@@ -308,6 +375,7 @@ export function PrivacyRequestsPage() {
             <PrivacyRequestCard
               key={row.id}
               row={row}
+              individualsByGedcomId={individualsByGedcomId}
               onResolve={(id) => resolveMutation.mutate(id)}
               onDelete={handleDelete}
               resolving={pendingId === row.id && resolveMutation.isPending}

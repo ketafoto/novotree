@@ -1,5 +1,6 @@
 import { memo, useState, useCallback } from 'react';
 import { Handle, Position } from '@xyflow/react';
+import { CheckCircle2 } from 'lucide-react';
 import type { TreeNode } from '../../types/models';
 import { MaleSilhouette } from './MaleSilhouette';
 import { FemaleSilhouette } from './FemaleSilhouette';
@@ -11,6 +12,10 @@ interface PersonNodeData extends TreeNode {
   isFocus: boolean;
   carouselIntervalMs?: number;
   isFullTree?: boolean;
+  // Privacy-request selection mode (PRIVACY_DESIGN.md 3.9). selectMode hints
+  // "click to check"; isSelected draws the checked ring + badge.
+  selectMode?: boolean;
+  isSelected?: boolean;
 }
 
 /**
@@ -76,9 +81,14 @@ export const PersonNode = memo(function PersonNode({
 
   const lifespan = deathYear ? `${birthYear} – ${deathYear}` : birthYear !== '?' ? `b. ${birthYear}` : '';
 
-  const borderColor = data.isFocus
-    ? 'ring-amber-400 ring-4'
-    : 'ring-gray-300 ring-2';
+  // Selected (privacy-request 3.9) wins the ring so a checked person reads as
+  // checked even when they are also the focus; emerald is distinct from the
+  // amber focus ring.
+  const borderColor = data.isSelected
+    ? 'ring-emerald-500 ring-4'
+    : data.isFocus
+      ? 'ring-amber-400 ring-4'
+      : 'ring-gray-300 ring-2';
 
   const hasPhotos = data.photos && data.photos.length > 0;
 
@@ -96,10 +106,16 @@ export const PersonNode = memo(function PersonNode({
       >
         {/* Portrait */}
         <div
-          className={`w-[88px] h-[110px] rounded-xl overflow-hidden ring ${borderColor} ${
-            data.isFocus ? 'shadow-lg shadow-amber-200' : ''
+          className={`relative w-[88px] h-[110px] rounded-xl overflow-hidden ring ${borderColor} ${
+            data.isFocus && !data.isSelected ? 'shadow-lg shadow-amber-200' : ''
           } bg-white transition-shadow group-hover:shadow-md`}
         >
+          {/* Check badge -- only when checked in selection mode. */}
+          {data.isSelected && (
+            <span className="absolute top-1 right-1 z-10 rounded-full bg-white/90">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+            </span>
+          )}
           {hasPhotos ? (
             <PhotoCarousel
               photos={data.photos}

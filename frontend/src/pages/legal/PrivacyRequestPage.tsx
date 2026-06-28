@@ -12,6 +12,10 @@ import { usePrivacyConfig } from '../../hooks/usePrivacyConfig';
 import { privacyApi } from '../../api/privacy';
 import type { PrivacyRequestType } from '../../api/privacy_requests';
 import { useAuth } from '../../contexts/AuthContext';
+import {
+  PARAM_INDIVIDUAL_IDS,
+  PARAM_REQUEST_TYPE,
+} from '../../constants/privacyRequestParams';
 
 // Three request kinds — radio options shown on the form (Tier 1 §2.7 of
 // docs/legal/PRIVACY_DESIGN.md). User copy is plain language; the legal text
@@ -39,6 +43,74 @@ const schema = z.object({
   message: z.string().min(10, 'Please describe your request (10+ characters)').max(4000),
 });
 type FormData = z.infer<typeof schema>;
+
+const VALID_REQUEST_TYPES: ReadonlySet<PrivacyRequestType> = new Set(
+  REQUEST_TYPE_OPTIONS.map((o) => o.value),
+);
+
+// Per-type opener for the prefilled message, so a request that arrives with
+// people pre-selected reads correctly for its kind (a removal does not say
+// "send me a copy"). Each takes the comma-joined id list.
+const MESSAGE_PREFILL_BY_TYPE: Record<PrivacyRequestType, (people: string) => string> = {
+  removal: (people) =>
+    `Please remove my data from this family tree for the following people: ${people}.`,
+  access: (people) =>
+    `Please send me a copy of the data this family tree holds about the following people: ${people}.`,
+  correction: (people) =>
+    `Please correct the data this family tree holds about the following people: ${people}.`,
+};
+
+export function buildPrefillMessage(requestType: PrivacyRequestType, people: string): string {
+  return MESSAGE_PREFILL_BY_TYPE[requestType](people);
+}
+
+// Whether the message box still holds an auto-generated default (for the given
+// pre-selected people) and so is safe to re-word when the radio changes. True
+// when it is empty or matches the default for ANY of the three types -- the
+// latter so switching removal -> access -> correction keeps re-wording, but the
+// moment the user edits the text it stops matching and we leave it alone.
+export function isDefaultMessage(message: string, people: string): boolean {
+  if (message.trim() === '') return true;
+  return REQUEST_TYPE_OPTIONS.some((o) => message === buildPrefillMessage(o.value, people));
+}
+
+interface PrefillParams {
+  /** GEDCOM-shaped ids parsed from ?individual_ids= (e.g. ["I1", "I2"]). */
+  individualIds: string[];
+  /** ?request_type=, only if it is one of the three known kinds. */
+  requestType?: PrivacyRequestType;
+  /** Human-readable text seeded into the message field, when ids are present. */
+  messagePrefill?: string;
+}
+
+// Tree selection mode (PRIVACY_DESIGN.md 3.9) navigates here with the checked
+// people in ?individual_ids= and ?request_type=removal. Parse them into a
+// readable message rather than extending the backend payload -- the owner-triage
+// page already turns I-ids in the message into "Open Individual" links. Pure and
+// exported so it can be unit-tested without rendering the form.
+export function parsePrefillParams(search: string): PrefillParams {
+  const params = new URLSearchParams(search);
+
+  const individualIds = (params.get(PARAM_INDIVIDUAL_IDS) ?? '')
+    .split(',')
+    .map((id) => id.trim())
+    .filter((id) => id.length > 0);
+
+  const rawType = params.get(PARAM_REQUEST_TYPE);
+  const requestType =
+    rawType && VALID_REQUEST_TYPES.has(rawType as PrivacyRequestType)
+      ? (rawType as PrivacyRequestType)
+      : undefined;
+
+  // Word the opener for the request kind. When ids arrive without an explicit
+  // type, default to removal -- the only kind the tree CTA emits (§3.9).
+  const messagePrefill =
+    individualIds.length > 0
+      ? buildPrefillMessage(requestType ?? 'removal', individualIds.join(', '))
+      : undefined;
+
+  return { individualIds, requestType, messagePrefill };
+}
 
 type PrefillSource = 'url' | 'share-token' | 'authenticated-self' | 'none';
 
@@ -127,17 +199,38 @@ export function PrivacyRequestPage() {
   const authenticatedOwnerId = editor?.owner_id ?? null;
   const ownerContext = resolveOwnerContext(viewerOwnerId, authenticatedOwnerId);
 
+  // Tree selection-mode prefill (§3.9): ids + request_type from the URL seed
+  // the message, the radio, and the legacy single-id hint field.
+  const prefill = parsePrefillParams(window.location.search);
+
   const {
     register,
     handleSubmit,
+    setValue,
+    getValues,
     formState: { errors, isSubmitting },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
       tree_owner_id: ownerContext.prefillValue,
-      // request_type intentionally has no default — the user must pick.
+      // request_type has no default unless §3.9 supplied one; otherwise the
+      // user must pick.
+      request_type: prefill.requestType,
+      individual_id: prefill.individualIds[0],
+      message: prefill.messagePrefill,
     },
   });
+
+  // When people were pre-selected (§3.9) and the user picks a different request
+  // type, re-word the message to match -- but only while it still holds an
+  // auto-generated default, so we never clobber text the user typed.
+  const prefillPeople = prefill.individualIds.join(', ');
+  const handleRequestTypeChange = (requestType: PrivacyRequestType) => {
+    if (prefill.individualIds.length === 0) return;
+    if (isDefaultMessage(getValues('message') ?? '', prefillPeople)) {
+      setValue('message', buildPrefillMessage(requestType, prefillPeople));
+    }
+  };
 
   const onSubmit = async (data: FormData) => {
     try {
@@ -238,17 +331,25 @@ export function PrivacyRequestPage() {
               <span className="text-red-500 ml-1">*</span>
             </legend>
             <div className="space-y-2">
-              {REQUEST_TYPE_OPTIONS.map((opt) => (
-                <label key={opt.value} className="flex items-start gap-2 text-sm text-gray-700 cursor-pointer">
-                  <input
-                    type="radio"
-                    value={opt.value}
-                    className="mt-1"
-                    {...register('request_type')}
-                  />
-                  <span>{opt.label}</span>
-                </label>
-              ))}
+              {REQUEST_TYPE_OPTIONS.map((opt) => {
+                // Compose RHF's onChange with our re-wording so both run.
+                const { onChange: rhfOnChange, ...rest } = register('request_type');
+                return (
+                  <label key={opt.value} className="flex items-start gap-2 text-sm text-gray-700 cursor-pointer">
+                    <input
+                      type="radio"
+                      value={opt.value}
+                      className="mt-1"
+                      onChange={(e) => {
+                        rhfOnChange(e);
+                        handleRequestTypeChange(opt.value);
+                      }}
+                      {...rest}
+                    />
+                    <span>{opt.label}</span>
+                  </label>
+                );
+              })}
             </div>
             {errors.request_type?.message && (
               <p className="text-sm text-red-600">{errors.request_type.message}</p>

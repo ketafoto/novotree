@@ -13,11 +13,13 @@ import { TreeLegend } from '../../components/tree/TreeLegend';
 import { ExportControls } from '../../components/tree/ExportControls';
 import { ContributeDialog } from '../../components/common/ContributeDialog';
 import { MobilePersonSheet } from '../../components/tree/MobilePersonSheet';
+import { TreeSelectionControls } from '../../components/tree/TreeSelectionControls';
 import { PrivacyLinks } from '../../components/layout/PrivacyLinks';
 import { isLocalApp } from '../../config/appMode';
 import { useAuth } from '../../contexts/AuthContext';
 import { useIsMobileViewport } from '../../hooks/useIsMobileViewport';
 import { useCanContribute } from '../../hooks/useCanContribute';
+import { useTreeSelection } from '../../hooks/useTreeSelection';
 
 /**
  * Full tree overview page.
@@ -46,6 +48,11 @@ export function TreeOverviewPage() {
   // deployment's allow_contributor_signup flag (§3.1). See useCanContribute.
   const canContribute = useCanContribute();
 
+  // Privacy-request selection mode (§3.9). Hidden in the local app (same gate
+  // as PrivacyLinks below).
+  const selection = useTreeSelection();
+  const showSelection = !isLocalApp;
+
   const { data: treeData, isLoading, isError } = useQuery({
     queryKey: ['tree', 'full'],
     queryFn: () => treeApi.getFullTree(),
@@ -61,6 +68,10 @@ export function TreeOverviewPage() {
 
   const handlePersonClick = useCallback(
     (clickedId: number) => {
+      if (selection.selectMode) {
+        selection.toggleSelected(clickedId);
+        return;
+      }
       if (isMobileViewport) {
         setMobileSheetPersonId(clickedId);
         return;
@@ -70,7 +81,7 @@ export function TreeOverviewPage() {
         navigate(`/individuals/${clickedId}/tree`);
       }, 250);
     },
-    [navigate, isMobileViewport],
+    [navigate, isMobileViewport, selection],
   );
 
   const handlePersonDoubleClick = useCallback(
@@ -106,6 +117,12 @@ export function TreeOverviewPage() {
   const mobileSheetNode = mobileSheetPersonId !== null && displayedTreeData
     ? displayedTreeData.nodes.find((n) => n.id === mobileSheetPersonId) ?? null
     : null;
+
+  // §3.9: open the pre-filled privacy-request form for the checked people.
+  const handleSendPrivacyRequest = useCallback(() => {
+    const nodes = displayedTreeData?.nodes ?? [];
+    navigate(selection.buildHref(ownerOwnerId, nodes));
+  }, [navigate, selection, ownerOwnerId, displayedTreeData]);
 
   const handleMobileSheetRecenter = useCallback(() => {
     if (mobileSheetPersonId === null) return;
@@ -167,6 +184,15 @@ export function TreeOverviewPage() {
 
           {isOwner && (
             <SensitiveViewToggle shown={showSensitive} onToggle={setShowSensitive} />
+          )}
+
+          {/* Privacy-request selection (§3.9) — see TreePage. */}
+          {showSelection && (
+            <TreeSelectionControls
+              selection={selection}
+              onSend={handleSendPrivacyRequest}
+              variant="desktop"
+            />
           )}
 
           {/* Privacy links — see TreePage for rationale (fullscreen overlay
@@ -251,6 +277,17 @@ export function TreeOverviewPage() {
             </div>
           )}
 
+          {showSelection && (
+            <TreeSelectionControls
+              selection={selection}
+              onSend={() => {
+                setMobileMenuOpen(false);
+                handleSendPrivacyRequest();
+              }}
+              variant="mobile"
+            />
+          )}
+
           <button
             onClick={() => {
               setShowExport(true);
@@ -302,6 +339,8 @@ export function TreeOverviewPage() {
               viewportRef={viewportRef}
               onPersonClick={handlePersonClick}
               onPersonDoubleClick={handlePersonDoubleClick}
+              selectMode={selection.selectMode}
+              selectedIds={selection.selectedIds}
               isFullTree
             />
           </ReactFlowProvider>

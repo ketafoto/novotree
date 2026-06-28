@@ -29,6 +29,10 @@ interface TreeCanvasProps {
   onPersonDoubleClick?: (individualId: number) => void;
   /** Whether this canvas is showing the full tree (affects tooltip hints) */
   isFullTree?: boolean;
+  /** Privacy-request selection mode is active (PRIVACY_DESIGN.md 3.9). */
+  selectMode?: boolean;
+  /** Numeric ids currently checked in selection mode. */
+  selectedIds?: Set<number>;
 }
 
 const nodeTypes: NodeTypes = {
@@ -45,6 +49,8 @@ function TreeCanvasInner({
   onPersonClick,
   onPersonDoubleClick,
   isFullTree = false,
+  selectMode = false,
+  selectedIds,
 }: TreeCanvasProps) {
   const { fitView } = useReactFlow();
   const isMobileViewport = useIsMobileViewport();
@@ -60,11 +66,13 @@ function TreeCanvasInner({
                 ...(node.data as Record<string, unknown>),
                 carouselIntervalMs: (photoIntervalMs ?? 3000),
                 isFullTree,
+                selectMode,
+                isSelected: selectedIds?.has(Number(node.id)) ?? false,
               },
             }
           : node,
       ),
-    [layout.nodes, photoIntervalMs],
+    [layout.nodes, photoIntervalMs, isFullTree, selectMode, selectedIds],
   );
   const [nodes, setNodes, onNodesChange] = useNodesState(nodesWithCarouselInterval);
   const [edges, setEdges, onEdgesChange] = useEdgesState(layout.edges);

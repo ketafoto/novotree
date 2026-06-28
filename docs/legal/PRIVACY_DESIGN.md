@@ -13,15 +13,17 @@
 > [PRIVACY_ANALYSIS.md](PRIVACY_ANALYSIS.md) first to understand the problem
 > space, then this file to see what is built, in progress, or queued.
 
-**Status overall: TIER 1 SHIPPED, TIER 2 STARTED.** All of §2.1–§2.7 are
+**Status overall: TIER 1 AND TIER 2 SHIPPED.** All of §2.1–§2.7 are
 shipped: §2.1 (central privacy config), §2.2 (public privacy-request flow,
 originally "takedown"), §2.3 (privacy policy page + footer link), §2.4
 (viewer notice on first share-link load), §2.5 (per-share acknowledgement),
 §2.6 (right-of-access export per Individual), §2.7 (public privacy-request
 intake — the §2.2 form generalized to removal, access, and correction
 under GDPR Art. 15-17). Mode A is defensible. Tier 2 (operational
-hardening) is underway: §3.1 (enforce signup flags + consolidate the
-contact-email config) is shipped; §3.2–§3.9 remain.
+hardening) is now complete: §3.1–§3.9 are all shipped (§3.8 children/minors
+and §3.9 TreeView selection-mode prefill were the last two). The next work
+is Tier 3 §4.1 — the lawyer review go/no-go gate, which must precede any
+§4.2–§4.10 code.
 
 ---
 
@@ -1057,12 +1059,31 @@ population (b) in
 never reaches the UI. Scoped to `request_type='removal'` at first; can be
 extended to access later if ever asked for.
 
-- [ ] TreeView selection mode: multi-check individuals on the tree.
-- [ ] "Send privacy request for selected" CTA navigates to
+- [x] TreeView selection mode: multi-check individuals on the tree. A "Select
+      people" toggle in the tree chrome (both [TreePage.tsx](../frontend/src/pages/tree/TreePage.tsx)
+      and [TreeOverviewPage.tsx](../frontend/src/pages/tree/TreeOverviewPage.tsx))
+      flips clicks from re-center to check/uncheck; checked nodes get an emerald
+      ring + badge. Selection state and the CTA href live in one shared hook,
+      [useTreeSelection.ts](../frontend/src/hooks/useTreeSelection.ts), so the
+      two pages do not duplicate it. Available to viewer and owner; hidden in the
+      local app (no second party to address).
+- [x] "Send privacy request for selected" CTA navigates to
       `/privacy/request` with `?owner=...&individual_ids=...&request_type=removal`.
-- [ ] PrivacyRequestPage accepts and prefills the comma-separated IDs into
-      the message field (or extends the payload to accept a list — see how
-      it shakes out at implementation time).
+      The href is built by `buildPrivacyRequestHref()` in
+      [PrivacyLinks.tsx](../frontend/src/components/layout/PrivacyLinks.tsx)
+      (next to the footer "Remove Me" link, so the param contract is defined
+      once); `individual_ids` carries the selected nodes' GEDCOM ids.
+- [x] PrivacyRequestPage prefills via the **message-pack** approach (no backend
+      schema change): `parsePrefillParams()` in
+      [PrivacyRequestPage.tsx](../frontend/src/pages/legal/PrivacyRequestPage.tsx)
+      reads `individual_ids` + `request_type`, seeds the removal radio and a
+      readable message ("Please remove my data ... for the following people: I1,
+      I2."), and pre-fills the legacy single-id hint field with the first id.
+      The owner-triage page already turns those I-ids in the message into
+      "Open Individual" links, so no triage-UI change was needed. The shared
+      param names live in
+      [privacyRequestParams.ts](../frontend/src/constants/privacyRequestParams.ts)
+      so producer and consumer cannot drift. Scope stays removal-only.
 
 ---
 

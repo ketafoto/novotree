@@ -1,6 +1,12 @@
 import { Link } from 'react-router-dom';
 import { usePrivacyConfig } from '../../hooks/usePrivacyConfig';
 import { DonateLink } from '../common/DonateButton';
+import {
+  PARAM_INDIVIDUAL_IDS,
+  PARAM_OWNER,
+  PARAM_REQUEST_TYPE,
+  REQUEST_TYPE_REMOVAL,
+} from '../../constants/privacyRequestParams';
 
 /**
  * The privacy-link cluster used by both [PrivacyFooter.tsx] (every page that
@@ -26,11 +32,39 @@ const PRIVACY_REQUEST_BASE_PATH = '/privacy/request';
 const PRIVACY_POLICY_PATH = '/legal/privacy';
 const SHARE_OWNER_STORAGE_KEY = 'share_owner_id';
 
+interface PrivacyRequestHrefParams {
+  /** Tree owner username the request is filed against; omitted if unknown. */
+  ownerId?: string;
+  /**
+   * GEDCOM-shaped ids (e.g. ["I1", "I2"]) of the people the request concerns.
+   * When non-empty, a removal request_type is implied (the only kind the tree
+   * selection CTA emits today -- see PRIVACY_DESIGN.md 3.9).
+   */
+  individualGedcomIds?: string[];
+}
+
+/**
+ * Build the /privacy/request URL with whatever context we have. Single place
+ * the query-param contract (PARAM_*) is assembled, so the footer "Remove Me"
+ * link and the tree selection-mode CTA cannot disagree about param names.
+ */
+export function buildPrivacyRequestHref({
+  ownerId,
+  individualGedcomIds,
+}: PrivacyRequestHrefParams): string {
+  const params = new URLSearchParams();
+  if (ownerId) params.set(PARAM_OWNER, ownerId);
+  if (individualGedcomIds && individualGedcomIds.length > 0) {
+    params.set(PARAM_INDIVIDUAL_IDS, individualGedcomIds.join(','));
+    params.set(PARAM_REQUEST_TYPE, REQUEST_TYPE_REMOVAL);
+  }
+  const query = params.toString();
+  return query ? `${PRIVACY_REQUEST_BASE_PATH}?${query}` : PRIVACY_REQUEST_BASE_PATH;
+}
+
 export function privacyRequestHref(): string {
   const shareOwnerId = sessionStorage.getItem(SHARE_OWNER_STORAGE_KEY);
-  return shareOwnerId
-    ? `${PRIVACY_REQUEST_BASE_PATH}?owner=${encodeURIComponent(shareOwnerId)}`
-    : PRIVACY_REQUEST_BASE_PATH;
+  return buildPrivacyRequestHref({ ownerId: shareOwnerId ?? undefined });
 }
 
 interface PrivacyLinksProps {

@@ -15,9 +15,11 @@ import { TreeLegend } from '../../components/tree/TreeLegend';
 import { ExportControls } from '../../components/tree/ExportControls';
 import { ContributeDialog } from '../../components/common/ContributeDialog';
 import { MobilePersonSheet } from '../../components/tree/MobilePersonSheet';
+import { TreeSelectionControls } from '../../components/tree/TreeSelectionControls';
 import { PrivacyLinks } from '../../components/layout/PrivacyLinks';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCanContribute } from '../../hooks/useCanContribute';
+import { useTreeSelection } from '../../hooks/useTreeSelection';
 import { isPublicApp, isLocalApp } from '../../config/appMode';
 import { formatIndividualName, getLatestName } from '../../utils/nameUtils';
 import { slugifyForFilename } from '../../utils/exportFilename';
@@ -54,6 +56,12 @@ export function TreePage() {
   // Whether to offer the viewer the "contribute" CTA — gated on the
   // deployment's allow_contributor_signup flag (§3.1). See useCanContribute.
   const canContribute = useCanContribute();
+
+  // Privacy-request selection mode (§3.9). Hidden in the local app, where the
+  // public privacy-request flow has no second party to address (same gate as
+  // PrivacyLinks below).
+  const selection = useTreeSelection();
+  const showSelection = !isLocalApp;
 
   // Reset depths when navigating to a different person's tree
   useEffect(() => {
@@ -92,8 +100,13 @@ export function TreePage() {
 
   // Single-click on desktop: re-center tree on that person.
   // On mobile: open the bottom sheet instead (tap fights with hover/double-tap).
+  // In selection mode (§3.9) a click check/unchecks instead, on either viewport.
   const handlePersonClick = useCallback(
     (clickedId: number) => {
+      if (selection.selectMode) {
+        selection.toggleSelected(clickedId);
+        return;
+      }
       if (isMobileViewport) {
         setMobileSheetPersonId(clickedId);
         return;
@@ -102,7 +115,7 @@ export function TreePage() {
         navigate(`/individuals/${clickedId}/tree`, { replace: true });
       }
     },
-    [navigate, individualId, isMobileViewport],
+    [navigate, individualId, isMobileViewport, selection],
   );
 
   // Double-click any person: open their detail page (desktop only — touch
@@ -141,6 +154,12 @@ export function TreePage() {
   const mobileSheetNode = mobileSheetPersonId !== null && displayedTreeData
     ? displayedTreeData.nodes.find((n) => n.id === mobileSheetPersonId) ?? null
     : null;
+
+  // §3.9: open the pre-filled privacy-request form for the checked people.
+  const handleSendPrivacyRequest = useCallback(() => {
+    const nodes = displayedTreeData?.nodes ?? [];
+    navigate(selection.buildHref(ownerOwnerId, nodes));
+  }, [navigate, selection, ownerOwnerId, displayedTreeData]);
 
   const handleMobileSheetRecenter = useCallback(() => {
     if (mobileSheetPersonId === null) return;
@@ -221,6 +240,17 @@ export function TreePage() {
               <UserPlus className="w-3.5 h-3.5" />
               Contribute 🌿
             </button>
+          )}
+
+          {/* Privacy-request selection (§3.9) — viewer/owner convenience to
+              pre-fill the removal form with checked people. Hidden in the local
+              app (showSelection), same as PrivacyLinks. */}
+          {showSelection && (
+            <TreeSelectionControls
+              selection={selection}
+              onSend={handleSendPrivacyRequest}
+              variant="desktop"
+            />
           )}
 
           {/* Actions pill — Privacy links + Export share one border.
@@ -330,6 +360,17 @@ export function TreePage() {
             </div>
           )}
 
+          {showSelection && (
+            <TreeSelectionControls
+              selection={selection}
+              onSend={() => {
+                setMobileMenuOpen(false);
+                handleSendPrivacyRequest();
+              }}
+              variant="mobile"
+            />
+          )}
+
           <button
             onClick={() => {
               setShowExport(true);
@@ -382,6 +423,8 @@ export function TreePage() {
               viewportRef={viewportRef}
               onPersonClick={handlePersonClick}
               onPersonDoubleClick={handlePersonDoubleClick}
+              selectMode={selection.selectMode}
+              selectedIds={selection.selectedIds}
             />
           </ReactFlowProvider>
         )}
