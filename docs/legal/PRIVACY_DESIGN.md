@@ -34,9 +34,9 @@ If you are picking this up from scratch, read in this order:
 1. [PRIVACY_ANALYSIS.md](PRIVACY_ANALYSIS.md) — concerns inventory, mitigations,
    concern↔mitigation matrix, and draft legal texts.
 2. This file — tiered checklist + central config draft + decisions made so far.
-3. [AUTH_SCHEMA_PROPOSAL.md](AUTH_SCHEMA_PROPOSAL.md) — auth tables/endpoints
+3. [AUTH_SCHEMA_PROPOSAL.md](../design/AUTH_SCHEMA_PROPOSAL.md) — auth tables/endpoints
    that several privacy items extend.
-4. [CONTRIBUTOR_FEATURE.md](CONTRIBUTOR_FEATURE.md) — contributor lifecycle
+4. [CONTRIBUTOR_FEATURE.md](../features/CONTRIBUTOR_FEATURE.md) — contributor lifecycle
    that some privacy items add acknowledgements to.
 
 ### Key product framing — three deployment modes
@@ -123,9 +123,11 @@ becomes true, schedule a paid review:
   with or without `owner_signup_requires_approval`) — triggers full Mode C.
 - An **embedded** payment integration is added — i.e. a checkout, donor
   receipt, donor wall, or any flow where money or donor PII passes through
-  NovoTree's server or DB. **Pure link-out donate buttons** (a heart icon
-  that opens GitHub Sponsors or Ko-fi in a new tab, NovoTree never sees the
-  transaction) do NOT trigger Tier 3 — see §4.8.
+  NovoTree's server or DB. This is **not planned**: §4.8 settles on the
+  **pure link-out donate button** we already ship (a heart icon that opens
+  GitHub Sponsors or Ko-fi in a new tab, NovoTree never sees the
+  transaction), which does NOT trigger Tier 3. The bullet stays as a tripwire
+  in case that decision is ever reversed.
 - Analytics with non-essential cookies are introduced (`analytics_enabled = True`).
 - Sensitive data is intentionally exposed via share tokens.
 
@@ -141,16 +143,16 @@ risk-reduction to effort.
 
 ### 2.1 Central privacy config (foundational; everything else reads from it)
 
-- [x] Add `PrivacySettings` dataclass to [backend/config.py](../backend/config.py).
+- [x] Add `PrivacySettings` dataclass to [backend/config.py](../../backend/config.py).
       Use the draft in §6 below verbatim.
 - [x] Add a `GET /privacy/config` endpoint that returns the public subset
       (age threshold, retention windows, controller name, contact email,
       `analytics_enabled`) so the frontend can render text without
-      hard-coding values. Lives in [backend/api/privacy.py](../backend/api/privacy.py).
+      hard-coding values. Lives in [backend/api/privacy.py](../../backend/api/privacy.py).
 - [x] Frontend hook `usePrivacyConfig()` in
-      [frontend/src/hooks/usePrivacyConfig.ts](../frontend/src/hooks/usePrivacyConfig.ts)
+      [frontend/src/hooks/usePrivacyConfig.ts](../../frontend/src/hooks/usePrivacyConfig.ts)
       that fetches once and caches (module-scoped promise). API typings in
-      [frontend/src/api/privacy.ts](../frontend/src/api/privacy.ts).
+      [frontend/src/api/privacy.ts](../../frontend/src/api/privacy.ts).
 
 > **Note on editability:** `PrivacySettings` is loaded from environment
 > variables (`/etc/novotree.env`) at startup and is **read-only at runtime**.
@@ -179,7 +181,7 @@ TreeView selection mode that prefills the form is the Tier-2 follow-up
 below).
 
 - [x] New table `privacy_requests` (renamed from `takedown_requests` in §2.7)
-      in [database/system_models.py](../database/system_models.py):
+      in [database/system_models.py](../../database/system_models.py):
       `id`, `tree_owner_id`, `individual_id` (nullable), `request_type`,
       `requester_name`, `requester_email`, `requester_phone` (nullable),
       `message`, `status` (open / acknowledged / resolved / escalated),
@@ -187,42 +189,42 @@ below).
       for sweeper idempotency.
 - [x] Public endpoint `POST /privacy/request` (renamed from `/privacy/takedown`
       in §2.7) in
-      [backend/api/privacy_requests.py](../backend/api/privacy_requests.py).
+      [backend/api/privacy_requests.py](../../backend/api/privacy_requests.py).
       Rate-limited by IP (5/hour) via
-      [backend/api/_privacy_request_rate_limit.py](../backend/api/_privacy_request_rate_limit.py).
+      [backend/api/_privacy_request_rate_limit.py](../../backend/api/_privacy_request_rate_limit.py).
       No auth. Disabled in `is_local` (desktop) mode.
 - [x] Email notification to the Owner on receipt; reminder at day 14;
       auto-escalate at `privacy_request_sla_days` (default 30). Sweep logic
       lives in
-      [backend/api/_privacy_request_sweep.py](../backend/api/_privacy_request_sweep.py);
+      [backend/api/_privacy_request_sweep.py](../../backend/api/_privacy_request_sweep.py);
       shared SMTP helper extracted to
-      [backend/api/_email.py](../backend/api/_email.py).
+      [backend/api/_email.py](../../backend/api/_email.py).
 - [x] In-process scheduler started from FastAPI lifespan in
-      [backend/main.py](../backend/main.py) — primary path.
+      [backend/main.py](../../backend/main.py) — primary path.
 - [x] Standalone backstop at
-      [tools/ops/scheduled_jobs/](../tools/ops/scheduled_jobs/)
+      [tools/ops/scheduled_jobs/](../../tools/ops/scheduled_jobs/)
       driven by `novotree-backend-monitor.{service,timer}` on the VM. Runs
       only when the backend `/health` probe fails. DB-level claim columns
       make both paths safe to run concurrently.
 - [x] Persistent **"Remove Me / Our Privacy"** link cluster rendered globally
-      in [frontend/src/App.tsx](../frontend/src/App.tsx) via
-      [PrivacyFooter.tsx](../frontend/src/components/layout/PrivacyFooter.tsx).
+      in [frontend/src/App.tsx](../../frontend/src/App.tsx) via
+      [PrivacyFooter.tsx](../../frontend/src/components/layout/PrivacyFooter.tsx).
       Visible to viewers (share-token sessions) as well as owners. Hidden
       in `isLocalApp`. (Label "Remove Me" preserved verbatim post-§2.7;
       target URL now `/privacy/request`.)
 - [x] Public privacy-request form page at `/privacy/request` (renamed from
       `/privacy/takedown` in §2.7) —
-      [frontend/src/pages/legal/PrivacyRequestPage.tsx](../frontend/src/pages/legal/PrivacyRequestPage.tsx).
+      [frontend/src/pages/legal/PrivacyRequestPage.tsx](../../frontend/src/pages/legal/PrivacyRequestPage.tsx).
 - [x] Owner-scoped triage queue: `GET /privacy/requests`,
       `PATCH /privacy/requests/{id}`, `DELETE /privacy/requests/{id}` in
-      [backend/api/privacy_requests.py](../backend/api/privacy_requests.py).
+      [backend/api/privacy_requests.py](../../backend/api/privacy_requests.py).
       Owner sees only their own rows; allowed transition is
       `open|escalated → resolved`. Hard delete is allowed only on terminal
       rows (operator escape hatch before retention sweep). UI at
-      [frontend/src/pages/legal/PrivacyRequestsPage.tsx](../frontend/src/pages/legal/PrivacyRequestsPage.tsx),
+      [frontend/src/pages/legal/PrivacyRequestsPage.tsx](../../frontend/src/pages/legal/PrivacyRequestsPage.tsx),
       reachable from the "Privacy requests" sidebar item.
 - [x] Retention enforcement: sweep pass in
-      [_privacy_request_sweep.py](../backend/api/_privacy_request_sweep.py)
+      [_privacy_request_sweep.py](../../backend/api/_privacy_request_sweep.py)
       hard-deletes `resolved` / `escalated` rows older than
       `privacy_request_retention_months` (default 12). No separate cron —
       same sweep cadence as reminders / escalations.
@@ -248,20 +250,20 @@ and a footer that exposes both.
 
 - [x] Backend serves the policy markdown via
       `GET /privacy/policy` (read from
-      [docs/legal/privacy.md](legal/privacy.md), versioned via
+      [docs/legal/privacy.md](privacy.md), versioned via
       `privacy_policy_version`). Endpoint lives in
-      [backend/api/privacy.py](../backend/api/privacy.py).
+      [backend/api/privacy.py](../../backend/api/privacy.py).
 - [x] Frontend renders it under
-      [frontend/src/pages/legal/PrivacyPage.tsx](../frontend/src/pages/legal/PrivacyPage.tsx)
+      [frontend/src/pages/legal/PrivacyPage.tsx](../../frontend/src/pages/legal/PrivacyPage.tsx)
       at route `/legal/privacy`. Minimal in-tree markdown renderer in
-      [renderPolicyMarkdown.tsx](../frontend/src/pages/legal/renderPolicyMarkdown.tsx)
+      [renderPolicyMarkdown.tsx](../../frontend/src/pages/legal/renderPolicyMarkdown.tsx)
       avoids adding a third-party markdown dependency on a public route.
 - [x] Link pair on every page: **Remove me · Our Privacy** — extracted into
-      [PrivacyLinks.tsx](../frontend/src/components/layout/PrivacyLinks.tsx)
-      and used by both [PrivacyFooter.tsx](../frontend/src/components/layout/PrivacyFooter.tsx)
+      [PrivacyLinks.tsx](../../frontend/src/components/layout/PrivacyLinks.tsx)
+      and used by both [PrivacyFooter.tsx](../../frontend/src/components/layout/PrivacyFooter.tsx)
       (document-flow pages) and the Tree pages' top bar
-      ([TreePage.tsx](../frontend/src/pages/tree/TreePage.tsx),
-      [TreeOverviewPage.tsx](../frontend/src/pages/tree/TreeOverviewPage.tsx)).
+      ([TreePage.tsx](../../frontend/src/pages/tree/TreePage.tsx),
+      [TreeOverviewPage.tsx](../../frontend/src/pages/tree/TreeOverviewPage.tsx)).
       The Tree pages render as `fixed inset-0 z-50` fullscreen overlays that
       cover the global footer, so embedding the same links in their chrome
       is the only path that keeps the "Remove Me" affordance visible to
@@ -277,13 +279,13 @@ and a footer that exposes both.
       `sessionStorage`; the token is SHA-256 hashed so the raw share token
       never appears under this key, and the version suffix re-shows the
       notice when `cookie_notice_version` is bumped).
-- [x] Component: [ViewerNotice.tsx](../frontend/src/components/ViewerNotice.tsx).
+- [x] Component: [ViewerNotice.tsx](../../frontend/src/components/ViewerNotice.tsx).
       Mounted at the App level in
-      [frontend/src/App.tsx](../frontend/src/App.tsx); reads
+      [frontend/src/App.tsx](../../frontend/src/App.tsx); reads
       `shareToken` / `isLoading` from
-      [AuthContext](../frontend/src/contexts/AuthContext.tsx) and
+      [AuthContext](../../frontend/src/contexts/AuthContext.tsx) and
       `cookie_notice_version` from
-      [usePrivacyConfig](../frontend/src/hooks/usePrivacyConfig.ts).
+      [usePrivacyConfig](../../frontend/src/hooks/usePrivacyConfig.ts).
       Hidden in `isLocalApp` (no viewers there); not gated on
       `deployment_mode` — applies in Modes A, B, and C.
 
@@ -294,7 +296,7 @@ each time a share link is created. Useful evidence if a relative forwards the
 link further than intended and someone later complains.
 
 - [x] New table `auth_share_consents` in
-      [database/system_models.py](../database/system_models.py): `id`,
+      [database/system_models.py](../../database/system_models.py): `id`,
       `editor_id`, `tree_owner_id`, `share_token_id` (nullable, reserved for
       future extend flow), `accepted_at`, `accepted_ip`,
       `privacy_policy_version`. **Diverges from spec:** stores
@@ -305,11 +307,11 @@ link further than intended and someone later complains.
       §9.4 draft assuming ToS existed at Tier 1.
 - [x] Modal shown when Owner clicks "Create share link", text verbatim from
       [PRIVACY_ANALYSIS.md §9.4](PRIVACY_ANALYSIS.md#94-per-share-acknowledgement-shown-when-creating-or-extending-a-share-link).
-      Component: [ShareConsentModal.tsx](../frontend/src/components/ShareConsentModal.tsx).
+      Component: [ShareConsentModal.tsx](../../frontend/src/components/ShareConsentModal.tsx).
       Mounted in both share-token entry points:
-      [UserManagerPage.tsx](../frontend/src/pages/users/UserManagerPage.tsx)
+      [UserManagerPage.tsx](../../frontend/src/pages/users/UserManagerPage.tsx)
       (full ShareTokensTab) and
-      [DashboardPage.tsx](../frontend/src/pages/dashboard/DashboardPage.tsx)
+      [DashboardPage.tsx](../../frontend/src/pages/dashboard/DashboardPage.tsx)
       (ShareLinksWidget). The "or extending" clause of §9.4 is **deferred** —
       no extend-visibility endpoint or UI action exists today (only
       Create and Revoke). When such an action is added, reuse the same
@@ -319,17 +321,17 @@ link further than intended and someone later complains.
       `acknowledgement: true` in the body and rejects with HTTP 400
       otherwise, writing the consent row in the same transaction as the
       share token. Client IP is captured via the shared helper at
-      [backend/api/_client_ip.py](../backend/api/_client_ip.py), extracted
+      [backend/api/_client_ip.py](../../backend/api/_client_ip.py), extracted
       from previously-duplicated copies in
-      [backend/main.py](../backend/main.py) and
-      [backend/api/privacy_requests.py](../backend/api/privacy_requests.py).
+      [backend/main.py](../../backend/main.py) and
+      [backend/api/privacy_requests.py](../../backend/api/privacy_requests.py).
 
 ### 2.6 Right-of-access export per Individual (M-09, Phase 7)
 
 - [x] Endpoint `GET /individuals/{id}/data-export` returning JSON of every
       field, event, media reference, and contributor attribution (`created_by` /
       `created_at`). Owner-only. Lives in
-      [backend/api/individuals.py](../backend/api/individuals.py) (next to the
+      [backend/api/individuals.py](../../backend/api/individuals.py) (next to the
       resource — deviates from PRIVACY_ANALYSIS.md Phase 7.1 which pointed at
       `export.py`; that file is reserved for whole-tree GEDCOM export with
       different auth scope). Delivered as `application/json` with a
@@ -340,7 +342,7 @@ link further than intended and someone later complains.
       [docs/notes.txt](../notes.txt) under "Go contributors" for the column-add
       action item).
 - [x] "Export data" button on Individual page
-      ([IndividualDetailPage.tsx](../frontend/src/pages/individuals/IndividualDetailPage.tsx)).
+      ([IndividualDetailPage.tsx](../../frontend/src/pages/individuals/IndividualDetailPage.tsx)).
       Hidden for viewers (share-token) and contributors — owner-only, mirroring
       the backend gate. Reuses the shared `saveBlob` helper used by the
       whole-tree GEDCOM export so the local desktop app gets a native SaveAs
@@ -410,9 +412,9 @@ on the `data.sqlite.system` table is the simplest path.
 **Keep verbatim — user-visible:**
 
 - Footer link label: **"Remove me"** in
-  [PrivacyLinks.tsx](../frontend/src/components/layout/PrivacyLinks.tsx)
+  [PrivacyLinks.tsx](../../frontend/src/components/layout/PrivacyLinks.tsx)
   /
-  [PrivacyFooter.tsx](../frontend/src/components/layout/PrivacyFooter.tsx)
+  [PrivacyFooter.tsx](../../frontend/src/components/layout/PrivacyFooter.tsx)
   and in the Tree pages' top bar.
 - The systemd unit name on the VM: `novotree-backend-monitor.{service,timer}`.
   It is request-kind-agnostic; the unit watches backend `/health` and
@@ -426,7 +428,7 @@ on the `data.sqlite.system` table is the simplest path.
 | Today | After §2.7 |
 |---|---|
 | `takedown_requests` (table) | `privacy_requests` |
-| `TakedownRequest` (SQLAlchemy model in [system_models.py](../database/system_models.py)) | `PrivacyRequest` |
+| `TakedownRequest` (SQLAlchemy model in [system_models.py](../../database/system_models.py)) | `PrivacyRequest` |
 | `POST /privacy/takedown` (public endpoint) | `POST /privacy/request` |
 | `GET/PATCH/DELETE /takedown/*` (owner triage endpoints) | `GET/PATCH/DELETE /privacy/requests/*` (note: under `/privacy` namespace, not its own top-level) |
 | `backend/api/takedown.py` | `backend/api/privacy_requests.py` |
@@ -437,9 +439,9 @@ on the `data.sqlite.system` table is the simplest path.
 | `frontend/src/pages/legal/TakedownPage.tsx` (public form) | `frontend/src/pages/legal/PrivacyRequestPage.tsx` |
 | `frontend/src/pages/legal/TakedownsPage.tsx` (owner triage) | `frontend/src/pages/legal/PrivacyRequestsPage.tsx` |
 | `frontend/src/pages/legal/TestTakedownTimestampPanel.tsx` | `frontend/src/pages/legal/TestPrivacyRequestTimestampPanel.tsx` |
-| `takedown_request_retention_months` (config key in [config.py](../backend/config.py)) | `privacy_request_retention_months` |
-| `takedown_sla_days` (config key in [config.py](../backend/config.py); env `TAKEDOWN_SLA_DAYS`) | `privacy_request_sla_days` (env `PRIVACY_REQUEST_SLA_DAYS`) |
-| Sidebar nav label "Takedowns" (in [Sidebar.tsx](../frontend/src/components/layout/Sidebar.tsx)) | "Privacy requests" |
+| `takedown_request_retention_months` (config key in [config.py](../../backend/config.py)) | `privacy_request_retention_months` |
+| `takedown_sla_days` (config key in [config.py](../../backend/config.py); env `TAKEDOWN_SLA_DAYS`) | `privacy_request_sla_days` (env `PRIVACY_REQUEST_SLA_DAYS`) |
+| Sidebar nav label "Takedowns" (in [Sidebar.tsx](../../frontend/src/components/layout/Sidebar.tsx)) | "Privacy requests" |
 | Tags in FastAPI routers (`tags=["Privacy"]` already today — no change needed there) | (unchanged) |
 
 **SLA config-key decision at implementation time.** The original spec
@@ -515,7 +517,7 @@ releases the `DROP TABLE` line can come out.
       `backend/api/takedown.py` → `privacy_requests.py`;
       `_takedown_sweep.py` → `_privacy_request_sweep.py`;
       `_takedown_rate_limit.py` → `_privacy_request_rate_limit.py`.
-      Update imports in [backend/main.py](../backend/main.py) (router
+      Update imports in [backend/main.py](../../backend/main.py) (router
       include block; `AUTH_ONLY_PATHS` set still needs `/privacy/request`
       and the new owner-triage prefix). Update FastAPI router prefixes:
       public router stays at `prefix="/privacy"` with `.post("/request")`;
@@ -537,7 +539,7 @@ releases the `DROP TABLE` line can come out.
       it invokes the package, not a specific job file.
 - [x] **Config:** rename `takedown_request_retention_months` →
       `privacy_request_retention_months` AND `takedown_sla_days` →
-      `privacy_request_sla_days` in [config.py](../backend/config.py).
+      `privacy_request_sla_days` in [config.py](../../backend/config.py).
       Env vars renamed correspondingly (`PRIVACY_REQUEST_RETENTION_MONTHS`,
       `PRIVACY_REQUEST_SLA_DAYS`). No back-compat — project is pre-launch.
 - [x] **Frontend rename pass:** `api/takedown.ts` → `api/privacy_requests.ts`;
@@ -545,7 +547,7 @@ releases the `DROP TABLE` line can come out.
       `pages/legal/TakedownsPage.tsx` → `PrivacyRequestsPage.tsx`;
       `TestTakedownTimestampPanel.tsx` → `TestPrivacyRequestTimestampPanel.tsx`.
       Update all imports. Update router paths in
-      [App.tsx](../frontend/src/App.tsx).
+      [App.tsx](../../frontend/src/App.tsx).
 - [x] **Frontend form:** in the renamed `PrivacyRequestPage.tsx` add a
       `request_type` selector at the top, three radio options, no
       pre-selection — the user must pick. Plain-language labels (no
@@ -553,8 +555,8 @@ releases the `DROP TABLE` line can come out.
       Page title: *"Privacy request — remove, access, or correct your
       data"* (final copy lives in [PRIVACY_ANALYSIS.md §9.8](PRIVACY_ANALYSIS.md)).
 - [x] **Footer labels:** keep "Remove me" verbatim in
-      [PrivacyLinks.tsx](../frontend/src/components/layout/PrivacyLinks.tsx)
-      and [PrivacyFooter.tsx](../frontend/src/components/layout/PrivacyFooter.tsx).
+      [PrivacyLinks.tsx](../../frontend/src/components/layout/PrivacyLinks.tsx)
+      and [PrivacyFooter.tsx](../../frontend/src/components/layout/PrivacyFooter.tsx).
       Only the *target URL* changes from `/privacy/takedown` to
       `/privacy/request`. The label is now load-bearing in a way it was
       not before (it advertises one of three rights), which is the entire
@@ -567,7 +569,7 @@ releases the `DROP TABLE` line can come out.
       `I\d+` ID. A `request_type` filter in the queue header lets the
       Owner filter by kind during triage.
 - [x] **Sidebar:** label "Takedowns" → "Privacy requests" in
-      [Sidebar.tsx](../frontend/src/components/layout/Sidebar.tsx).
+      [Sidebar.tsx](../../frontend/src/components/layout/Sidebar.tsx).
 - [x] **Public form copy — PRIVACY_ANALYSIS.md §9.8:**
       replace §9.5 with a generalized version. Three short paragraphs
       naming the three options to the requester in plain language. Each
@@ -704,21 +706,21 @@ per-mode rule. This task is the runtime enforcement.
 ### 3.3 Log scrubbing + retention (M-14)
 
 - [x] Disable request-body logging in production
-      ([backend/main.py](../backend/main.py),
-      [backend/logging.py](../backend/logging.py)).
+      ([backend/main.py](../../backend/main.py),
+      [backend/logging.py](../../backend/logging.py)).
       Done: **verify-and-scrub**, not "remove a body logger" — none exists.
-      The per-request middleware ([main.py](../backend/main.py) `owner_db_router`)
+      The per-request middleware ([main.py](../../backend/main.py) `owner_db_router`)
       emits a single access line of IP / method / path / HTTP-version / status
       via `access_logger.info`; it never logs the request body, and no other
       hot-path log line does either. The two PII-bearing spots were the signup
-      logs in [auth.py](../backend/api/auth.py) (`owner_signup` /
+      logs in [auth.py](../../backend/api/auth.py) (`owner_signup` /
       `contributor_signup`), which logged `{editor_id} <{email}>` at INFO —
       the email is now dropped, leaving `editor_id` (+ `owner_id` for
       contributors), the stable handle ops needs. The local-desktop save-as
-      log in [local.py](../backend/api/local.py) records a byte count only
+      log in [local.py](../../backend/api/local.py) records a byte count only
       (no content) and is left as-is.
 - [x] Document log retention (14 / 30 days for access / error) in the privacy
-      policy and in [novospace.git/docs/deployment.md](../../novospace.git/docs/deployment.md).
+      policy and in [novospace.git/docs/deployment.md](../../../novospace.git/docs/deployment.md).
       Done. **Architectural note:** the backend funnels access logs and error
       logs into one stdout/journald stream under one unit (`novotree.service`),
       and journald retention is per-journal, not per-log-level. Per the chosen
@@ -860,7 +862,7 @@ attribution to the Owner.
       `created_by` / `created_at` NULL on *every* imported row (the exact
       attribution loss this item warns about). `owner_id` was not threaded
       below `import_for_owner` either. Fixed in
-      [database/gedcom_import.py](../database/gedcom_import.py): `owner_id` is
+      [database/gedcom_import.py](../../database/gedcom_import.py): `owner_id` is
       now threaded `import_for_owner -> import_gedcom -> _create_*` and the
       `Event` / `Media` build sites; a single `_stamp(row, owner_id, created_at)`
       helper stamps every imported `Individual`, `Family`, `Event`, `Media`,
@@ -871,7 +873,7 @@ attribution to the Owner.
       The export never emits these internal columns into GEDCOM, so the
       round-trip stays lossless. Covered by the new regression test
       `TestImportStampsContributorAttribution` in
-      [tests/database/test_database.py](../tests/database/test_database.py),
+      [tests/database/test_database.py](../../tests/database/test_database.py),
       which asserts no NULL `created_by` / `created_at` on any of the five row
       types and that `created_by == owner_id`. **Out of scope:** existing NULL
       rows from past imports are not back-filled (no migration), and column
@@ -887,7 +889,7 @@ item. All three bullets landed in one pass.
 - [x] **Tag sensitive data — two mechanisms.** (a) An inherently-religious
       **event-type allow-list** (`BAPM, BARM, BASM, BLES, CHR, CHRA, CONF, FCOM,
       ORDN`) is a single named constant `SENSITIVE_EVENT_CODES` in
-      [database/models.py](../database/models.py), with an
+      [database/models.py](../../database/models.py), with an
       `event_is_sensitive(event)` helper (auto type OR manual flag). (b) A
       **manual per-record flag** the Owner sets by hand (the schema has no
       religion/ethnicity/health columns; that data is free text in notes and
@@ -902,10 +904,10 @@ item. All three bullets landed in one pass.
       **UI-only**: a shoulder-surfing guard, not access control, not persisted,
       never sent to the backend; viewers never get the toggle. Mounted on three
       surfaces so it is consistent wherever the Owner sees data:
-      [IndividualDetailPage.tsx](../frontend/src/pages/individuals/IndividualDetailPage.tsx)
+      [IndividualDetailPage.tsx](../../frontend/src/pages/individuals/IndividualDetailPage.tsx)
       (detail/edit view) and **both tree views**
-      ([TreePage.tsx](../frontend/src/pages/tree/TreePage.tsx) per-individual,
-      [TreeOverviewPage.tsx](../frontend/src/pages/tree/TreeOverviewPage.tsx) full
+      ([TreePage.tsx](../../frontend/src/pages/tree/TreePage.tsx) per-individual,
+      [TreeOverviewPage.tsx](../../frontend/src/pages/tree/TreeOverviewPage.tsx) full
       tree) — on the tree, when off, the shared `hideSensitiveFromTree` helper
       strips sensitive events and notes AND drops whole-`is_sensitive` people
       *atomically* (the person plus every edge/couple referencing them, mirroring
@@ -919,17 +921,17 @@ item. All three bullets landed in one pass.
       addition to the Basic-Info modal checkbox) so flagging a person does not
       require hunting through a modal. All four "mark sensitive" checkboxes share
       one component (`SensitiveCheckbox`) for consistent look and copy. Covered by
-      [hideSensitiveFromTree.test.ts](../frontend/tests/frontend/hideSensitiveFromTree.test.ts).
+      [hideSensitiveFromTree.test.ts](../../frontend/tests/frontend/hideSensitiveFromTree.test.ts).
 - [x] **Per-share-token `expose_sensitive` flag** (default False) on
-      `AuthShareToken` ([database/system_models.py](../database/system_models.py)),
-      set by the Owner in [ShareConsentModal.tsx](../frontend/src/components/ShareConsentModal.tsx).
+      `AuthShareToken` ([database/system_models.py](../../database/system_models.py)),
+      set by the Owner in [ShareConsentModal.tsx](../../frontend/src/components/ShareConsentModal.tsx).
       Server-side exclusion (a viewer never receives sensitive bytes) is enforced
-      in [backend/api/tree.py](../backend/api/tree.py) (sensitive events dropped,
+      in [backend/api/tree.py](../../backend/api/tree.py) (sensitive events dropped,
       `notes_sensitive` notes blanked, `is_sensitive` individuals omitted with
-      their edges/couples) and [backend/api/media.py](../backend/api/media.py)
+      their edges/couples) and [backend/api/media.py](../../backend/api/media.py)
       (flagged media, and media of a sensitive individual, 404 / filtered).
       Exclusion keys off a new `get_viewer_context` dependency in
-      [auth.py](../backend/api/auth.py) that distinguishes a share-token viewer
+      [auth.py](../../backend/api/auth.py) that distinguishes a share-token viewer
       from an editor and carries the token's `expose_sensitive`. **Full
       exclusion, no trace** (chosen over redaction): the viewer sees no
       placeholder. The Owner (non-share session) always sees everything.
@@ -937,7 +939,7 @@ item. All three bullets landed in one pass.
 **Explanatory affordance (the user's main addition).** The "what counts as
 sensitive (religion, ethnicity, health, cause of death — GDPR Art. 9)" copy is a
 single shared string `SENSITIVE_DATA_EXPLANATION` in
-[frontend/src/constants/sensitiveData.ts](../frontend/src/constants/sensitiveData.ts),
+[frontend/src/constants/sensitiveData.ts](../../frontend/src/constants/sensitiveData.ts),
 surfaced via a reusable `SensitiveInfo` info icon at **all four** surfaces: the
 show-sensitive toggle, every mark-sensitive checkbox (basic-info, notes, event,
 photo), the Notes editor (a "think about sensitivity while typing" reminder),
@@ -954,7 +956,7 @@ back-fill). **`privacy_policy_version` is NOT bumped** (stays 1.1 until real
 deployment, per §3.4's standing decision); privacy.md:44's "Sensitive fields"
 promise already matches the shipped behavior, so no wording change was needed.
 
-**Tests.** [tests/backend/test_sensitive_gating.py](../tests/backend/test_sensitive_gating.py)
+**Tests.** [tests/backend/test_sensitive_gating.py](../../tests/backend/test_sensitive_gating.py)
 asserts (per share token) that sensitive events (BAPM + manual), notes,
 whole-person-flagged individuals, and flagged media are excluded when
 `expose_sensitive` is False and included when True, and that the Owner session
@@ -971,13 +973,13 @@ live promise. All three bullets landed in one pass, plus the M-06 16th-birthday
 re-confirm reminder.
 
 - [x] **Detect minor + alive -- one shared helper.** `individual_is_minor(ind,
-      threshold_years)` in [database/models.py](../database/models.py): exact
+      threshold_years)` in [database/models.py](../../database/models.py): exact
       `birth_date` within `child_age_threshold_years` of today AND `death_date`
       IS NULL. The threshold reads from
       `PrivacySettings.child_age_threshold_years` (default 16, already in
-      [config.py](../backend/config.py) and published via `GET /privacy/config`).
+      [config.py](../../backend/config.py) and published via `GET /privacy/config`).
       A frontend mirror `individualIsMinor()` lives in
-      [sensitiveData.ts](../frontend/src/constants/sensitiveData.ts) (drives the
+      [sensitiveData.ts](../../frontend/src/constants/sensitiveData.ts) (drives the
       upload-gate hint only; the server is the real gate). **Approx-only dates
       are NOT auto-detected** (we cannot prove age from "ABT 2015"; auto-hiding
       every undated person would gut the tree -- such cases use the manual
@@ -986,25 +988,25 @@ re-confirm reminder.
 - [x] **Parental-consent photo-upload gate.** New nullable `Boolean`
       `Individual.parental_consent` (the Owner asserts they may store a minor's
       data). The authoritative gate is server-side: `_require_parental_consent`
-      in [backend/api/media.py](../backend/api/media.py) rejects `POST
+      in [backend/api/media.py](../../backend/api/media.py) rejects `POST
       /media/upload` and `/media/upload-file` with **403** for a living minor
       until consent is recorded. The frontend
-      ([PhotoUploadDialog.tsx](../frontend/src/components/photo/PhotoUploadDialog.tsx))
+      ([PhotoUploadDialog.tsx](../../frontend/src/components/photo/PhotoUploadDialog.tsx))
       shows an "I have parental consent" checkbox that disables OK until ticked
       and persists `parental_consent`; the
-      [IndividualDetailPage](../frontend/src/pages/individuals/IndividualDetailPage.tsx)
+      [IndividualDetailPage](../../frontend/src/pages/individuals/IndividualDetailPage.tsx)
       also carries a standalone consent control (shown only `isOwner && isMinor`)
       next to the §3.7 "Mark sensitive" control.
 - [x] **Per-share-token `expose_minors` flag** (default False) on
-      `AuthShareToken` ([database/system_models.py](../database/system_models.py)),
+      `AuthShareToken` ([database/system_models.py](../../database/system_models.py)),
       **independent of `expose_sensitive`** (a link can expose one category but
       not the other). When False, living minors are excluded **entirely** from
       the viewer payload -- their node, every edge/couple referencing them
       (reusing the existing `_filter_excluded_individuals` machinery in
-      [tree.py](../backend/api/tree.py)), and their media
-      ([media.py](../backend/api/media.py) `_media_hidden_from_viewer`, now ctx-
+      [tree.py](../../backend/api/tree.py)), and their media
+      ([media.py](../../backend/api/media.py) `_media_hidden_from_viewer`, now ctx-
       driven and considering both categories). Set by the Owner in
-      [ShareConsentModal.tsx](../frontend/src/components/ShareConsentModal.tsx)
+      [ShareConsentModal.tsx](../../frontend/src/components/ShareConsentModal.tsx)
       (second "Include minors" checkbox, default off); surfaced on each link via
       a `ShareMinorBadge` next to the sensitive badge. The Owner (non-share
       session) always sees minors -- there is no minor-hiding toggle for the
@@ -1013,7 +1015,7 @@ re-confirm reminder.
 
 **16th-birthday re-confirm reminder (M-06 bullet 3).** New unconditional
 scheduled job
-[minor_consent_reminder.py](../tools/ops/scheduled_jobs/jobs/minor_consent_reminder.py)
+[minor_consent_reminder.py](../../tools/ops/scheduled_jobs/jobs/minor_consent_reminder.py)
 (modeled on the §3.4 error-log digest): scans every owner tree via
 `owner_info.list_owners()`, finds individuals who crossed the threshold (consent
 recorded, `consent_reminder_sent_at` NULL, no longer a minor), emails the Owner
@@ -1023,7 +1025,7 @@ idempotency. Self-throttled by a cursor file to `MINOR_REMINDER_INTERVAL_HOURS`
 deployments skip cheaply.
 
 **Explanatory affordance.** Reuses the §3.7 pattern: a `minorDataExplanation(N)`
-helper in [sensitiveData.ts](../frontend/src/constants/sensitiveData.ts)
+helper in [sensitiveData.ts](../../frontend/src/constants/sensitiveData.ts)
 interpolates the threshold (never hardcodes 16) and is reconciled with
 privacy.md section 10 and M-06 -- surfaced at the consent checkbox, the detail-
 page consent control, and the share-link modal.
@@ -1037,7 +1039,7 @@ bumped** (stays 1.1 per §3.4's standing decision); privacy.md section 10 alread
 matches the shipped behavior, so no wording change was needed.
 
 **Tests.**
-[tests/backend/test_minor_gating.py](../tests/backend/test_minor_gating.py)
+[tests/backend/test_minor_gating.py](../../tests/backend/test_minor_gating.py)
 asserts the two `expose_*` flags are independent, that a living minor (node,
 edges, media) is excluded when `expose_minors` is False and included when True,
 that the Owner always sees minors, and that the upload gate returns 403 without
@@ -1060,29 +1062,29 @@ never reaches the UI. Scoped to `request_type='removal'` at first; can be
 extended to access later if ever asked for.
 
 - [x] TreeView selection mode: multi-check individuals on the tree. A "Select
-      people" toggle in the tree chrome (both [TreePage.tsx](../frontend/src/pages/tree/TreePage.tsx)
-      and [TreeOverviewPage.tsx](../frontend/src/pages/tree/TreeOverviewPage.tsx))
+      people" toggle in the tree chrome (both [TreePage.tsx](../../frontend/src/pages/tree/TreePage.tsx)
+      and [TreeOverviewPage.tsx](../../frontend/src/pages/tree/TreeOverviewPage.tsx))
       flips clicks from re-center to check/uncheck; checked nodes get an emerald
       ring + badge. Selection state and the CTA href live in one shared hook,
-      [useTreeSelection.ts](../frontend/src/hooks/useTreeSelection.ts), so the
+      [useTreeSelection.ts](../../frontend/src/hooks/useTreeSelection.ts), so the
       two pages do not duplicate it. Available to viewer and owner; hidden in the
       local app (no second party to address).
 - [x] "Send privacy request for selected" CTA navigates to
       `/privacy/request` with `?owner=...&individual_ids=...&request_type=removal`.
       The href is built by `buildPrivacyRequestHref()` in
-      [PrivacyLinks.tsx](../frontend/src/components/layout/PrivacyLinks.tsx)
+      [PrivacyLinks.tsx](../../frontend/src/components/layout/PrivacyLinks.tsx)
       (next to the footer "Remove Me" link, so the param contract is defined
       once); `individual_ids` carries the selected nodes' GEDCOM ids.
 - [x] PrivacyRequestPage prefills via the **message-pack** approach (no backend
       schema change): `parsePrefillParams()` in
-      [PrivacyRequestPage.tsx](../frontend/src/pages/legal/PrivacyRequestPage.tsx)
+      [PrivacyRequestPage.tsx](../../frontend/src/pages/legal/PrivacyRequestPage.tsx)
       reads `individual_ids` + `request_type`, seeds the removal radio and a
       readable message ("Please remove my data ... for the following people: I1,
       I2."), and pre-fills the legacy single-id hint field with the first id.
       The owner-triage page already turns those I-ids in the message into
       "Open Individual" links, so no triage-UI change was needed. The shared
       param names live in
-      [privacyRequestParams.ts](../frontend/src/constants/privacyRequestParams.ts)
+      [privacyRequestParams.ts](../../frontend/src/constants/privacyRequestParams.ts)
       so producer and consumer cannot drift. Scope stays removal-only.
 
 ---
@@ -1101,8 +1103,10 @@ Tier 3 covers two destinations:
 
 - **Mode B (contributors-only)** needs: §4.1 (lawyer), §4.5 (contributor ack),
   §4.6 (audit trail), §4.7 (hosting + DPA). It does NOT need §4.3 (owner
-  self-unregister), §4.4 (owner ToS at signup), §4.8 (donate button),
-  §4.9 (cross-Owner takedown admin), or §4.10 (PrivacySettings admin UI).
+  self-unregister), §4.4 (owner ToS at signup), §4.9 (cross-Owner takedown
+  admin), or §4.10 (PrivacySettings admin UI). §4.8 (donate button) is not
+  work in either mode — the link-out button we ship is already allowed
+  everywhere.
 - **Mode C (public service, including gated/admin-approved owner signup)**
   needs all of §4.1–§4.10.
 
@@ -1168,7 +1172,7 @@ directory by hand. Reuses the privacy-request infrastructure from §2.2 +
       `individual` / `media`, target_id, requester_kind = `owner` / `subject`,
       privacy_request_id nullable). Used by removal privacy requests and
       self-unregister.
-- [ ] `DELETE /users/me` in [backend/api/users.py](../backend/api/users.py) —
+- [ ] `DELETE /users/me` in [backend/api/users.py](../../backend/api/users.py) —
       cascades: revoke all share tokens, delete contributors, drop owner's
       `data.sqlite` and media folder, write erasure_log row, clear cookies.
 - [ ] Frontend "Delete my account and all my data" button on Settings →
@@ -1193,7 +1197,7 @@ up — i.e. when this section is built.
 - [ ] Cookie notice banner — dismissible, persisted in `localStorage`, single
       "Got it" button. Text from
       [PRIVACY_ANALYSIS.md §9.6](PRIVACY_ANALYSIS.md#96-cookie-notice-banner-first-visit).
-      Component: [frontend/src/components/CookieNotice.tsx](../frontend/src/components/CookieNotice.tsx) (new).
+      Component: `frontend/src/components/CookieNotice.tsx` (new - not yet created).
 - [ ] Flip `PrivacySettings.allow_owner_signup = True`. If gated, also set
       `PrivacySettings.owner_signup_requires_approval = True` and wire the
       admin-approval flow (per §6.5).
@@ -1219,15 +1223,15 @@ makes "who edited this last?" answerable, which becomes meaningful in Mode B.
 
 - [ ] Add `updated_by`, `updated_at` columns to `Individual`,
       `IndividualName`, `Family`, `FamilyMember`, `FamilyChild`, `Event`,
-      `Media` in [database/models.py](../database/models.py) and
-      [database/schema.sql](../database/schema.sql).
+      `Media` in [database/models.py](../../database/models.py) and
+      [database/schema.sql](../../database/schema.sql).
 - [ ] Lazy migration on `get_engine()` to add columns to existing
-      `data.sqlite` files ([database/db.py](../database/db.py)).
+      `data.sqlite` files ([database/db.py](../../database/db.py)).
 - [ ] Stamp them in every UPDATE path:
-      [backend/api/individuals.py](../backend/api/individuals.py),
-      [backend/api/families.py](../backend/api/families.py),
-      [backend/api/events.py](../backend/api/events.py),
-      [backend/api/media.py](../backend/api/media.py).
+      [backend/api/individuals.py](../../backend/api/individuals.py),
+      [backend/api/families.py](../../backend/api/families.py),
+      [backend/api/events.py](../../backend/api/events.py),
+      [backend/api/media.py](../../backend/api/media.py).
 - [ ] "History" tab on Individual page showing creator + last editor.
 - [ ] Right-of-access export from §2.6 includes both `created_by` /
       `created_at` and `updated_by` / `updated_at` once these columns exist.
@@ -1239,42 +1243,49 @@ makes "who edited this last?" answerable, which becomes meaningful in Mode B.
 - [ ] Sign Cloudflare DPA via dashboard.
 - [ ] List both as sub-processors in the privacy policy.
 
-### 4.8 Donate button (notes.txt L249)
+### 4.8 Donate button (notes.txt L249) — decided: link-out only
 
-Two distinct patterns with very different privacy postures. Read this section
-before adding *any* donate UI in *any* mode.
+**Decision (settled).** NovoTree ships a **pure link-out donate button** and
+no embedded payment flow. Both options were considered; the link-out pattern
+was chosen because it keeps NovoTree out of the payment path entirely, which
+in turn keeps this whole section out of the Tier 3 critical path. An embedded
+integration (Stripe / PayPal checkout, donor wall, NovoTree-issued receipts)
+is **not planned** — see "Why not embedded" below for the reasoning, kept so
+the trade-off does not have to be re-derived if the question is reopened.
 
-**Pattern A — Link-out (mode-agnostic, no Tier 3 review needed).** A button
-that opens GitHub Sponsors and/or Ko-fi in a new browser tab. NovoTree never
-sees the transaction; the destination is the controller of all payment data;
-no cookies are set on NovoTree's domain; no new sub-processor relationship is
-created. The local desktop app already ships this pattern — see
+**What ships.** A button that opens GitHub Sponsors and/or Ko-fi in a new
+browser tab. NovoTree never sees the transaction; the destination is the
+controller of all payment data; no cookies are set on NovoTree's domain; no
+new sub-processor relationship is created. This is mode-agnostic and needs no
+Tier 3 review. The local desktop app already ships it — see
 [docs/features/LOCAL_APP.md §Donations](../features/LOCAL_APP.md#donations).
 
 - Safe in Mode A, Mode B, Mode C, and the local app.
-- Implementation: a `<DonateButton>` component that opens
-  `https://github.com/sponsors/<handle>` and/or `https://ko-fi.com/<handle>`
-  via `window.open(url, '_blank', 'noopener,noreferrer')`. Do NOT append donor
-  email, name, or any identifier to the outbound URL — that would make
-  NovoTree the originating controller of that PII transfer.
+- Implementation: the `<DonateButton>` / `<DonateLink>` components in
+  [frontend/src/components/common/DonateButton.tsx](../../frontend/src/components/common/DonateButton.tsx),
+  linking to `https://github.com/sponsors/<handle>` and
+  `https://ko-fi.com/<handle>` with `target="_blank"` +
+  `rel="noopener noreferrer"`. Do NOT append donor email, name, or any
+  identifier to the outbound URL — that would make NovoTree the originating
+  controller of that PII transfer. The Ko-fi logo is self-hosted from
+  `public/donate/` so merely opening the dialog leaks no referer to ko-fi.com.
 - One-line mention in the privacy policy under "Who we share with" is good
   hygiene but not legally required (no controller relationship to declare).
 - Hint copy on the button ("opens github.com / ko-fi.com in a new tab") is
   defensive UX, not a legal requirement.
 
-**Pattern B — Embedded payment integration (Mode C only).** A Stripe / PayPal
-checkout rendered inside NovoTree, a donor wall that shows names, donor
-receipts emailed by NovoTree, a thank-you page that reads order data, or any
-flow where money or donor PII passes through NovoTree's server or DB.
-
-- [ ] Pick provider (Stripe / PayPal). Payment provider becomes a sub-processor;
-      list in privacy policy and sign their DPA.
-- [ ] Update Mode C cookie banner: most embedded checkout scripts set
-      non-essential cookies before user interaction. May force banner from
-      notice-only to real Accept/Reject.
-- [ ] Schedule a short follow-up lawyer session covering: donor-data
-      retention, receipt/invoice obligations, charity-vs-gift framing in your
-      jurisdiction.
+**Why not embedded.** An embedded integration — a Stripe / PayPal checkout
+rendered inside NovoTree, a donor wall that shows names, donor receipts
+emailed by NovoTree, a thank-you page that reads order data, or any flow where
+money or donor PII passes through NovoTree's server or DB — was rejected
+because it would: add a payment provider as a sub-processor (privacy policy
+entry + signed DPA); likely force the Mode C cookie banner from notice-only to
+a real Accept/Reject, since most checkout scripts set non-essential cookies
+before user interaction; and require an extra lawyer session on donor-data
+retention, receipt/invoice obligations, and charity-vs-gift framing. None of
+that is worth it for a one-person hobby project whose donation volume is
+expected to be negligible. If the decision is ever reversed, that list is the
+work it implies, and it is **Mode C only**.
 
 ### 4.9 Admin privacy-request triage endpoint and UI (M-04 extension) — Mode C only
 
@@ -1302,7 +1313,7 @@ that is what this endpoint is for.
 ### 4.10 Admin UI for `PrivacySettings` — Mode C only
 
 Today the `PrivacySettings` dataclass in
-[backend/config.py](../backend/config.py) is loaded from `/etc/novotree.env`
+[backend/config.py](../../backend/config.py) is loaded from `/etc/novotree.env`
 at startup and is read-only at runtime. Changes require editing the env file
 and `systemctl restart novotree`. That is fine in Mode A — the operator owns
 the shell, the restart drops only their own session, and the env file is
@@ -1363,7 +1374,7 @@ job of this admin UI.
 
 ## 6. Central privacy config — draft (not yet implemented)
 
-When Tier 1 starts, copy this block into [backend/config.py](../backend/config.py).
+When Tier 1 starts, copy this block into [backend/config.py](../../backend/config.py).
 Loaded from environment variables; defaults are the conservative choices
 documented in [PRIVACY_ANALYSIS.md §10](PRIVACY_ANALYSIS.md#10-open-questions-for-legal-review).
 
@@ -1541,8 +1552,8 @@ the obligation gates the launch of that mode.
 | §4.5 Contributor acknowledgement modal (M-15) | **Required** | Required |
 | §4.6 Audit trail `updated_by` / `updated_at` (M-11) | **Required** (multiple editors share one tree) | Required |
 | §4.7 Hetzner DPA + Cloudflare DPA | Required | Required |
-| §4.8 Donate button — link-out (GitHub Sponsors / Ko-fi) | Allowed (mode-agnostic; same as Mode A and the local app) | Allowed |
-| §4.8 Donate button — embedded payment (Stripe / PayPal) | Not allowed | Optional (adds sub-processor + may force consent-style cookie banner) |
+| §4.8 Donate button — link-out (GitHub Sponsors / Ko-fi) — **the chosen design** | Allowed (mode-agnostic; same as Mode A and the local app) | Allowed |
+| §4.8 Donate button — embedded payment (Stripe / PayPal) — **not planned** | Not allowed | Would be Mode C only; rejected (adds sub-processor + may force consent-style cookie banner) |
 | §4.9 Admin privacy-request triage endpoint + UI | Not required (operator IS the admin) | Required (multiple Owners; operator must act over Owner's head) |
 | §4.10 Admin UI for `PrivacySettings` | Not required (env file + `systemctl restart` is fine) | Required (live toggle of signup flags / contact emails without restart) |
 | `allow_owner_signup` flag | `False` | `True` |
@@ -1552,10 +1563,10 @@ the obligation gates the launch of that mode.
 ### Recommendation for "friends and family only"
 
 If relatives only need to **add and edit information in your tree**, Mode B is
-the cheapest path out of Mode A — skip §4.3, §4.4, and §4.8 Pattern B
-(embedded payments), but still pay for §4.1 (lawyer) and build §4.5, §4.6,
-§4.7. §4.8 Pattern A (link-out donate button) is allowed in any mode and
-needs no Tier 3 work.
+the cheapest path out of Mode A — skip §4.3 and §4.4, but still pay for §4.1
+(lawyer) and build §4.5, §4.6, §4.7. §4.8 costs nothing here: the link-out
+donate button we ship is allowed in any mode and needs no Tier 3 work, and
+embedded payments are not planned.
 
 If relatives genuinely need **their own separate trees** on your server, the
 honest classification is Mode C (gated). The approval gate is worth doing for

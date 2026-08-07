@@ -99,8 +99,9 @@ in the global footer and in the Tree pages' top bar alongside the
 heart button. In Modes B
 and C the Donate link is deliberately omitted — placement there requires
 the §4.1 lawyer review (see
-[docs/legal/PRIVACY_DESIGN.md §4.8](../legal/PRIVACY_DESIGN.md) Pattern A
-vs. Pattern B for the legal framing).
+[docs/legal/PRIVACY_DESIGN.md §4.8](../legal/PRIVACY_DESIGN.md) for the legal
+framing; link-out is the settled design and embedded payments are not
+planned).
 
 ### Uninstalling
 

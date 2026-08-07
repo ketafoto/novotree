@@ -74,7 +74,7 @@ constraints on the form.
 | **Processor** | The entity processing data on behalf of a controller. Lighter duties, but a written DPA-equivalent is required. |
 | **Household exemption** | GDPR Art. 2(2)(c): purely personal/household activity is outside GDPR. Lost the moment data is published or shared widely (CJEU *Lindqvist*, C-101/01). |
 | **Special category data** | GDPR Art. 9: religion, ethnicity, health, sex life, biometrics, etc. Needs explicit consent or a narrow legal basis. |
-| **Owner / Contributor / Viewer (OCV)** | NovoTree's three roles. See [AUTH_SCHEMA_PROPOSAL.md](AUTH_SCHEMA_PROPOSAL.md). |
+| **Owner / Contributor / Viewer (OCV)** | NovoTree's three roles. See [AUTH_SCHEMA_PROPOSAL.md](../design/AUTH_SCHEMA_PROPOSAL.md). |
 
 ---
 
@@ -159,7 +159,7 @@ into."
 
 Without a per-record `created_by` / `updated_by` log, neither Owner nor we can
 respond to "who added this about me?" requests. Project already records `created_by`
-and `created_at` on most tables (see [database/models.py](database/models.py)).
+and `created_at` on most tables (see [database/models.py](../../database/models.py)).
 `updated_by` is not tracked.
 
 ### C-15 — Email-based identifiers leak (LOW; all modes)
@@ -416,77 +416,77 @@ likely to change so it can be picked up and coded directly.
 
 | # | Task | Files |
 |---|------|-------|
-| 0.1 | Land this document. | [docs/PRIVACY_ANALYSIS.md](docs/PRIVACY_ANALYSIS.md) |
-| 0.2 | Draft Privacy Policy + Terms of Service pages (text in section 9). | [frontend/src/pages/legal/](frontend/src/pages/legal/) (new), [backend/api/legal.py](backend/api/legal.py) (new, serves markdown) |
-| 0.3 | Add ToS / privacy links to the footer of every page. | [frontend/src/components/Layout.tsx](frontend/src/components/Layout.tsx) |
-| 0.4 | Cookie notice banner (dismissible, persisted in `localStorage`). | [frontend/src/components/CookieNotice.tsx](frontend/src/components/CookieNotice.tsx) (new) |
+| 0.1 | Land this document. | [docs/PRIVACY_ANALYSIS.md](PRIVACY_ANALYSIS.md) |
+| 0.2 | Draft Privacy Policy + Terms of Service pages (text in section 9). | [frontend/src/pages/legal/](../../frontend/src/pages/legal/) (new), `backend/api/legal.py` (new, serves markdown) |
+| 0.3 | Add ToS / privacy links to the footer of every page. | [frontend/src/components/layout/Layout.tsx](../../frontend/src/components/layout/Layout.tsx) |
+| 0.4 | Cookie notice banner (dismissible, persisted in `localStorage`). | `frontend/src/components/CookieNotice.tsx` (new) |
 
 ### Phase 1 — Owner-as-controller ToS at signup (M-01)
 
 | # | Task | Files |
 |---|------|-------|
-| 1.1 | Add `tos_accepted_at`, `tos_version` columns to `auth_editors`. | [database/system_models.py](database/system_models.py) |
-| 1.2 | Signup form: required checkbox "I accept the Terms of Service and Privacy Policy" with link. | [frontend/src/pages/auth/SignupPage.tsx](frontend/src/pages/auth/SignupPage.tsx) |
-| 1.3 | Backend rejects signup if not accepted; stores timestamp + ToS version. | [backend/api/auth.py](backend/api/auth.py) |
-| 1.4 | Re-acceptance prompt on login if `tos_version` increased. | [backend/api/auth.py](backend/api/auth.py), [frontend/src/contexts/AuthContext.tsx](frontend/src/contexts/AuthContext.tsx) |
+| 1.1 | Add `tos_accepted_at`, `tos_version` columns to `auth_editors`. | [database/system_models.py](../../database/system_models.py) |
+| 1.2 | Signup form: required checkbox "I accept the Terms of Service and Privacy Policy" with link. | [frontend/src/pages/auth/SignupPage.tsx](../../frontend/src/pages/auth/SignupPage.tsx) |
+| 1.3 | Backend rejects signup if not accepted; stores timestamp + ToS version. | [backend/api/auth.py](../../backend/api/auth.py) |
+| 1.4 | Re-acceptance prompt on login if `tos_version` increased. | [backend/api/auth.py](../../backend/api/auth.py), [frontend/src/contexts/AuthContext.tsx](../../frontend/src/contexts/AuthContext.tsx) |
 
 ### Phase 2 — Audit trail completeness (M-11)
 
 | # | Task | Files |
 |---|------|-------|
-| 2.1 | Add `updated_by`, `updated_at` to mutable tables. | [database/models.py](database/models.py), [database/schema.sql](database/schema.sql) |
-| 2.2 | Migration to add columns to existing owner DBs (lazy on engine init). | [database/db.py](database/db.py) |
-| 2.3 | Populate them in every UPDATE path. | [backend/api/individuals.py](backend/api/individuals.py), [backend/api/families.py](backend/api/families.py), [backend/api/events.py](backend/api/events.py), [backend/api/media.py](backend/api/media.py) |
-| 2.4 | "History" tab on Individual page showing creator + last editor. | [frontend/src/pages/individuals/](frontend/src/pages/individuals/) |
+| 2.1 | Add `updated_by`, `updated_at` to mutable tables. | [database/models.py](../../database/models.py), [database/schema.sql](../../database/schema.sql) |
+| 2.2 | Migration to add columns to existing owner DBs (lazy on engine init). | [database/db.py](../../database/db.py) |
+| 2.3 | Populate them in every UPDATE path. | [backend/api/individuals.py](../../backend/api/individuals.py), [backend/api/families.py](../../backend/api/families.py), [backend/api/events.py](../../backend/api/events.py), [backend/api/media.py](../../backend/api/media.py) |
+| 2.4 | "History" tab on Individual page showing creator + last editor. | [frontend/src/pages/individuals/](../../frontend/src/pages/individuals/) |
 
 ### Phase 3 — Default-private + per-share acknowledgement (M-02, M-03)
 
 | # | Task | Files |
 |---|------|-------|
-| 3.1 | New trees ship with zero share tokens (verify; should already be true). | [backend/api/auth.py](backend/api/auth.py) |
-| 3.2 | "Create share link" button shows acknowledgement modal with text from §9.4. Click logged with timestamp + IP. | [frontend/src/pages/settings/](frontend/src/pages/settings/), [backend/api/auth.py](backend/api/auth.py) |
-| 3.3 | New table `auth_share_consents` (`editor_id`, `tree_id`, `share_token_id`, `accepted_at`, `accepted_ip`, `tos_version`). | [database/system_models.py](database/system_models.py) |
+| 3.1 | New trees ship with zero share tokens (verify; should already be true). | [backend/api/auth.py](../../backend/api/auth.py) |
+| 3.2 | "Create share link" button shows acknowledgement modal with text from §9.4. Click logged with timestamp + IP. | [frontend/src/pages/settings/](../../frontend/src/pages/settings/), [backend/api/auth.py](../../backend/api/auth.py) |
+| 3.3 | New table `auth_share_consents` (`editor_id`, `tree_id`, `share_token_id`, `accepted_at`, `accepted_ip`, `tos_version`). | [database/system_models.py](../../database/system_models.py) |
 
 ### Phase 4 — Public privacy-request flow (M-04, §2.7)
 
 | # | Task | Files |
 |---|------|-------|
-| 4.1 | Table `privacy_requests` (id, tree_owner_id, individual_id?, request_type, name, email, message, status, created_at, resolved_at). | [database/system_models.py](database/system_models.py) |
-| 4.2 | Public endpoint `POST /privacy/request` (rate-limited, no auth). | [backend/api/privacy_requests.py](backend/api/privacy_requests.py) |
-| 4.3 | Owner triage endpoints `GET/PATCH/DELETE /privacy/requests/*`. | [backend/api/privacy_requests.py](backend/api/privacy_requests.py) |
-| 4.4 | Email Owner on new request; reminder at day 14; admin escalation at day 30. | [backend/api/_privacy_request_sweep.py](backend/api/_privacy_request_sweep.py) + [backend/api/_email.py](backend/api/_email.py) |
-| 4.5 | "Remove Me / Our Privacy" link in viewer footer. | [frontend/src/components/layout/PrivacyLinks.tsx](frontend/src/components/layout/PrivacyLinks.tsx) |
-| 4.6 | Public privacy-request form page (three options: removal / access / correction). | [frontend/src/pages/legal/PrivacyRequestPage.tsx](frontend/src/pages/legal/PrivacyRequestPage.tsx) |
+| 4.1 | Table `privacy_requests` (id, tree_owner_id, individual_id?, request_type, name, email, message, status, created_at, resolved_at). | [database/system_models.py](../../database/system_models.py) |
+| 4.2 | Public endpoint `POST /privacy/request` (rate-limited, no auth). | [backend/api/privacy_requests.py](../../backend/api/privacy_requests.py) |
+| 4.3 | Owner triage endpoints `GET/PATCH/DELETE /privacy/requests/*`. | [backend/api/privacy_requests.py](../../backend/api/privacy_requests.py) |
+| 4.4 | Email Owner on new request; reminder at day 14; admin escalation at day 30. | [backend/api/_privacy_request_sweep.py](../../backend/api/_privacy_request_sweep.py) + [backend/api/_email.py](../../backend/api/_email.py) |
+| 4.5 | "Remove Me / Our Privacy" link in viewer footer. | [frontend/src/components/layout/PrivacyLinks.tsx](../../frontend/src/components/layout/PrivacyLinks.tsx) |
+| 4.6 | Public privacy-request form page (three options: removal / access / correction). | [frontend/src/pages/legal/PrivacyRequestPage.tsx](../../frontend/src/pages/legal/PrivacyRequestPage.tsx) |
 
 ### Phase 5 — Contributor & viewer acknowledgements (M-15, M-16)
 
 | # | Task | Files |
 |---|------|-------|
-| 5.1 | First-edit modal for Contributors with text from §9.2. Persisted per (editor_id, tree_id). | [frontend/src/components/ContributorAck.tsx](frontend/src/components/ContributorAck.tsx) (new), [backend/api/auth.py](backend/api/auth.py) |
-| 5.2 | First-load notice for Viewers, dismissed once per share token. | [frontend/src/contexts/AuthContext.tsx](frontend/src/contexts/AuthContext.tsx), [frontend/src/components/ViewerNotice.tsx](frontend/src/components/ViewerNotice.tsx) (new) |
+| 5.1 | First-edit modal for Contributors with text from §9.2. Persisted per (editor_id, tree_id). | `frontend/src/components/ContributorAck.tsx` (new), [backend/api/auth.py](../../backend/api/auth.py) |
+| 5.2 | First-load notice for Viewers, dismissed once per share token. | [frontend/src/contexts/AuthContext.tsx](../../frontend/src/contexts/AuthContext.tsx), [frontend/src/components/ViewerNotice.tsx](../../frontend/src/components/ViewerNotice.tsx) (new) |
 
 ### Phase 6 — Special-category + children handling (M-05, M-06)
 
 | # | Task | Files |
 |---|------|-------|
-| 6.1 | Mark sensitive fields (cause of death, religion, ethnicity, certain event types). Hide behind "show sensitive" toggle. | [frontend/src/pages/individuals/](frontend/src/pages/individuals/), [backend/api/events.py](backend/api/events.py) |
-| 6.2 | Per-share-token flag `expose_sensitive` (default off). | [database/system_models.py](database/system_models.py) |
-| 6.3 | Detect "minor + alive" individuals; require parental-consent checkbox to upload photo or expose to share. | [frontend/src/pages/individuals/](frontend/src/pages/individuals/), [backend/api/individuals.py](backend/api/individuals.py) |
+| 6.1 | Mark sensitive fields (cause of death, religion, ethnicity, certain event types). Hide behind "show sensitive" toggle. | [frontend/src/pages/individuals/](../../frontend/src/pages/individuals/), [backend/api/events.py](../../backend/api/events.py) |
+| 6.2 | Per-share-token flag `expose_sensitive` (default off). | [database/system_models.py](../../database/system_models.py) |
+| 6.3 | Detect "minor + alive" individuals; require parental-consent checkbox to upload photo or expose to share. | [frontend/src/pages/individuals/](../../frontend/src/pages/individuals/), [backend/api/individuals.py](../../backend/api/individuals.py) |
 
 ### Phase 7 — Right-of-access export (M-09)
 
 | # | Task | Files |
 |---|------|-------|
-| 7.1 | Endpoint `GET /individuals/{id}/data-export` returning JSON of every field, event, media link, contributor attribution. | [backend/api/export.py](backend/api/export.py) |
-| 7.2 | "Export this person's data" button on Individual page. | [frontend/src/pages/individuals/](frontend/src/pages/individuals/) |
+| 7.1 | Endpoint `GET /individuals/{id}/data-export` returning JSON of every field, event, media link, contributor attribution. | [backend/api/export.py](../../backend/api/export.py) |
+| 7.2 | "Export this person's data" button on Individual page. | [frontend/src/pages/individuals/](../../frontend/src/pages/individuals/) |
 
 ### Phase 8 — Backup retention + erasure log (M-10)
 
 | # | Task | Files |
 |---|------|-------|
-| 8.1 | `vm-backup.py` rotates: keep 30 daily; delete older. | external `vm-backup.py` (in [novospace.git/scripts/deployment/](../../novospace.git/scripts/deployment/)) |
-| 8.2 | New `erasure_log` table. Every delete in response to a removal privacy request writes a row. | [database/models.py](database/models.py) |
-| 8.3 | Document the 30-day backup window in the privacy policy. | [docs/PRIVACY_ANALYSIS.md](docs/PRIVACY_ANALYSIS.md), the rendered policy |
+| 8.1 | `vm-backup.py` rotates: keep 30 daily; delete older. | external `vm-backup.py` (in [novospace.git/scripts/deployment/](../../../novospace.git/scripts/deployment/)) |
+| 8.2 | New `erasure_log` table. Every delete in response to a removal privacy request writes a row. | [database/models.py](../../database/models.py) |
+| 8.3 | Document the 30-day backup window in the privacy policy. | [docs/PRIVACY_ANALYSIS.md](PRIVACY_ANALYSIS.md), the rendered policy |
 
 ### Phase 9 — Local-first / desktop mode (M-08; large; corresponds to notes.txt line 248)
 
@@ -498,8 +498,8 @@ separately.
 
 | # | Task | Files |
 |---|------|-------|
-| 10.1 | Disable request-body logging in production config. | [backend/main.py](backend/main.py), [backend/config.py](backend/config.py) |
-| 10.2 | Document log retention (14 / 30 days) in privacy policy and in deployment notes. | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md), the rendered policy |
+| 10.1 | Disable request-body logging in production config. | [backend/main.py](../../backend/main.py), [backend/config.py](../../backend/config.py) |
+| 10.2 | Document log retention (14 / 30 days) in privacy policy and in deployment notes. | [docs/DEPLOYMENT.md](../ops/DEPLOYMENT.md), the rendered policy |
 
 ---
 

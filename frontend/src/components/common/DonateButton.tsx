@@ -14,8 +14,9 @@ import { Modal } from './Modal';
  *                  clicking "Donate" inside About opens this modal.
  *
  * All three render the same privacy disclaimer + GitHub Sponsors + Ko-fi links.
- * NovoTree never sees the transaction — this is Pattern A (link-out) in
- * docs/legal/PRIVACY_DESIGN.md §4.8. The Ko-fi logo is inline-hosted from
+ * NovoTree never sees the transaction - link-out is the settled design in
+ * docs/legal/PRIVACY_DESIGN.md section 4.8, which also records why an embedded
+ * payment flow was rejected. The Ko-fi logo is inline-hosted from
  * `public/donate/` so opening the modal does not leak a referer to ko-fi.com.
  *
  * Gated at call sites:
