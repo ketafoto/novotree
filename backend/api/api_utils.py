@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import inspect
 import database.models
+from database import owner_info  # full-module access - EDITOR_ID is rebindable
 from database.system_models import AuthEditor
 
 
@@ -36,13 +37,24 @@ def generate_gedcom_id(db: Session, model) -> str:
 
 
 def fetch_display_names(editor_ids: set, db_sys: Session) -> dict:
-    """Batch-fetch editor display names from the system DB."""
+    """Batch-fetch editor display names from the system DB.
+
+    The local desktop app has no AuthEditor rows -- auth is bypassed there and
+    nothing ever writes to system.sqlite -- so its configured editor is added
+    from config instead. Without this the app shows the session display name
+    right after a record is created and the bare editor_id after a refresh.
+    """
     if not editor_ids:
         return {}
     rows = db_sys.query(AuthEditor.editor_id, AuthEditor.display_name).filter(
         AuthEditor.editor_id.in_(editor_ids)
     ).all()
-    return {r.editor_id: r.display_name for r in rows}
+    resolved = {r.editor_id: r.display_name for r in rows}
+
+    local_editor = owner_info.EDITOR_ID
+    if local_editor and local_editor in editor_ids and local_editor not in resolved:
+        resolved[local_editor] = owner_info.EDITOR_DISPLAY_NAME or local_editor
+    return resolved
 
 
 def enrich_created_by(record, name_map: dict):

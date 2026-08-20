@@ -5,9 +5,10 @@ Runs only when NOVOTREE_APP_MODE=local (the installer build sets this).
 Starts uvicorn in a daemon thread, mounts the bundled SPA as static files,
 and shows the UI in a native pywebview window backed by WebView2 (Edge).
 
-First run prompts the user to pick a data folder; the choice is persisted
+First run prompts the user to pick a data folder, and -- only when that
+folder already holds trees -- which tree to open; both choices are persisted
 to %AppData%\\NovoTree\\config.json so subsequent launches are silent.
-Closing the window terminates the entire process — the daemon thread dies
+Closing the window terminates the entire process - the daemon thread dies
 with it, no orphaned server is left running.
 
 Usage (development from source):
@@ -19,7 +20,6 @@ Packaged usage:
 
 from __future__ import annotations
 
-import json
 import logging
 import logging.handlers
 import os
@@ -31,20 +31,13 @@ import traceback
 import urllib.request
 from pathlib import Path
 
-import platformdirs
+from backend import local_config
 
-APP_NAME = "NovoTree"
-APP_AUTHOR = "NovoSpace"
-
-# %AppData%\NovoTree on Windows; ~/.config/NovoTree on Linux.
-APP_CONFIG_DIR = Path(platformdirs.user_config_dir(APP_NAME, APP_AUTHOR))
-APP_CONFIG_FILE = APP_CONFIG_DIR / "config.json"
-
-# Suggested default data dir, but the user can pick anywhere.
-DEFAULT_DATA_DIR = Path(platformdirs.user_data_dir(APP_NAME, APP_AUTHOR)) / "datasets"
-
-# Log file always lives next to the config (small, one place to look).
-_LOG_FILE = APP_CONFIG_DIR / "novotree.log"
+# The config-file schema and the platformdirs paths live in local_config so
+# this launcher and backend/api/local.py cannot drift on either.
+#
+APP_NAME = local_config.APP_NAME
+_LOG_FILE = local_config.LOG_FILE
 
 
 # ── stdio sanity (runs at import, before anything else needs it) ──────────────
@@ -62,7 +55,7 @@ _LOG_FILE = APP_CONFIG_DIR / "novotree.log"
 def _ensure_std_streams() -> None:
     if sys.stdout is not None and sys.stderr is not None:
         return
-    APP_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    local_config.APP_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     try:
         sink = open(_LOG_FILE, "a", encoding="utf-8", buffering=1)
         if sys.stdout is None:
@@ -88,7 +81,7 @@ _ensure_std_streams()
 # above, so we don't touch sys.stderr here.
 
 def _setup_logging() -> Path:
-    APP_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    local_config.APP_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     handler = logging.handlers.RotatingFileHandler(
         str(_LOG_FILE), maxBytes=2 * 1024 * 1024, backupCount=2, encoding="utf-8"
     )
@@ -102,28 +95,77 @@ def _setup_logging() -> Path:
     return _LOG_FILE
 
 
-# ── First-run data-dir picker ────────────────────────────────────────────────
+# ── First-run pickers ────────────────────────────────────────────────
 
-def _load_persisted_data_dir() -> Path | None:
-    if not APP_CONFIG_FILE.exists():
-        return None
-    try:
-        # utf-8-sig tolerates a BOM if a Windows tool (PowerShell Out-File,
-        # Notepad) writes the config; plain utf-8 would reject it.
-        cfg = json.loads(APP_CONFIG_FILE.read_text(encoding="utf-8-sig"))
-        path = cfg.get("data_dir")
-        return Path(path).expanduser() if path else None
-    except (OSError, json.JSONDecodeError) as exc:
-        logging.warning("config.json unreadable (%s) — re-prompting", exc)
-        return None
+def _existing_trees(data_dir: Path) -> list[str]:
+    """Tree folders already present in `data_dir`.
 
-
-def _persist_data_dir(path: Path) -> None:
-    APP_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    APP_CONFIG_FILE.write_text(
-        json.dumps({"data_dir": str(path)}, indent=2),
-        encoding="utf-8",
+    Standalone rather than database.owner_info.list_owners() because that
+    module snapshots DATASETS_DIR from the environment at import time, and on
+    this path the env var is not set yet -- importing it here would freeze the
+    wrong root for the rest of the process.
+    """
+    if not data_dir.is_dir():
+        return []
+    return sorted(
+        (child.name for child in data_dir.iterdir()
+         if child.is_dir() and not child.name.startswith(".")),
+        key=str.lower,
     )
+
+
+def _prompt_tree(data_dir: Path) -> str:
+    """Ask which tree to open when the chosen folder already holds some.
+
+    A fresh folder holds none, so the ordinary first-run path shows no extra
+    dialog and silently uses the default tree name. The dialog appears only
+    when the user pointed the picker at a folder with existing data, where
+    opening one of several trees unasked would be a guess.
+    """
+    trees = _existing_trees(data_dir)
+    if not trees:
+        return local_config.DEFAULT_OWNER_ID
+
+    import tkinter as tk
+
+    chosen = trees[0]
+
+    root = tk.Tk()
+    root.title(f"{APP_NAME} - choose tree")
+    root.attributes("-topmost", True)
+    root.resizable(False, False)
+
+    tk.Label(
+        root,
+        text=(
+            f"This folder already holds {len(trees)} tree(s):\n{data_dir}\n\n"
+            f"Which one should {APP_NAME} open?"
+        ),
+        justify="left",
+    ).pack(anchor="w", padx=16, pady=12)
+
+    listbox = tk.Listbox(root, height=min(len(trees), 10), width=48, exportselection=False)
+    for tree in trees:
+        listbox.insert(tk.END, tree)
+    listbox.selection_set(0)
+    listbox.pack(padx=16, fill="x")
+
+    def confirm() -> None:
+        nonlocal chosen
+        selection = listbox.curselection()
+        if selection:
+            chosen = trees[selection[0]]
+        root.destroy()
+
+    tk.Button(root, text="Open this tree", command=confirm, width=18).pack(pady=12)
+    listbox.bind("<Double-Button-1>", lambda _event: confirm())
+    # Closing the window accepts the highlighted tree: there is no "no tree"
+    # state to fall back to and the app cannot start without one.
+    #
+    root.protocol("WM_DELETE_WINDOW", confirm)
+    root.mainloop()
+
+    return chosen
 
 
 def _prompt_data_dir(default: Path) -> Path:
@@ -155,16 +197,25 @@ def _prompt_data_dir(default: Path) -> Path:
     return result
 
 
-def resolve_data_dir() -> Path:
-    """Return the user's data dir, prompting on first run."""
-    persisted = _load_persisted_data_dir()
+def resolve_startup_config() -> local_config.LocalConfig:
+    """Return the data folder and tree to open, prompting on first run."""
+    persisted = local_config.load()
     if persisted is not None:
-        persisted.mkdir(parents=True, exist_ok=True)
+        persisted.data_dir.mkdir(parents=True, exist_ok=True)
         return persisted
 
-    chosen = _prompt_data_dir(DEFAULT_DATA_DIR)
-    _persist_data_dir(chosen)
-    return chosen
+    data_dir = _prompt_data_dir(local_config.DEFAULT_DATA_DIR)
+    owner_id = _prompt_tree(data_dir)
+    # Seed the editor identity from the tree id. For a folder adopted from a
+    # web install that is the owner's real editor_id (both derive from the
+    # registration email), so records added offline keep the same author as
+    # the ones added online. The user can rename it in Settings afterwards.
+    #
+    config = local_config.LocalConfig(
+        data_dir=data_dir, owner_id=owner_id, editor_id=owner_id, display_name=owner_id,
+    )
+    local_config.save(config)
+    return config
 
 
 # ── Server plumbing ──────────────────────────────────────────────────────────
@@ -249,19 +300,20 @@ def main() -> None:
     _setup_logging()
     logging.info("%s %s starting", APP_NAME, "(packaged)" if hasattr(sys, "_MEIPASS") else "(source)")
 
-    # 1. First-run picker (or load persisted choice).
-    data_dir = resolve_data_dir()
-    logging.info("data_dir = %s", data_dir)
+    # 1. First-run pickers (or load persisted choices).
+    config = resolve_startup_config()
+    logging.info(
+        "data_dir = %s, tree = %s, editor = %s (%s)",
+        config.data_dir, config.owner_id, config.editor_id, config.display_name,
+    )
 
     # 2. Configure backend via env vars BEFORE importing FastAPI app.
     #    backend.config.settings is loaded at import time, so the order matters.
-    os.environ["NOVOTREE_APP_MODE"] = "local"
-    os.environ["NOVOTREE_DATA_DIR"] = str(data_dir)
-    os.environ["NOVOTREE_DEFAULT_OWNER_ID"] = "local"
-    # Surfaced read-only by the /api/local/info endpoint so the SPA's Settings
-    # page can show the user where their data lives without recomputing paths.
-    os.environ["NOVOTREE_CONFIG_FILE"] = str(APP_CONFIG_FILE)
-    os.environ["NOVOTREE_LOG_FILE"] = str(_LOG_FILE)
+    os.environ[local_config.ENV_APP_MODE] = "local"
+    os.environ[local_config.ENV_DATA_DIR] = str(config.data_dir)
+    os.environ[local_config.ENV_DEFAULT_OWNER_ID] = config.owner_id
+    os.environ[local_config.ENV_EDITOR_ID] = config.editor_id
+    os.environ[local_config.ENV_EDITOR_DISPLAY_NAME] = config.display_name
 
     # 3. Compose ASGI app (API + static SPA).
     spa_dir = _frontend_dist_dir()

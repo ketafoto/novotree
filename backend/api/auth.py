@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 
 from backend.api._email import send_email
 from backend.config import privacy_settings, settings
-from database.owner_info import DEFAULT_OWNER_ID
+from database import owner_info  # full-module access - DEFAULT_OWNER_ID is rebindable
 from database.system_db import get_system_db
 from database.system_models import AuthEditor, AuthEditorTree, AuthPendingContributor, AuthPendingOwner, AuthSetPasswordToken
 
@@ -362,12 +362,18 @@ class EditorSession:
 
 
 def _dev_session() -> EditorSession:
-    """Auto-authenticated session for NOVOTREE_APP_MODE=admin."""
+    """Auto-authenticated session for the auth-bypass modes (admin and local).
+
+    `owner_id` is the tree; `editor_id` is the person whose name lands in
+    created_by. The desktop app configures both, so the author stays the same
+    when the user switches tree. Admin dev mode configures neither and keeps
+    its historical behaviour of using the tree id as the editor.
+    """
     return EditorSession(
-        editor_id=DEFAULT_OWNER_ID,
-        owner_id=DEFAULT_OWNER_ID,
+        editor_id=owner_info.EDITOR_ID or owner_info.DEFAULT_OWNER_ID,
+        owner_id=owner_info.DEFAULT_OWNER_ID,
         role="owner",
-        display_name="Dev Owner",
+        display_name=owner_info.EDITOR_DISPLAY_NAME or "Dev Owner",
     )
 
 
@@ -483,7 +489,8 @@ def get_viewer_context(
     """
     if settings.is_dev:
         return ViewerContext(
-            DEFAULT_OWNER_ID, is_share_viewer=False, expose_sensitive=True, expose_minors=True
+            owner_info.DEFAULT_OWNER_ID, is_share_viewer=False,
+            expose_sensitive=True, expose_minors=True,
         )
 
     # Try authenticated session first — reuse get_current_editor to enforce freeze checks

@@ -19,6 +19,7 @@ from jose import JWTError, jwt
 from sqlalchemy import text
 
 from database import db
+from database import owner_info  # full-module access - DEFAULT_OWNER_ID is rebindable
 from database.owner_info import OwnerInfo
 from database.system_db import get_system_session, init_system_db
 from database.system_models import AuthShareToken
@@ -28,7 +29,7 @@ from backend.api import local as local_api
 from backend.api import privacy as privacy_api
 from backend.api import privacy_requests as privacy_requests_api
 from backend.api._client_ip import get_client_ip
-from backend.api.auth import DEFAULT_OWNER_ID, _ALGORITHM
+from backend.api.auth import _ALGORITHM
 from backend.config import settings
 from backend.logging import setup_logging, request_user
 
@@ -64,12 +65,12 @@ async def lifespan(app: FastAPI):
 
     if settings.is_dev:
         # Dev mode: initialize default owner's database directly
-        owner_info = OwnerInfo(owner_id=DEFAULT_OWNER_ID)
+        default_owner = OwnerInfo(owner_id=owner_info.DEFAULT_OWNER_ID)
         try:
-            engine = db.init_db_once(owner_info)
+            engine = db.init_db_once(default_owner)
             with engine.connect() as conn:
                 conn.execute(text("SELECT 1 FROM main_individuals LIMIT 1"))
-            logger.info(f"Dev mode: database ready for owner '{DEFAULT_OWNER_ID}'")
+            logger.info(f"Dev mode: database ready for owner '{owner_info.DEFAULT_OWNER_ID}'")
         except Exception as e:
             logger.error(f"Dev mode database initialization failed: {e}")
             raise
@@ -137,12 +138,12 @@ def _resolve_owner_id_from_request(request: Request) -> str | None:
     Determine which owner's database to open for this request.
 
     Priority:
-    1. Dev mode → DEFAULT_OWNER_ID
+    1. Dev mode -> DEFAULT_OWNER_ID
     2. Access token cookie → owner_id claim
     3. share query param → look up in system DB
     """
     if settings.is_dev:
-        return DEFAULT_OWNER_ID
+        return owner_info.DEFAULT_OWNER_ID
 
     # Try JWT access token
     access_token = request.cookies.get("access_token")
@@ -202,7 +203,7 @@ async def owner_db_router(request: Request, call_next):
     # Inject current user into logging context
     access_token = request.cookies.get("access_token")
     if settings.is_dev:
-        request_user.set(DEFAULT_OWNER_ID)
+        request_user.set(owner_info.DEFAULT_OWNER_ID)
     elif access_token:
         try:
             payload = jwt.decode(access_token, settings.jwt_secret_key, algorithms=[_ALGORITHM])
@@ -229,9 +230,15 @@ async def owner_db_router(request: Request, call_next):
             if is_share_token and request.method in WRITE_METHODS:
                 return JSONResponse(status_code=403, content={"detail": "Read-only viewer access"})
 
-            # Ensure the owner's DB engine is in the pool (idempotent — no-op if already cached).
+            # Ensure the owner's DB engine is in the pool. get_engine builds the
+            # OwnerInfo only on a pool miss; passing one in instead would run
+            # OwnerInfo.__post_init__ (two mkdirs) on every single request, and
+            # would create datasets/<owner>/ even for an owner whose engine was
+            # registered from elsewhere -- which is how test runs kept
+            # materialising a stray datasets/owner1/.
+            #
             try:
-                db.init_db_once(OwnerInfo(owner_id=owner_id))
+                db.get_engine(owner_id)
             except Exception as e:
                 logger.error(f"Failed to open database for owner '{owner_id}': {e}")
                 return JSONResponse(status_code=500, content={"detail": "Database unavailable"})

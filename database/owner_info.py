@@ -36,6 +36,20 @@ DATASETS_DIR = _resolve_datasets_dir()
 # "local" without touching the multi-user web deployment.
 DEFAULT_OWNER_ID = os.environ.get("NOVOTREE_DEFAULT_OWNER_ID", "aktiniya")
 
+# Who is editing, as opposed to which tree is open. Separate from
+# DEFAULT_OWNER_ID because a tree is a dataset ("Mothers side") while an editor
+# is a person: stamping the tree name into created_by makes one human look like
+# a different author in every tree. Empty means "not configured" -- the web
+# deployment resolves the editor from the JWT instead, and admin dev mode falls
+# back to DEFAULT_OWNER_ID so its behaviour is unchanged.
+#
+# In the hosted version editor_id comes from the local part of the owner's
+# registration email (auth._derive_editor_id); the desktop app carries the same
+# value in config.json so records added offline and online agree on the author.
+#
+EDITOR_ID = os.environ.get("NOVOTREE_EDITOR_ID", "")
+EDITOR_DISPLAY_NAME = os.environ.get("NOVOTREE_EDITOR_DISPLAY_NAME", "")
+
 
 @dataclass
 class OwnerInfo:

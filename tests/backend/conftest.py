@@ -29,6 +29,34 @@ from tests.backend.db_utils import DatabaseUtils, IndividualVerifier, FamilyVeri
 
 
 # ---------------------------------------------------------------------------
+# Datasets isolation
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(autouse=True, scope="session")
+def _isolate_datasets_dir(tmp_path_factory):
+    """Point the datasets root at a throwaway directory for every backend test.
+
+    Backend tests never read the real datasets/ - they build their trees in
+    in-memory SQLite or in a module temp dir. But a request whose owner has no
+    engine in the pool makes owner_db_router materialise datasets/<owner>/, and
+    the contributor fixtures authenticate as "owner1" without registering one.
+    That left a stray datasets/owner1/ in the working tree after every run.
+    Repointing the root keeps any such write inside pytest's tmp area.
+
+    Session-scoped, so monkeypatch (function-scoped) is not available; the
+    original value is restored by hand.
+    """
+    from database import owner_info
+
+    original = owner_info.DATASETS_DIR
+    owner_info.DATASETS_DIR = tmp_path_factory.mktemp("datasets")
+    try:
+        yield
+    finally:
+        owner_info.DATASETS_DIR = original
+
+
+# ---------------------------------------------------------------------------
 # Auth client fixtures shared by test_auth_contributor and test_logging
 # ---------------------------------------------------------------------------
 

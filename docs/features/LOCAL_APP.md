@@ -61,21 +61,73 @@ Two folders matter:
 
 | Folder | What's in it | Default location |
 | --- | --- | --- |
-| **Data folder** | Your tree(s), photos, GEDCOM exports | `<your choice>\local\data.sqlite`, `<your choice>\local\media\…` |
+| **Data folder** | Your tree(s), photos, GEDCOM exports | `<your choice>\<tree>\data.sqlite`, `<your choice>\<tree>\media\…` |
 | **Config folder** | The remembered data-folder path, plus a rotating debug log capped at 6 MB total (see below) | `%LocalAppData%\NovoSpace\NovoTree\config.json`, `…\novotree.log` |
 
 The data folder is what you back up. The config folder is small (<1 MB,
 mostly the rotating log) and is recreated automatically if deleted.
 
-To **change** where data lives:
+To **change** where data lives, use **Settings -> Locations -> "Change…"**.
+It opens a folder picker, moves every file, and reloads. The target folder
+must be empty.
 
-1. Quit NovoTree.
-2. Move the data folder to its new location.
-3. Edit `%LocalAppData%\NovoSpace\NovoTree\config.json` so the `data_dir`
-   field points to the new path. Or delete `config.json` to be re-prompted on
-   next launch.
+By hand (app closed): move the folder, then edit the `data_dir` field in
+`%LocalAppData%\NovoSpace\NovoTree\config.json` — or delete `config.json`
+to be re-prompted on next launch.
 
-A built-in "Move data folder…" UI is on the roadmap but not yet shipped.
+### Multiple trees
+
+One data folder can hold **several independent trees** — say your own line and
+your partner's. Each is a separate folder inside the data folder with its own
+`data.sqlite` and `media/`; only one is open at a time.
+
+| Action | Where |
+| --- | --- |
+| See every tree, with size and person count | Settings -> Trees |
+| Open a different tree | Settings -> Trees -> "Open" |
+| Start an empty tree | Settings -> Trees -> "New tree…" |
+| Delete a tree | Settings -> Trees -> trash icon (only on trees that are not open) |
+| Choose a tree on a fresh install | Prompted at first launch, but only if the folder you picked already contains trees |
+
+Switching moves nothing on disk and never deletes anything — it just changes
+which tree the app reads. The app reloads afterwards so nothing from the
+previous tree is left on screen.
+
+**Trees do not share data.** There is no cross-tree search, and an individual
+in one tree is unrelated to a same-named individual in another. To combine
+trees, use the GEDCOM export/import round-trip.
+
+### Who is recorded as adding records
+
+Every person, photo and event carries the name of whoever added it. That is
+**Settings -> You**, and it is deliberately separate from which tree is open,
+so you stay one author across all of your trees.
+
+| Field | What it is |
+| --- | --- |
+| **Your name** | The label shown next to records you add. Change it freely. |
+| **Editor ID** | The identity actually stored on each record. |
+
+**Where the Editor ID comes from.** On the hosted version at novospace.cz it is
+created for you from your registration email - the part before the `@`, with
+anything other than letters, digits, hyphens and underscores replaced (so
+`anna.smith@gmail.com` becomes `anna_smith`). The desktop app carries the same
+ID, so records you add offline and online agree on the author. If you only ever
+use the desktop app, it is simply a name you pick.
+
+Changing it affects **new** records only. Ones already added keep the name they
+were added under, because silently reattributing work to someone who did not do
+it is worse than a bit of inconsistent history.
+
+Deleting asks you to type the tree's name, then removes its folder outright —
+it does not go to the Recycle Bin and cannot be undone. The tree you have open
+cannot be deleted (open a different one first), which is also why you can never
+delete your last remaining tree.
+
+If the tree has **share links** (only possible when the same data folder is
+also used by a NovoTree server), the confirmation says how many, and deleting
+the tree revokes them. Your account and any privacy requests are kept — those
+belong to you, not to the tree.
 
 ### Moving data between local and SaaS
 
@@ -158,7 +210,9 @@ the cost of a 2–3 s extraction on each launch — see the user-facing
 | --- | --- | --- |
 | `NOVOTREE_APP_MODE` | `admin` | `admin` = dev bypass, `local` = packaged installer (also bypass), anything else = full multi-user auth (web/VM). |
 | `NOVOTREE_DATA_DIR` | `<repo>/datasets` | Override the SQLite + media root. Set by the launcher to the user's chosen folder. |
-| `NOVOTREE_DEFAULT_OWNER_ID` | `aktiniya` | Owner id used in bypass mode. Launcher pins this to `local`. |
+| `NOVOTREE_DEFAULT_OWNER_ID` | `aktiniya` | Which tree is open - the folder name under the data dir. The launcher sets it from `config.json` (`owner_id`, default `local`), and `/api/local/switch-tree` rebinds it at runtime. |
+| `NOVOTREE_EDITOR_ID` | unset | Who is editing: the value stamped into `created_by`. Set by the launcher from `config.json` (`editor_id`). Unset in admin dev mode, where the editor falls back to `NOVOTREE_DEFAULT_OWNER_ID` as before. |
+| `NOVOTREE_EDITOR_DISPLAY_NAME` | unset | Human name shown as "Added by ...". Set by the launcher from `config.json` (`display_name`). |
 | `VITE_NOVOTREE_APP_MODE` | `admin` | **Build-time** variable — bakes "show login screen" into the SPA bundle. The local installer build pins it to `admin`; the VM deployment sets it to a non-`admin` value to render the login. |
 | `VITE_NOVOTREE_INSTALLER` | unset | **Build-time** variable — set to `"true"` only by `installer/build.ps1`. Reveals desktop-app-only UI (Donate ♥ in the header, future "Move data folder…" dialog). Read in the SPA via `isLocalApp` from `src/config/appMode.ts`. |
 
@@ -166,6 +220,69 @@ The web/VM deployment leaves the runtime env vars unset (so the auth path
 runs as it does today). The local installer's launcher sets all three at
 process start, before importing the FastAPI app — this matters because
 `backend.config.settings` snapshots them at module-load time.
+
+### Data folder vs tree
+
+Two independent axes, and it is worth keeping them straight:
+
+```
+<data folder>                 <- NOVOTREE_DATA_DIR       (/local/change-data-dir, moves files)
+├── system.sqlite             <- one per data folder, shared by all trees
+├── local/                    <- NOVOTREE_DEFAULT_OWNER_ID (/local/switch-tree, moves nothing)
+│   ├── data.sqlite
+│   └── media/
+└── Mothers side/
+    ├── data.sqlite
+    └── media/
+```
+
+`DEFAULT_OWNER_ID` is **not** just a path segment. It appears in:
+
+- `datasets/<owner_id>/` — the tree's folder
+- `auth._dev_session()` / `get_viewer_context()` — the session's `owner_id`
+- `db._pool` — the engine-pool key (which is why switching needs no dispose)
+- `request_user` — the name in the access log
+
+It used to supply `created_by` as well. It no longer does: `EDITOR_ID` is a
+separate axis, because a tree is a dataset and an editor is a person, and
+fusing them made one human show up as a different author in every tree. In the
+hosted deployment the two coincide for owners (`_derive_editor_id` builds both
+from the registration email), which is how the conflation went unnoticed until
+the desktop app grew more than one tree.
+
+Local mode has no `AuthEditor` rows to resolve a display name against — it
+never writes to `system.sqlite` at all — so `api_utils.fetch_display_names()`
+falls back to the configured editor. A row in `system.sqlite` still wins, which
+is what makes a data folder shared with a web install show the real account
+name rather than the bare id.
+
+### Deleting a tree and the system DB
+
+`system.sqlite` is per *data folder*, not per tree, so removing a tree's folder
+would otherwise leave rows behind that still point at it. That matters because
+`OwnerInfo.__post_init__` creates missing directories: the first request to
+resolve a surviving share token rebuilds the deleted tree as an empty folder,
+so the link does not 404 and the tree reappears in the picker.
+
+`delete_tree` therefore purges the tree-scoped tables listed in
+`_TREE_SCOPED_ROWS` (share tokens, consents, contributor grants, invitations,
+pending contributors, set-password tokens), after the `rmtree` rather than
+before — the removal is the step that can fail on a Windows lock, and purging
+first would strand a live tree with no share links.
+
+`AuthEditor` and `PrivacyRequest` are deliberately excluded: the first is an
+identity that must survive a tree deletion on a folder shared with a web
+install, and the second is a compliance record with its own retention window
+([PRIVACY_DESIGN.md](../legal/PRIVACY_DESIGN.md) section 6).
+
+In pure desktop use all of this is a no-op — nothing ever writes to
+`system.sqlite`, so `purged` comes back empty.
+
+Because a rebind has to be visible to all of those, both `backend/main.py` and
+`backend/api/auth.py` reach it as `owner_info.DEFAULT_OWNER_ID` rather than
+importing the bare name; a `from … import DEFAULT_OWNER_ID` would freeze the
+startup value and the switch would silently half-apply. `database/system_db.py`
+carries the same note about `DATASETS_DIR`.
 
 See also [DEPLOYMENT.md](DEPLOYMENT.md) for the full env reference used on
 the VM.
@@ -177,7 +294,8 @@ Everything specific to the local installer, in load-bearing order:
 | Path | What it does |
 | --- | --- |
 | `version.py` | Single source of truth for `__version__`. Run with `python version.py` to regenerate `installer/version.iss` and `installer/version_info.txt`. |
-| `backend/local_launcher.py` | Desktop entrypoint. Resolves the data folder (first-run picker if needed), sets the three env vars, builds the Starlette composite, runs uvicorn in a daemon thread, opens the pywebview window, shuts down on close. |
+| `backend/local_config.py` | `config.json` schema (`data_dir` + `owner_id`) and the platformdirs paths. Single writer shared by the launcher and `backend/api/local.py`, so the two cannot drift on the file's shape. |
+| `backend/local_launcher.py` | Desktop entrypoint. Resolves the data folder and tree (first-run pickers if needed), sets the three env vars, builds the Starlette composite, runs uvicorn in a daemon thread, opens the pywebview window, shuts down on close. |
 | `installer/build.ps1` | Build orchestrator (4 steps). Run from the repo root: `.\installer\build.ps1`. Switches: `-SkipFrontend`, `-SkipPyInstaller`. |
 | `installer/novotree.spec` | PyInstaller spec. Location-independent — paths derive from `SPECPATH`, so the spec can move without breaking. |
 | `installer/novotree.iss` | Inno Setup 6 script. Produces `installer/Output/novotree-X.Y.Z-setup.exe`. |
@@ -194,8 +312,9 @@ Frontend pieces that are local-only:
 | --- | --- |
 | `frontend/src/config/appMode.ts` | Exposes `isLocalApp` (true when `VITE_NOVOTREE_INSTALLER=true`). Use this flag to gate any future desktop-only UI. |
 | `frontend/src/components/common/DonateButton.tsx` | Heart-button + modal with GitHub Sponsors / Ko-fi links. Imported by `Header.tsx`, rendered conditionally on `isLocalApp`. |
-| `frontend/src/api/local.ts` | Typed client for the `/api/local/*` endpoints (`info`, `pickDataDir`, `changeDataDir`). |
+| `frontend/src/api/local.ts` | Typed client for the `/api/local/*` endpoints (`info`, `listTrees`, `switchTree`, `createTree`, `pickDataDir`, `changeDataDir`). |
 | `frontend/src/pages/settings/LocalAppInfoCard.tsx` | Settings-page card showing the data folder, config file and log file paths read-only, with a "Change…" button that opens the native folder picker, moves the data, and restarts the app. |
+| `frontend/src/pages/settings/LocalTreesCard.tsx` | Settings-page card listing every tree in the data folder, with "Open" to switch and "New tree…" to create. Changes which tree is open; moves nothing. |
 
 Other local-only UI choices (all gated by `isLocalApp`, all tree-shaken from the web bundle):
 
@@ -211,7 +330,7 @@ Backend changes that the local mode relies on:
 | `backend/config.py` | `is_dev` now true for both `admin` and `local` modes; new `is_local` property. |
 | `database/owner_info.py` | `DATASETS_DIR` and `DEFAULT_OWNER_ID` honor the env vars above. |
 | `database/system_db.py` | Imports `DATASETS_DIR` from `owner_info` instead of redefining its own copy of the path — single source of truth. |
-| `backend/api/auth.py` | Imports `DEFAULT_OWNER_ID` from `owner_info` instead of hardcoding `"aktiniya"` here too — single source of truth. |
+| `backend/api/auth.py` | Reads `owner_info.DEFAULT_OWNER_ID` through the module rather than importing the name — a name import snapshots the value, and `/api/local/switch-tree` rebinds it at runtime. `backend/main.py` does the same for the request-routing and logging paths. |
 
 ### Build prerequisites (one-time setup)
 
@@ -363,4 +482,13 @@ the cap is rarely approached. To change the cap, edit `_setup_logging()` in
 - Auto-update (manual download + reinstall).
 - ~~A built-in "Move data folder…" UI~~ — shipped: Settings → Locations → "Change…" opens a native folder picker, moves the data, and restarts the app.
 - macOS / Linux installers (Windows-first).
+- ~~Multiple trees in one install~~ — shipped: Settings → Trees lists every
+  tree in the data folder, with "Open" to switch, "New tree…" to create and a
+  trash icon to delete. Renaming is still manual (quit, rename the folder; it
+  does not rewrite `created_by` on existing rows).
+- Adopting an *existing* folder without moving its contents — "Change…" always
+  moves, so pointing the app at a folder that already holds trees means editing
+  `config.json` by hand.
+- Re-attributing existing records after changing your Editor ID — rows keep the
+  name they were added under, by design.
 - Server import/export *sync* — round-tripping is via the existing GEDCOM bundle export/import.
