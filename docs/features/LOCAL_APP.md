@@ -53,7 +53,7 @@ System requirements:
 - ~35 MB free disk for the app (a single `novotree.exe`), plus space for your tree (typically tens of MB)
 - WebView2 runtime — pre-installed on Windows since ~2021, no separate download
 
-Startup is a touch slower than a "normal" Windows app — the first launch in a session takes 2–3 s while Windows extracts the embedded Python runtime and the SPA bundle to a temp folder. After that, the app responds instantly. Closing and reopening within the same session also costs ~2 s. This is the deliberate trade-off for an instantly-uninstallable single-file bundle (uninstall takes ~3 s instead of ~3 minutes); for a tool you open occasionally, it's the right balance.
+Startup is a touch slower than a "normal" Windows app: a NovoTree splash appears almost immediately and stays while Windows unpacks the embedded Python runtime and the SPA bundle and the app starts up. After that the app responds instantly. This is the deliberate trade-off for an instantly-uninstallable single-file bundle (uninstall takes ~3 s instead of ~3 minutes); for a tool you open occasionally, it's the right balance.
 
 ### Where your data lives
 
@@ -204,6 +204,86 @@ the cost of a 2–3 s extraction on each launch — see the user-facing
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+### Startup: what takes the time, and what covers it
+
+Measured on a warm machine from the launcher's own timing logs:
+
+| Phase | Cost | Can Python draw during it? |
+| --- | --- | --- |
+| PyInstaller bootloader extracts the onefile bundle | ~2 s | **No** - runs before our code |
+| Import `backend.main` + start uvicorn | 2-6 s | Yes |
+| WebView2 init + SPA first paint | ~1-4 s | Not in the WebView |
+
+Two consequences drive the design:
+
+**Startup is deliberately sequential.** The backend comes up first, then the
+window. Overlapping them looks obviously right and measures badly: WebView2
+becomes usable in **~0.9 s** when it has the CPU to itself, but **4-6.5 s** when
+a CPU-bound import is competing for the GIL. Two attempts at concurrency each
+made startup slower than the sequential version (once by ~2 s, once by ~2.5 s),
+which is why this is spelled out here - the change looks like an improvement
+right up until you measure it.
+
+The window is also created pointing **straight at the app URL** rather than at
+`about:blank` and navigating afterwards: WebView2 folds that first navigation
+into its own initialisation, whereas navigating later costs a second page-load
+cycle. The server is already listening by then, so it cannot race.
+
+**The splash is PyInstaller's, drawn by the bootloader.** That is the only
+place it can be. It has to be on screen during extraction, which happens before
+Python exists; and it cannot live inside the WebView, because nothing renders
+there until WebView2 has initialised - the end of the wait rather than the
+start of it.
+
+It costs almost nothing: Tcl/Tk is already in the bundle for the first-run
+pickers, so the only new bytes are `installer/splash.png` (~15 KB, about 0.05%
+of the installer).
+
+`_make_splash()` returns `_BootloaderSplash` when `pyi_splash` imports and
+`_NoSplash` otherwise; both satisfy the `_SplashLike` protocol that `main()`
+drives. `_NoSplash` is only reachable when running from source, where there is
+no bootloader - progress is in `novotree.log` either way. An earlier version
+drew a Tk window on a background thread to cover that case; it was removed
+because it needed careful teardown to avoid aborting the process on exit
+(`Tcl_AsyncDelete`) and existed solely for a path developers rarely use.
+
+`main()` stands the splash down before the first-run pickers: those are modal
+Tk dialogs and the splash is a separate always-on-top window that would cover
+them. `pyi_splash` cannot be reopened, which is acceptable - the pickers appear
+once, and the user is interacting with dialogs rather than waiting.
+
+`installer/splash.png` is generated from `installer/novotree.ico` by
+`installer/make_splash.py`, so the splash stays in step with the icon used for
+the setup wizard, the executable and the Start Menu shortcut. That script needs
+Pillow and is **not** part of the build - the PNG is committed; re-run it only
+when the branding changes.
+
+`_Splash` runs its Tk root on its own thread, because `webview.start()` owns the
+main thread for the rest of the session. Two details are load-bearing:
+
+- Only that thread touches widgets; other threads set `_status` / `_closed`,
+  which an `after()` poll picks up.
+- After `mainloop()` returns it drops every widget reference and calls
+  `gc.collect()` **on that thread**. Left for the main thread to finalise at
+  interpreter shutdown, Tcl aborts the process with *"Tcl_AsyncDelete: async
+  handler deleted by the wrong thread"* - a crash dialog on the way out.
+
+The window is created with `hidden=True` and shown only after the SPA reports
+`loaded` (with a 15 s backstop), so no white rectangle ever covers the splash.
+
+Each step logs a cumulative timing (`app imported (2.61s)`, `backend ready
+(3.14s)`, `UI on screen (…)`), so `novotree.log` answers "where did startup go?"
+without instrumenting anything. `_log_extraction_cost()` adds the one phase
+that is otherwise invisible: `sys._MEIPASS` is created when unpacking begins,
+so the gap from there to our first line is the blank period before Python
+existed.
+
+**What is left is real slowness, not a missing splash.** Measured warm:
+extraction ~4.2 s, backend ~2.0 s, WebView2 plus SPA first paint ~4.8 s. Every
+phase now has a splash over it, so the remaining wins are in making those
+phases shorter - the SPA's first paint is the largest single piece and is a
+frontend bundling question, not a launcher one.
+
 ### App-mode env vars
 
 | Variable | Default | Meaning |
@@ -295,7 +375,7 @@ Everything specific to the local installer, in load-bearing order:
 | --- | --- |
 | `version.py` | Single source of truth for `__version__`. Run with `python version.py` to regenerate `installer/version.iss` and `installer/version_info.txt`. |
 | `backend/local_config.py` | `config.json` schema (`data_dir` + `owner_id`) and the platformdirs paths. Single writer shared by the launcher and `backend/api/local.py`, so the two cannot drift on the file's shape. |
-| `backend/local_launcher.py` | Desktop entrypoint. Resolves the data folder and tree (first-run pickers if needed), sets the three env vars, builds the Starlette composite, runs uvicorn in a daemon thread, opens the pywebview window, shuts down on close. |
+| `backend/local_launcher.py` | Desktop entrypoint. Resolves the data folder and tree (first-run pickers if needed), sets the env vars, shows a Tk splash, then starts the backend and WebView2 in parallel and reveals the window once the SPA has painted. Shuts down on close. |
 | `installer/build.ps1` | Build orchestrator (4 steps). Run from the repo root: `.\installer\build.ps1`. Switches: `-SkipFrontend`, `-SkipPyInstaller`. |
 | `installer/novotree.spec` | PyInstaller spec. Location-independent — paths derive from `SPECPATH`, so the spec can move without breaking. |
 | `installer/novotree.iss` | Inno Setup 6 script. Produces `installer/Output/novotree-X.Y.Z-setup.exe`. |

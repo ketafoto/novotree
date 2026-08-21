@@ -110,6 +110,29 @@ a = Analysis(
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
+# ── Startup splash ───────────────────────────────────────────────────────────
+# Drawn by the bootloader, which means it is on screen while the onefile bundle
+# is still being unpacked - the largest blank phase of startup (~4 s warm, ~7 s
+# on a cold first run) and the only one no Python code can reach. The launcher
+# updates the status line and closes it once the real window is up; see
+# _BootloaderSplash in backend/local_launcher.py.
+#
+# Costs almost nothing: Tcl/Tk is already in the bundle for the first-run
+# folder pickers, so the only new bytes are splash.png itself (~15 KB).
+#
+splash = Splash(
+    _root("installer", "splash.png"),
+    binaries=a.binaries,
+    datas=a.datas,
+    # Anchored south-west (PyInstaller draws it with -anchor sw), so this is the
+    # bottom-left of the text: it sits in the grey band at the foot of the image.
+    text_pos=(24, 250),
+    text_size=9,
+    text_color="#6b7280",
+    text_default="Starting NovoTree...",
+    always_on_top=True,
+)
+
 # --onefile EXE: binaries + zipfiles + datas are packed INTO the exe instead
 # of being collected to a sibling _internal/ directory. This is the change
 # that produces a single-file bundle. (For onedir, exclude_binaries=True and
@@ -117,6 +140,8 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 exe = EXE(
     pyz,
     a.scripts,
+    splash,             # the splash screen itself
+    splash.binaries,    # and the Tcl/Tk pieces the bootloader needs to draw it
     a.binaries,
     a.zipfiles,
     a.datas,
