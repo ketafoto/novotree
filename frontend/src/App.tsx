@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
 
 import { AuthProvider } from './contexts/AuthContext';
+import { SensitiveViewProvider } from './contexts/SensitiveViewContext';
 import { useAuth } from './contexts/AuthContext';
 import { Layout } from './components/layout/Layout';
 import { PrivacyFooter } from './components/layout/PrivacyFooter';
@@ -120,6 +121,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter basename={import.meta.env.BASE_URL}>
         <AuthProvider>
+        <SensitiveViewProvider>
           <PrefetchTypes />
           <div className="min-h-screen flex flex-col">
           <div className="flex-1 flex flex-col">
@@ -249,6 +251,7 @@ function App() {
               error: { iconTheme: { primary: '#ef4444', secondary: '#fff' } },
             }}
           />
+        </SensitiveViewProvider>
         </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>

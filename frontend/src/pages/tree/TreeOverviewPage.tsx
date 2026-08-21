@@ -17,6 +17,7 @@ import { TreeSelectionControls } from '../../components/tree/TreeSelectionContro
 import { PrivacyLinks } from '../../components/layout/PrivacyLinks';
 import { isLocalApp } from '../../config/appMode';
 import { useAuth } from '../../contexts/AuthContext';
+import { useSensitiveView } from '../../contexts/SensitiveViewContext';
 import { useIsMobileViewport } from '../../hooks/useIsMobileViewport';
 import { useCanContribute } from '../../hooks/useCanContribute';
 import { useTreeSelection } from '../../hooks/useTreeSelection';
@@ -36,7 +37,7 @@ export function TreeOverviewPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileSheetPersonId, setMobileSheetPersonId] = useState<number | null>(null);
   // Owner-only, per-session cosmetic guard (default hidden). See TreePage.
-  const [showSensitive, setShowSensitive] = useState(false);
+  const { showSensitive, setShowSensitive } = useSensitiveView();
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 

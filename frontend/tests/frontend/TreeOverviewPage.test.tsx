@@ -24,6 +24,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { AuthProvider } from '../../src/contexts/AuthContext';
+import { SensitiveViewProvider } from '../../src/contexts/SensitiveViewContext';
 import { TreeOverviewPage } from '../../src/pages/tree/TreeOverviewPage';
 
 // ── API mocks ────────────────────────────────────────────────────────────────
@@ -87,7 +88,9 @@ function renderPage() {
     <QueryClientProvider client={queryClient}>
       <MemoryRouter>
         <AuthProvider>
-          <TreeOverviewPage />
+          <SensitiveViewProvider>
+            <TreeOverviewPage />
+          </SensitiveViewProvider>
         </AuthProvider>
       </MemoryRouter>
     </QueryClientProvider>,

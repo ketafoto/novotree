@@ -40,6 +40,7 @@ import { formatIndividualName, getLatestName } from '../../utils/nameUtils';
 import { sortEventsChronologically } from '../../utils/eventSort';
 import { saveBlob } from '../../utils/saveBlob';
 import { useAuth } from '../../contexts/AuthContext';
+import { useSensitiveView } from '../../contexts/SensitiveViewContext';
 import { SensitiveInfo } from '../../components/common/SensitiveInfo';
 import { SensitiveCheckbox } from '../../components/common/SensitiveCheckbox';
 import { SensitiveViewToggle } from '../../components/common/SensitiveViewToggle';
@@ -113,7 +114,7 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
   // Owner-only, per-session shoulder-surfing guard (not access control, not
   // persisted). Default off: sensitive events/notes/photos are collapsed until
   // the Owner reveals them. Viewers (readOnly) never get this toggle.
-  const [showSensitive, setShowSensitive] = useState(false);
+  const { showSensitive, setShowSensitive } = useSensitiveView();
 
   useEffect(() => {
     return () => {

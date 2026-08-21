@@ -18,6 +18,7 @@ import { MobilePersonSheet } from '../../components/tree/MobilePersonSheet';
 import { TreeSelectionControls } from '../../components/tree/TreeSelectionControls';
 import { PrivacyLinks } from '../../components/layout/PrivacyLinks';
 import { useAuth } from '../../contexts/AuthContext';
+import { useSensitiveView } from '../../contexts/SensitiveViewContext';
 import { useCanContribute } from '../../hooks/useCanContribute';
 import { useTreeSelection } from '../../hooks/useTreeSelection';
 import { isPublicApp, isLocalApp } from '../../config/appMode';
@@ -47,7 +48,7 @@ export function TreePage() {
   // Owner-only, per-session cosmetic guard. Default hidden: sensitive events/notes
   // are stripped from node tooltips until the Owner reveals them. Viewers never get
   // this toggle (their payload is already filtered server-side per share token).
-  const [showSensitive, setShowSensitive] = useState(false);
+  const { showSensitive, setShowSensitive } = useSensitiveView();
   const viewportRef = useRef<HTMLDivElement | null>(null);
 
   const isOwner = editor?.role === 'owner';
