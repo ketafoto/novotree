@@ -271,14 +271,24 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
       });
       toast.success('Photo uploaded');
     }
-    queryClient.invalidateQueries({ queryKey: ['media', { individual_id: Number(id) }] });
+    // Awaited so the Media modal reopens with the new photo already in the grid.
+    await queryClient.invalidateQueries({ queryKey: ['media', { individual_id: Number(id) }] });
     setPhotoCacheBust(Date.now());
+    closePhotoDialog();
+  };
+
+  // The photo dialog is only reachable from the Media modal (Add Photo / Edit
+  // crop), so return there: adding several photos in a row is then one click
+  // on "+" each instead of re-opening the Media card every time.
+  //
+  const closePhotoDialog = () => {
+    setShowPhotoDialog(false);
     setEditingPhoto(null);
     setNewPhotoSrc((prev) => {
       if (prev) URL.revokeObjectURL(prev);
       return null;
     });
-    setShowPhotoDialog(false);
+    setSectionModal('photos');
   };
 
   const handleDelete = () => {
@@ -698,14 +708,7 @@ export function IndividualDetailPage({ readOnly = false }: IndividualDetailPageP
           consentExplanation={minorDataExplanation(childThreshold)}
           onParentalConsent={(granted) => setParentalConsentMutation.mutate(granted)}
           onUpload={handlePhotoUpload}
-          onClose={() => {
-            setShowPhotoDialog(false);
-            setEditingPhoto(null);
-            setNewPhotoSrc((prev) => {
-              if (prev) URL.revokeObjectURL(prev);
-              return null;
-            });
-          }}
+          onClose={closePhotoDialog}
         />
       )}
 
